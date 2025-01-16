@@ -1,0 +1,2787 @@
+// these are all the permutations with clinched and eliminated teams highlihgted. It recognizes what teams had clinching/elim scenarios and it actually happened. SHould test with week 12 as well to see for teams in contention
+[
+  {
+    "permutation_number": 1,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "\"I can't build\""
+    ],
+    "eliminated_teams": [
+      "Weezer Africa",
+      "Njigba's In Paris",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 2,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "\"I can't build\""
+    ],
+    "eliminated_teams": [
+      "Weezer Africa",
+      "Njigba's In Paris",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 3,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "Weezer Africa"
+    ],
+    "eliminated_teams": [
+      "Njigba's In Paris",
+      "\"I can't build\"",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 4,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "Weezer Africa"
+    ],
+    "eliminated_teams": [
+      "Njigba's In Paris",
+      "Momma Gus",
+      "\"I can't build\""
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 5,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "\"I can't build\""
+    ],
+    "eliminated_teams": [
+      "Njigba's In Paris",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 6,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "\"I can't build\""
+    ],
+    "eliminated_teams": [
+      "Njigba's In Paris",
+      "Momma Gus",
+      "Weezer Africa"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 7,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "Njigba's In Paris"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 8,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "Njigba's In Paris"
+    ],
+    "eliminated_teams": [
+      "Momma Gus",
+      "\"I can't build\"",
+      "Weezer Africa"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 9,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "\"I can't build\""
+    ],
+    "eliminated_teams": [
+      "Weezer Africa",
+      "Njigba's In Paris",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 10,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "\"I can't build\""
+    ],
+    "eliminated_teams": [
+      "Weezer Africa",
+      "Njigba's In Paris",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 11,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "Weezer Africa"
+    ],
+    "eliminated_teams": [
+      "Njigba's In Paris",
+      "\"I can't build\"",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 12,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "Weezer Africa"
+    ],
+    "eliminated_teams": [
+      "Njigba's In Paris",
+      "Momma Gus",
+      "\"I can't build\""
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 13,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "\"I can't build\""
+    ],
+    "eliminated_teams": [
+      "Njigba's In Paris",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 14,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "\"I can't build\""
+    ],
+    "eliminated_teams": [
+      "Njigba's In Paris",
+      "Momma Gus",
+      "Weezer Africa"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 15,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "Njigba's In Paris"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 16,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "John Fortnite Kennedy",
+      "Njigba's In Paris"
+    ],
+    "eliminated_teams": [
+      "Momma Gus",
+      "\"I can't build\"",
+      "Weezer Africa"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 17,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 18,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 19,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "Weezer Africa",
+      "\"I can't build\"",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 20,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "Weezer Africa",
+      "Momma Gus",
+      "\"I can't build\""
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 21,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 22,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Momma Gus",
+      "Weezer Africa"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 23,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 24,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "Momma Gus",
+      "\"I can't build\"",
+      "Weezer Africa"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 3,
+        "losses": 11,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 25,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 26,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 27,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "Weezer Africa",
+      "\"I can't build\"",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 28,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "Weezer Africa",
+      "Momma Gus",
+      "\"I can't build\""
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 5,
+        "losses": 9,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 29,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 30,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Momma Gus",
+      "Weezer Africa"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 31,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "\"I can't build\"",
+      "Weezer Africa",
+      "Momma Gus"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 9,
+        "losses": 5,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  },
+  {
+    "permutation_number": 32,
+    "week_number": 14,
+    "weeks_remaining": 0,
+    "clinched_teams": [
+      "Njigba's In Paris",
+      "John Fortnite Kennedy"
+    ],
+    "eliminated_teams": [
+      "Momma Gus",
+      "\"I can't build\"",
+      "Weezer Africa"
+    ],
+    "still_in_contention": [],
+    "standings": [
+      {
+        "name": "Ben's Underrated Tennis Team",
+        "wins": 10,
+        "losses": 4,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Villoni Boutique #2 Fan",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "A courageous team",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Njigba's In Paris",
+        "wins": 8,
+        "losses": 6,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "John Fortnite Kennedy",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": 0,
+        "elimination_number": "N/A"
+      },
+      {
+        "name": "Momma Gus",
+        "wins": 7,
+        "losses": 7,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "\"I can't build\"",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Weezer Africa",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "La Puerta",
+        "wins": 6,
+        "losses": 8,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      },
+      {
+        "name": "Caitlyn clarks balls",
+        "wins": 4,
+        "losses": 10,
+        "magic_number": "N/A",
+        "elimination_number": 0
+      }
+    ]
+  }
+]
