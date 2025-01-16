@@ -1,6 +1,7 @@
 import json
-
-file_path = "test1.json"
+import argparse
+from tabulate import tabulate
+# pip install tabulate
 
 def load_league_data(file_path):
     with open(file_path, "r") as file:
@@ -8,8 +9,6 @@ def load_league_data(file_path):
     return league_data
 
 def calculate_standings(league_data):
-    # Do this, return a json in order
-    # have the team rank, tema name, wins, losses
     teams = league_data["teams"]
     sorted_teams = sorted(
         teams,
@@ -26,36 +25,27 @@ def calculate_standings(league_data):
         })
     return standings
 
-def calc_numbers(standings, playoff_spots, num_weeks, remaning_weeks):
-    # Currently only works for single divisions, with even # teams
-    if (len(standings) % 2 == 1):
+def calc_numbers(standings, playoff_spots, num_weeks, remaining_weeks):
+    if len(standings) % 2 == 1:
         return
     
-    # Calculate Magic/Elimination Number
     first_team_out = standings[playoff_spots]
     first_team_in = standings[playoff_spots - 1]
-    # print(f"first team out: {standings[playoff_spots]}")
     for team in standings:
         if standings.index(team) < playoff_spots:  # Playoff teams
             magic_num = num_weeks + 1 - team["wins"] - first_team_out["losses"]
             team["magic_num"] = magic_num
             team["elim_num"] = None
         else:   
-            # Currently Eliminated teams
             team["magic_num"] = None
-            elim_num = remaning_weeks - (first_team_in["wins"] - team["wins"]) + 1
+            elim_num = remaining_weeks - (first_team_in["wins"] - team["wins"]) + 1
             team["elim_num"] = elim_num
 
     return standings
 
-
 def better_standings(standings, remaining_weeks):
-    """
-    Simplifies the standings to include team name, win-loss record, and clinching status.
-    """
     simplified_standings = []
     for team in standings:
-        # Determine clinching/elimination status
         if team.get("magic_num") is not None and team["magic_num"] <= 0:
             status = "Clinched Playoff Spot"
         elif team.get("elim_num") is not None and team["elim_num"] <= 0:
@@ -69,36 +59,37 @@ def better_standings(standings, remaining_weeks):
                 status = f"In Contention, needs {team['magic_num']} win{'s' if team['magic_num'] != 1 else ''} to clinch."
             elif team.get("elim_num") is not None:
                 status = f"In Contention, needs {team['elim_num']} loss{'es' if team['elim_num'] != 1 else ''} to be mathematically eliminated."
-
-
-            
         
-        # Add simplified information
         simplified_standings.append({
-            "team_name": team["team_name"],
-            "record": f"{team['wins']}-{team['losses']}",
-            "status": status
+            "Rank": team["rank"],
+            "Team Name": team["team_name"],
+            "Record": f"{team['wins']}-{team['losses']}",
+            "Magic Num": team['magic_num'] if team['magic_num'] is not None else "N/A",
+            "Elim Num": team['elim_num'] if team['elim_num'] is not None else "N/A",
+            "Status": status
         })
     
     return simplified_standings
 
+if __name__ == "__main__":
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Calculate playoff scenarios for a fantasy league.")
+    parser.add_argument("file", help="Path to the JSON file containing league data.")
+    args = parser.parse_args()
 
+    # Load league data from the specified file
+    league_data = load_league_data(args.file)
 
+    standings = calculate_standings(league_data)
 
-league_data = load_league_data(file_path)
-# print(json.dumps(league_data, indent=4))
+    playoff_spots = league_data["league_settings"]["playoff_spots"]
+    num_weeks = league_data["league_settings"]["weeks_in_season"]
+    remaining_weeks = num_weeks - league_data["league_settings"]["current_week"]
 
-standings = calculate_standings(league_data)
-# print(json.dumps(standings, indent=4))
+    standings = calc_numbers(standings, playoff_spots, num_weeks, remaining_weeks)
 
+    pretty_standings = better_standings(standings, remaining_weeks)
 
-# Update the standings with magic/elimination number
-playoff_spots = league_data["league_settings"]["playoff_spots"]
-num_weeks = league_data["league_settings"]["weeks_in_season"]
-remaning_weeks = league_data["league_settings"]["weeks_in_season"] - league_data["league_settings"]["current_week"]
-standings = calc_numbers(standings, playoff_spots, num_weeks, remaning_weeks)
-
-# Add information to teams that have either clinched or been eliminated
-pretty_standings = better_standings(standings, remaning_weeks)
-print(f"-------- WEEK {league_data["league_settings"]["current_week"]} STANDINGS --------")
-print(json.dumps(pretty_standings, indent=2))
+    # Display standings as a table
+    print(f"---------------- WEEK {league_data['league_settings']['current_week']} STANDINGS ----------------")
+    print(tabulate(pretty_standings, headers="keys", tablefmt="grid"))

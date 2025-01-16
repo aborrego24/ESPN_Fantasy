@@ -1,0 +1,89 @@
+{
+  "league_settings": {
+    "num_teams": 10,
+    "playoff_spots": 5,
+    "weeks_in_season": 14,
+    "current_week": 12,
+    "tiebreaker": "points_for",
+    "num_divisions": 2
+  },
+  "teams": [
+    {
+      "name": "John Fortnite Kennedy",
+      "record": { "wins": 6, "losses": 6, "ties": 0 },
+      "points_for": 1919.64,
+      "remaining_schedule": ["\"I can't build\"", "Njigba's In Paris"],
+      "division": "Trump"
+    },
+    {
+      "name": "A courageous team",
+      "record": { "wins": 7, "losses": 5, "ties": 0 },
+      "points_for": 1628.3,
+      "remaining_schedule": ["Weezer Africa", "Caitlyn clarks balls"],
+      "division": "Trump"
+    },
+    {
+      "name": "Villoni Boutique #2 Fan",
+      "record": { "wins": 7, "losses": 5, "ties": 0 },
+      "points_for": 1816.86,
+      "remaining_schedule": ["Njigba's In Paris", "Momma Gus"],
+      "division": "Biden"
+    },
+    {
+      "name": "Ben's Underrated Tennis Team",
+      "record": { "wins": 8, "losses": 4, "ties": 0 },
+      "points_for": 1790.12,
+      "remaining_schedule": ["La Puerta", "\"I can't build\""],
+      "division": "Trump"
+    },
+    {
+      "name": "\"I can't build\"",
+      "record": { "wins": 6, "losses": 6, "ties": 0 },
+      "points_for": 1760.98,
+      "remaining_schedule": ["John Fortnite Kennedy", "Ben's Underrated Tennis Team"],
+      "division": "Trump"
+    },
+    {
+      "name": "La Puerta",
+      "record": { "wins": 5, "losses": 7, "ties": 0 },
+      "points_for": 1585.38,
+      "remaining_schedule": ["Ben's Underrated Tennis Team", "Weezer Africa"],
+      "division": "Biden"
+    },
+    {
+      "name": "Caitlyn clarks balls",
+      "record": { "wins": 2, "losses": 10, "ties": 0 },
+      "points_for": 1588.08,
+      "remaining_schedule": ["Momma Gus", "A courageous team"],
+      "division": "Biden"
+    },
+    {
+      "name": "Momma Gus",
+      "record": { "wins": 6, "losses": 6, "ties": 0 },
+      "points_for": 1576.28,
+      "remaining_schedule": ["Caitlyn clarks balls", "Villoni Boutique #2 Fan"],
+      "division": "Biden"
+    },
+    {
+      "name": "Weezer Africa",
+      "record": { "wins": 6, "losses": 6, "ties": 0 },
+      "points_for": 1704.02,
+      "remaining_schedule": ["A courageous team", "La Puerta"],
+      "division": "Biden"
+    },
+    {
+      "name": "Njigba's In Paris",
+      "record": { "wins": 7, "losses": 5, "ties": 0 },
+      "points_for": 1624.84,
+      "remaining_schedule": ["Villoni Boutique #2 Fan", "John Fortnite Kennedy"],
+      "division": "Trump"
+    }
+  ],
+  "current_week_matchups": [
+    { "team1": "John Fortnite Kennedy", "team2": "Njigba's In Paris" },
+    { "team1": "A courageous team", "team2": "Caitlyn clarks balls" },
+    { "team1": "Weezer Africa", "team2": "La Puerta" },
+    { "team1": "\"I can't build\"", "team2": "Ben's Underrated Tennis Team" },
+    { "team1": "Villoni Boutique #2 Fan", "team2": "Momma Gus" }
+  ]
+}
