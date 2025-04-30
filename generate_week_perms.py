@@ -1,6 +1,7 @@
 import json
 import itertools
 import copy
+import sys
 
 
 def load_league_data(file_path):
@@ -122,8 +123,10 @@ def save_to_file(data, filename):
 
 if __name__ == "__main__":
     # Path to the JSON file
-    file_path = "LGW_Test/week13.json"
-    output_file = "week13_perms.json"
+    #file_path = "LGW_Test/week13.json"
+    #output_file = "week13_perms.json"
+    file_path = sys.argv[1]
+    output_file = sys.argv[2]
 
     # Load league data
     league_data = load_league_data(file_path)
