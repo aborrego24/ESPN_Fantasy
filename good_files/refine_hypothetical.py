@@ -103,33 +103,64 @@ def build_team_scenarios(base_data, permutations):
 
     return scenario_map
 
-# === Main script ===
+def calc_clinching(team, clinched_idx, permutations, base_data):
+    if len(clinched_idx) == 0:
+        return []
+    for clinch in clinched_idx:
+        # team won & clinched
+        if team in permutations[clinch]:
+            
+
+    #TODO: Implement
+
+def calc_elim(team, eliminated_idx, permutations, base_data):
+    if len(eliminated_idx) == 0:
+        return []
+    # TODO: Implement
+
+def output_scenarios(team, clinched_idx, eliminated_idx, permutations, base_data):
+    # see notes
+    # iterate through all a team's permutations divied up
+    alive = outcomes["still_alive_in"]
+    clinch_scenarios = calc_clinching(team, clinched_idx, permutations, base_data)
+    elim_scenarios = calc_elim(team, eliminated_idx, permutations, base_data)
+    return {
+            "clinch_scenarios": clinch_scenarios,
+            "elim_scenarios": elim_scenarios
+        }
+
+
+    
+    
 
 if __name__ == "__main__":
     payload = json.load(sys.stdin)
     base_data = payload["base_league_data"]
     permutations = payload["permutations"]
+    print(json.dumps(permutations, indent=2))
 
     team_results = build_team_scenarios(base_data, permutations)
+    print(json.dumps(team_results, indent=2))
     total = len(permutations)
 
 
     for team, outcomes in team_results.items():
         clinched = outcomes["clinched_in"]
         eliminated = outcomes["eliminated_in"]
-        alive = outcomes["still_alive_in"]
 
-        print(f"\n=== {team} ===")
+        print(f"\n====== {team} ======")
         if len(clinched) == total:
-            print("CLINCHED a playoff spot in all scenarios.")
+            print("CLINCHED PLAYOFF SPOT")
         elif len(eliminated) == total:
-            print("ELIMINATED in all scenarios.")
+            print("ELIMINATED FROM PLAYOFFS.")
         else:
-            if clinched:
-                print(f"CLINCHES in {len(clinched)} of {total} permutations.")
-            if eliminated:
-                print(f"ELIMINATED in {len(eliminated)} of {total} permutations.")
-            if alive:
-                print(f"Still in contention in {len(alive)} permutations.")
+            output_scenarios(team, clinched, eliminated, permutations, base_data)
+        # else:
+        #     if clinched:
+        #         print(f"CLINCHES in {len(clinched)} of {total} permutations.")
+        #     if eliminated:
+        #         print(f"ELIMINATED in {len(eliminated)} of {total} permutations.")
+        #     if alive:
+        #         print(f"Still in contention in {len(alive)} permutations.")
 
 # python3 good_files/refine_current_week.py LGW_Test/week13.json | python3 good_files/generate_perms.py | python3 good_files/refine_hypothetical.py
