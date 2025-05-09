@@ -64,11 +64,9 @@ def apply_permutation(base_data, permutation):
 
     return standings
 
-
-# === Build scenario map for in-contention teams only ===
-
 def build_team_scenarios(base_data, permutations):
     scenario_map = {}
+
 
     # Filter out teams that are already clinched/eliminated
     tracked_teams = {
@@ -103,64 +101,100 @@ def build_team_scenarios(base_data, permutations):
 
     return scenario_map
 
-def calc_clinching(team, clinched_idx, permutations, base_data):
+def calc_clinching(team, clinched_idx, permutations, base_data, matchups):
     if len(clinched_idx) == 0:
-        return []
+        return [], []
+    win_clinch = []
+    loss_clinch = []
+    matchup_index = next(
+        (i for i, m in enumerate(matchups) if team in (m["team1"], m["team2"])), 
+        None
+    )
     for clinch in clinched_idx:
         # team won & clinched
         if team in permutations[clinch]:
-            
+            if not win_clinch:
+                win_clinch = list(permutations[clinch])
+                win_clinch.pop(matchup_index)
+            else:
+                win_clinch = [x if x == y else None for x, y in zip(win_clinch, permutations[clinch])]
+        # team lost & clinched
+        else:
+            if not loss_clinch:
+                loss_clinch = list(permutations[clinch])
+                loss_clinch.pop(matchup_index)
+            else:
+                loss_clinch = [x if x == y else None for x, y in zip(loss_clinch, permutations[clinch])]
+    return win_clinch, loss_clinch
 
-    #TODO: Implement
-
-def calc_elim(team, eliminated_idx, permutations, base_data):
+def calc_elim(team, eliminated_idx, permutations, base_data, matchups):
     if len(eliminated_idx) == 0:
-        return []
-    # TODO: Implement
+        return [], []
+    win_elim = []
+    loss_elim = []
+    matchup_index = next(
+        (i for i, m in enumerate(matchups) if team in (m["team1"], m["team2"])), 
+        None
+    )
+    for elim in eliminated_idx:
+        # team won & clinched
+        if team in permutations[elim]:
+            if not win_elim:
+                win_elim = list(permutations[elim])
+                win_elim.pop(matchup_index)
+            else:
+                win_elim = [x if x == y else None for x, y in zip(win_elim, permutations[elim])]
+        # team lost & clinched
+        else:
+            if not loss_elim:
+                loss_elim = list(permutations[elim])
+                loss_elim.pop(matchup_index)
+            else:
+                loss_elim = [x if x == y else None for x, y in zip(loss_elim, permutations[elim])]
+    return win_elim, loss_elim
 
-def output_scenarios(team, clinched_idx, eliminated_idx, permutations, base_data):
+def output_scenarios(team, clinched_idx, eliminated_idx, permutations, base_data, matchups):
     # see notes
     # iterate through all a team's permutations divied up
     alive = outcomes["still_alive_in"]
-    clinch_scenarios = calc_clinching(team, clinched_idx, permutations, base_data)
-    elim_scenarios = calc_elim(team, eliminated_idx, permutations, base_data)
+    clinch_scenarios = calc_clinching(team, clinched_idx, permutations, base_data, matchups)
+    elim_scenarios = calc_elim(team, eliminated_idx, permutations, base_data, matchups)
     return {
             "clinch_scenarios": clinch_scenarios,
             "elim_scenarios": elim_scenarios
         }
 
 
-    
-    
-
 if __name__ == "__main__":
     payload = json.load(sys.stdin)
     base_data = payload["base_league_data"]
     permutations = payload["permutations"]
-    print(json.dumps(permutations, indent=2))
+    # print(json.dumps(base_data, indent=2))
 
     team_results = build_team_scenarios(base_data, permutations)
-    print(json.dumps(team_results, indent=2))
+    # print(json.dumps(team_results, indent=2))
     total = len(permutations)
+    matchups = base_data["current_week_matchups"]
 
+    scenarios = []
 
     for team, outcomes in team_results.items():
         clinched = outcomes["clinched_in"]
         eliminated = outcomes["eliminated_in"]
 
-        print(f"\n====== {team} ======")
+        print(f"\n============ {team} ============")
         if len(clinched) == total:
             print("CLINCHED PLAYOFF SPOT")
         elif len(eliminated) == total:
             print("ELIMINATED FROM PLAYOFFS.")
         else:
-            output_scenarios(team, clinched, eliminated, permutations, base_data)
-        # else:
-        #     if clinched:
-        #         print(f"CLINCHES in {len(clinched)} of {total} permutations.")
-        #     if eliminated:
-        #         print(f"ELIMINATED in {len(eliminated)} of {total} permutations.")
-        #     if alive:
-        #         print(f"Still in contention in {len(alive)} permutations.")
+            scenario = output_scenarios(team, clinched, eliminated, permutations, base_data, matchups)
+            scenarios.append({f"{team}": scenario})
+    output_payload = {
+        "base_league_data": base_data,
+        "scenarios": scenarios
+    }
+
+    print(json.dumps(output_payload, indent=2))
 
 # python3 good_files/refine_current_week.py LGW_Test/week13.json | python3 good_files/generate_perms.py | python3 good_files/refine_hypothetical.py
