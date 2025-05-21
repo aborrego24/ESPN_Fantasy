@@ -1,6 +1,7 @@
 import json
 import sys
 import copy
+from itertools import zip_longest
 
 
 def calculate_magic_numbers(standings, playoff_spots, num_weeks, remaining_weeks):
@@ -115,16 +116,21 @@ def calc_clinching(team, clinched_idx, permutations, base_data, matchups):
         if team in permutations[clinch]:
             if not win_clinch:
                 win_clinch = list(permutations[clinch])
-                win_clinch.pop(matchup_index)
             else:
-                win_clinch = [x if x == y else None for x, y in zip(win_clinch, permutations[clinch])]
+                win_clinch = [x if x == y else None for x, y in zip_longest(win_clinch, permutations[clinch])]
         # team lost & clinched
         else:
             if not loss_clinch:
-                loss_clinch = list(permutations[clinch])
-                loss_clinch.pop(matchup_index)
+                loss_clinch = list(permutations[clinch])                
             else:
-                loss_clinch = [x if x == y else None for x, y in zip(loss_clinch, permutations[clinch])]
+                loss_clinch = [x if x == y else None for x, y in zip_longest(loss_clinch, permutations[clinch])]
+
+    if loss_clinch and 0 <= matchup_index < len(loss_clinch):
+        loss_clinch.pop(matchup_index)
+    
+    if win_clinch and 0 <= matchup_index < len(win_clinch):
+        win_clinch.pop(matchup_index)
+
     return win_clinch, loss_clinch
 
 def calc_elim(team, eliminated_idx, permutations, base_data, matchups):
@@ -143,26 +149,27 @@ def calc_elim(team, eliminated_idx, permutations, base_data, matchups):
                 win_elim = list(permutations[elim])
                 win_elim.pop(matchup_index)
             else:
-                win_elim = [x if x == y else None for x, y in zip(win_elim, permutations[elim])]
+                win_elim = [x if x == y else None for x, y in zip_longest(win_elim, permutations[elim])]
         # team lost & clinched
         else:
             if not loss_elim:
                 loss_elim = list(permutations[elim])
                 loss_elim.pop(matchup_index)
             else:
-                loss_elim = [x if x == y else None for x, y in zip(loss_elim, permutations[elim])]
+                loss_elim = [x if x == y else None for x, y in zip_longest(loss_elim, permutations[elim])]
     return win_elim, loss_elim
 
 def output_scenarios(team, clinched_idx, eliminated_idx, permutations, base_data, matchups):
-    # see notes
-    # iterate through all a team's permutations divied up
-    alive = outcomes["still_alive_in"]
     clinch_scenarios = calc_clinching(team, clinched_idx, permutations, base_data, matchups)
     elim_scenarios = calc_elim(team, eliminated_idx, permutations, base_data, matchups)
-    return {
-            "clinch_scenarios": clinch_scenarios,
-            "elim_scenarios": elim_scenarios
-        }
+
+    result = {}
+    if any(clinch_scenarios):  # At least one of the two lists is non-empty
+        result["clinch_scenarios"] = clinch_scenarios
+    if any(elim_scenarios):  # At least one of the two lists is non-empty
+        result["elim_scenarios"] = elim_scenarios
+
+    return result
 
 
 if __name__ == "__main__":
@@ -182,7 +189,7 @@ if __name__ == "__main__":
         clinched = outcomes["clinched_in"]
         eliminated = outcomes["eliminated_in"]
 
-        print(f"\n============ {team} ============")
+        # print(f"\n============ {team} ============")
         if len(clinched) == total:
             print("CLINCHED PLAYOFF SPOT")
         elif len(eliminated) == total:
@@ -197,4 +204,4 @@ if __name__ == "__main__":
 
     print(json.dumps(output_payload, indent=2))
 
-# python3 good_files/refine_current_week.py LGW_Test/week13.json | python3 good_files/generate_perms.py | python3 good_files/refine_hypothetical.py
+# python3 good_files/refine_current_week.py LGW_Test/PC_test.json | python3 good_files/generate_perms.py | python3 good_files/refine_hypothetical.py
