@@ -2,11 +2,6 @@ import json
 import itertools
 import copy
 import sys
-
-def load_league_data(file_path):
-    """ Load the league data from the given JSON file. """
-    with open(file_path, "r") as file:
-        return json.load(file)
     
 def calculate_magic_numbers(standings, playoff_spots, num_weeks, remaining_weeks):
     first_team_out = standings[playoff_spots]
@@ -65,13 +60,7 @@ def calculate_stats(league_data, playoff_spots, num_weeks, remaining_weeks):
 
 
 if __name__ == "__main__":
-    # Path to the JSON file
-    #file_path = "LGW_Test/week13.json"
-    #output_file = "Expanded_Weeks/week13_refined.json"
-    file_path = sys.argv[1]
-
-    # Load league data
-    league_data = load_league_data(file_path)
+    league_data = json.load(sys.stdin)
 
     playoff_spots = league_data["league_settings"]["playoff_spots"]
     num_weeks = league_data["league_settings"]["weeks_in_season"]
@@ -80,16 +69,17 @@ if __name__ == "__main__":
     metadata= [{
         "playoff_spots": playoff_spots,
         "num_weeks": num_weeks,
-        "remaining_weeks": remaining_weeks
+        "remaining_weeks": remaining_weeks,
+        "current_week": league_data["league_settings"]["current_week"]
              }]
-    current_week_matchups = [
-        league_data["current_week_matchups"]
+    next_week_matchups = [
+        league_data["next_week_matchups"]
     ]
     # Calculate Magic Numbers
     expanded_data = calculate_stats(league_data, playoff_spots, num_weeks, remaining_weeks)
     combined = {
         "league_data": metadata[0],
-        "current_week_matchups": current_week_matchups[0],
+        "next_week_matchups": next_week_matchups[0],
         "standings": expanded_data 
     }
     print(json.dumps(combined, indent=2))

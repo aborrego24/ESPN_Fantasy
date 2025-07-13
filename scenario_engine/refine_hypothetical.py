@@ -39,7 +39,7 @@ def calculate_status(standings, remaining_weeks):
 def apply_permutation(base_data, permutation):
     data = copy.deepcopy(base_data)
     data["league_data"]["remaining_weeks"] -= 1
-    matchups = data["current_week_matchups"]
+    matchups = data["next_week_matchups"]
 
     for matchup, winner in zip(matchups, permutation):
         t1, t2 = matchup["team1"], matchup["team2"]
@@ -176,12 +176,12 @@ if __name__ == "__main__":
     payload = json.load(sys.stdin)
     base_data = payload["base_league_data"]
     permutations = payload["permutations"]
-    # print(json.dumps(base_data, indent=2))
 
     team_results = build_team_scenarios(base_data, permutations)
     # print(json.dumps(team_results, indent=2))
     total = len(permutations)
-    matchups = base_data["current_week_matchups"]
+    matchups = base_data["next_week_matchups"]
+    # print(json.dumps(matchups, indent=2))
 
     scenarios = []
 
