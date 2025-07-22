@@ -39,11 +39,21 @@ def clean_scenarios(scenarios):
                 data["elim_scenarios"] = cleaned_elim
     return scenarios
 
+def get_opponent(matchups, team_name):
+    for matchup in matchups:
+        if matchup["team1"] == team_name:
+            return matchup["team2"]
+        elif matchup["team2"] == team_name:
+            return matchup["team1"]
+    return None  # Team not found in matchups
+
 def main():
     data = json.load(sys.stdin)
     standings = data["base_league_data"]["standings"]
     scenarios = data["scenarios"]
     scenarios = clean_scenarios(scenarios)
+    next_week_matchups = data["base_league_data"]["next_week_matchups"]
+    print(f"scenarios: {json.dumps(scenarios, indent=2)}")
 
     print("\n===================== \033[92mCLINCH SCENARIOS\033[0m =====================")
     for team in standings:
@@ -62,19 +72,20 @@ def main():
         print(f"====== \033[92m{name}\033[0m Clinches a playoff spot with: ======")
 
         # win conditions
-        filtered_win = [t for t in win_path if t]
+        filtered_win = [t for t in win_path if t and t != team["team_name"]]
         if filtered_win:
             win_conditions = " and ".join(f"{team} WIN" for team in filtered_win)
             print(f"  - a WIN and {win_conditions}")
         else:
             print(f"  - a WIN")
 
-        if loss_path:
+        # print(f"team playing: {get_opponent(next_week_matchups, team["team_name"])}")
+        filtered_loss = [t for t in loss_path if t and t != get_opponent(next_week_matchups, team["team_name"])]
+        # print(f"first filteredloss: {filtered_loss}")
+        if filtered_loss:
             print("    or ... ")
-            filtered_loss = [t for t in loss_path if t]
-            if filtered_loss:
-                loss_conditions = " and ".join(f"{team} WIN" for team in filtered_loss)
-                print(f"  - a LOSS and {loss_conditions}")
+            loss_conditions = " and ".join(f"{team} WIN" for team in filtered_loss)
+            print(f"  - a LOSS and {loss_conditions}")
 
     print("\n===================== \033[91mELIMINATION SCENARIOS\033[0m =====================")
     for team in standings:
@@ -92,17 +103,21 @@ def main():
         win_path, loss_path = elim_scenario
         print(f"====== \033[91m{name}\033[0m Eliminated from playoffs with: ======")
 
+
+        # TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO check this and print
+        #  TODO TODO also, check why the middle 3 teams still ge their win conditions, their status shouldn't be Clinched Playoff spot (refine hypotheticals)
         # win elim conditions
-        filtered_loss = [t for t in loss_path if t]
+        filtered_loss = [t for t in loss_path if t and t != team["team_name"]]
         if filtered_loss:
             loss_conditions = " and ".join(f"{team} WIN" for team in filtered_loss)
             print(f"  - a LOSS and {win_conditions}")
         else:
             print(f"  - a LOSS")
 
+        filtered_win = [t for t in win_path if t and t != get_opponent(next_week_matchups, team["team_name"])]
+        print(f"second filtered win: {filtered_win}")
         if win_path:
             print("    or ... ")
-            filtered_win = [t for t in win_path if t]
             if filtered_win:
                 win_conditions = " and ".join(f"{team} WIN" for team in filtered_win)
                 print(f"  - a LOSS and {win_conditions}")

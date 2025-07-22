@@ -1,13 +1,19 @@
 import json
-import itertools
-import copy
 import sys
     
 def calculate_magic_numbers(standings, playoff_spots, num_weeks, remaining_weeks):
-    first_team_out = standings[playoff_spots]
+    cutoff_wins = standings[playoff_spots - 1]["wins"]
     first_team_in = standings[playoff_spots - 1]
+
+    # Find the first team a game back from a playoff spot
+    first_team_out = None
+    for team in standings[playoff_spots:]:
+        if team["wins"] < cutoff_wins:
+            first_team_out = team
+            break
+
     for team in standings:
-        if standings.index(team) < playoff_spots:  # Current Playoff teams
+        if standings.index(team) < playoff_spots or team["wins"] == first_team_in["wins"]:  # Current Playoff teams
             team["clinch_MN"] = num_weeks + 1 - team["wins"] - first_team_out["losses"]
         else:   # Currently Eliminated Teams
             team["elim_MN"] = remaining_weeks - (first_team_in["wins"] - team["wins"]) + 1
@@ -86,4 +92,4 @@ if __name__ == "__main__":
 
 
 
-# Command to run python3 good_files/refine_current_week.py LGW_Test/week13.json
+# Command to run python3 scenario_engine/refine_current_week.py scenario_engine_tests/week13.json
