@@ -68,7 +68,7 @@
         "remaining_schedule": ["TeamC"]
       }
     ],
-    "current_week_matchups": [
+    "next_week_matchups": [
       { "team1": "TeamA", "team2": "TeamB" },
       { "team1": "TeamC", "team2": "TeamJ" },
       { "team1": "TeamD", "team2": "TeamI" },

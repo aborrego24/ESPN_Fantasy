@@ -15,11 +15,21 @@ def calculate_magic_numbers(standings, playoff_spots, num_weeks, remaining_weeks
             first_team_out = team
             break
 
+    # Nobody outside the bracket is behind on wins (everyone tied, e.g. week 1),
+    # so fall back to whoever holds the first non-playoff seat.
+    if first_team_out is None and len(standings) > playoff_spots:
+        first_team_out = standings[playoff_spots]
+
+    if first_team_out is None:  # every team is in a playoff spot
+        for i, team in enumerate(standings):
+            team["rank"] = i + 1
+        return standings
+
     # recalculate MN, EN and rank
     for i, team in enumerate(standings):
         if i < playoff_spots or team["wins"] == first_team_in["wins"]:  # Currently in
             team["clinch_MN"] = num_weeks + 1 - team["wins"] - first_team_out["losses"]
-            team["elim_MIN"] = None
+            team["elim_MN"] = None
         else:
             team["elim_MN"] = remaining_weeks - (first_team_in["wins"] - team["wins"]) + 1
             team["clinch_MN"] = None
@@ -221,4 +231,5 @@ if __name__ == "__main__":
 
     print(json.dumps(output_payload, indent=2))
 
-# python3 good_files/refine_current_week.py LGW_Test/PC_test.json | python3 good_files/generate_perms.py | python3 good_files/refine_hypothetical.py
+# Run the whole pipeline with:
+#   ./run_scenarios.sh --test scenario_engine_tests/week13.json

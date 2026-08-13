@@ -12,6 +12,14 @@ def calculate_magic_numbers(standings, playoff_spots, num_weeks, remaining_weeks
             first_team_out = team
             break
 
+    # Nobody outside the bracket is behind on wins (everyone tied, e.g. week 1),
+    # so fall back to whoever holds the first non-playoff seat.
+    if first_team_out is None and len(standings) > playoff_spots:
+        first_team_out = standings[playoff_spots]
+
+    if first_team_out is None:  # every team is in a playoff spot
+        return standings
+
     for team in standings:
         if standings.index(team) < playoff_spots or team["wins"] == first_team_in["wins"]:  # Current Playoff teams
             team["clinch_MN"] = num_weeks + 1 - team["wins"] - first_team_out["losses"]
@@ -92,4 +100,6 @@ if __name__ == "__main__":
 
 
 
-# Command to run python3 scenario_engine/refine_current_week.py scenario_engine_tests/week13.json
+# Reads the stage-1 payload on stdin, e.g.:
+#   python3 scenario_engine/league_data.py --test scenario_engine_tests/week13.json \
+#     | python3 scenario_engine/refine_current_week.py

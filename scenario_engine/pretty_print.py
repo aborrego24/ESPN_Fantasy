@@ -53,7 +53,6 @@ def main():
     scenarios = data["scenarios"]
     scenarios = clean_scenarios(scenarios)
     next_week_matchups = data["base_league_data"]["next_week_matchups"]
-    print(f"scenarios: {json.dumps(scenarios, indent=2)}")
 
     print("\n===================== \033[92mCLINCH SCENARIOS\033[0m =====================")
     for team in standings:
@@ -104,23 +103,28 @@ def main():
         print(f"====== \033[91m{name}\033[0m Eliminated from playoffs with: ======")
 
 
-        # TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO check this and print
-        #  TODO TODO also, check why the middle 3 teams still ge their win conditions, their status shouldn't be Clinched Playoff spot (refine hypotheticals)
-        # win elim conditions
-        filtered_loss = [t for t in loss_path if t and t != team["team_name"]]
-        if filtered_loss:
-            loss_conditions = " and ".join(f"{team} WIN" for team in filtered_loss)
-            print(f"  - a LOSS and {win_conditions}")
-        else:
-            print(f"  - a LOSS")
+        # TODO middle-of-table teams can come back as "Clinched Playoff Spot"
+        # when they are not mathematically clinched (refine_hypothetical)
 
-        filtered_win = [t for t in win_path if t and t != get_opponent(next_week_matchups, team["team_name"])]
-        print(f"second filtered win: {filtered_win}")
+        # Eliminated after losing: the opponent won, so drop them from the list
+        filtered_loss = [t for t in loss_path if t and t != get_opponent(next_week_matchups, name)]
+        if loss_path:
+            if filtered_loss:
+                loss_conditions = " and ".join(f"{t} WIN" for t in filtered_loss)
+                print(f"  - a LOSS and {loss_conditions}")
+            else:
+                print(f"  - a LOSS")
+
+        # Eliminated despite winning: the team itself is in its own permutation
+        filtered_win = [t for t in win_path if t and t != name]
         if win_path:
-            print("    or ... ")
+            if loss_path:
+                print("    or ... ")
             if filtered_win:
-                win_conditions = " and ".join(f"{team} WIN" for team in filtered_win)
-                print(f"  - a LOSS and {win_conditions}")
+                win_conditions = " and ".join(f"{t} WIN" for t in filtered_win)
+                print(f"  - a WIN and {win_conditions}")
+            else:
+                print(f"  - a WIN")
 
 
 
