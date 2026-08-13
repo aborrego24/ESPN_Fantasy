@@ -2,34 +2,20 @@ import sys
 import json
 import itertools
 
-def refine_matchups(data):
-    # Get set of teams that are locked (clinched or eliminated)
-    locked_statuses = {"Clinched Playoff Spot", "Eliminated"}
-    locked_teams = {team["team_name"] for team in data["standings"] if team["status"] in locked_statuses}
-
-    # Filter out matchups where both teams are in the locked set
-    filtered_matchups = []
-    for matchup in data["next_week_matchups"]:
-        team1, team2 = matchup["team1"], matchup["team2"]
-        if not (team1 in locked_teams and team2 in locked_teams):
-            filtered_matchups.append(matchup)
-
-    # Replace the old matchups with the filtered list
-    data["next_week_matchups"] = filtered_matchups
-    return data
 
 def gen_perms(league_data):
     matchups = league_data["next_week_matchups"]
     possible_outcomes = [(matchup["team1"], matchup["team2"]) for matchup in matchups]
     return list(itertools.product(*possible_outcomes))
 
+
 def generate_matchup_permutations(league_data):
-    # Remove any matchups between clinched (elim & playoff) teams
-    league_data = refine_matchups(league_data)
+    # Every matchup is enumerated, including games between teams whose fate is
+    # already settled. Dropping those used to prune the search, but it left
+    # their records frozen while everyone else played on, which moved them
+    # relative to teams they should have stayed ahead of -- and the exact
+    # engine is fast enough that the pruning bought nothing.
     return gen_perms(league_data)
-
-
-
 
 
 if __name__ == "__main__":

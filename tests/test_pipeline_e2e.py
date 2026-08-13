@@ -27,13 +27,29 @@ def test_stage2_emits_the_documented_wire_format(stage1_json, run_stages, name):
     assert code == 0, err
 
     payload = json.loads(out)
-    assert set(payload) == {"league_data", "next_week_matchups", "standings"}
+    assert set(payload) == {
+        "league_data",
+        "next_week_matchups",
+        "remaining_matchups",
+        "standings",
+    }
     assert set(payload["league_data"]) == {
         "playoff_spots",
         "num_weeks",
         "remaining_weeks",
         "current_week",
     }
+
+    # remaining_matchups is one entry per week left, and its first week must
+    # agree with next_week_matchups on who is playing whom.
+    remaining = payload["remaining_matchups"]
+    assert len(remaining) == payload["league_data"]["remaining_weeks"]
+    if remaining:
+        as_pairs = {frozenset((m["team1"], m["team2"])) for m in remaining[0]}
+        next_pairs = {
+            frozenset((m["team1"], m["team2"])) for m in payload["next_week_matchups"]
+        }
+        assert as_pairs == next_pairs
 
 
 @pytest.mark.parametrize("name", FIXTURES)

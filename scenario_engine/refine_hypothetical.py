@@ -3,6 +3,8 @@ import sys
 import copy
 from itertools import zip_longest
 
+import playoff_math
+
 
 def calculate_magic_numbers(standings, playoff_spots, num_weeks, remaining_weeks):
     cutoff_wins = standings[playoff_spots - 1]["wins"]
@@ -87,7 +89,12 @@ def apply_permutation(base_data, permutation):
 
     standings = calculate_magic_numbers(sorted_teams, playoff_spots, num_weeks, remaining_weeks)
     standings = calculate_status(standings, remaining_weeks, playoff_spots)
-    # print(json.dumps(standings, indent=2))
+
+    # The magic number only ever answered "can one rival pass me". Whether a
+    # team actually holds a playoff seat is decided exactly, over every
+    # completion of the weeks still left after this one.
+    later_weeks = base_data.get("remaining_matchups", [])[1:]
+    standings = playoff_math.apply_verdicts(standings, later_weeks, playoff_spots)
     return standings
 
 def build_team_scenarios(base_data, permutations):
