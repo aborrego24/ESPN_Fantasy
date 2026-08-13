@@ -67,7 +67,8 @@ def test_report_carries_no_debug_output(stage1_json, run_stages, all_stages, nam
     assert code == 0, err
 
     assert "second filtered win" not in out
-    assert '"clinch_scenarios"' not in out, "raw scenario JSON leaked into the report"
+    assert '"matchup"' not in out, "raw scenario JSON leaked into the report"
+    assert '"winner"' not in out, "raw scenario JSON leaked into the report"
 
 
 @pytest.mark.parametrize("name", FIXTURES)
