@@ -266,6 +266,104 @@ def apply_verdicts(standings, remaining_matchups, playoff_spots, budget=DEFAULT_
     return standings
 
 
+POINTS_EPSILON = 0.01  # fantasy scores carry at most two decimals
+
+
+def _with_points_override(state, team, value):
+    points = list(state.points)
+    points[team] = value
+    return LeagueState(
+        state.names, state.wins, state.losses, points, state.games, state.playoff_spots
+    )
+
+
+def clinch_dependency(state, team, budget=DEFAULT_NODE_BUDGET):
+    """Which rival overtaking on total points would cost `team` its clinch.
+
+    Verdicts freeze total points at today's values, so a clinch that rests on
+    the tiebreaker is really "clinched *if* the scoring holds". This finds the
+    nearest rival that would break it, and by how much it must catch up.
+
+    Probes cumulatively: at a candidate gap, every rival within that gap is
+    lifted past the team, not just one. It can take more than one rival
+    overtaking to actually cost a seat -- with two seats and three teams tied on
+    wins, the leader only drops out when *both* of the others pass it -- and
+    probing one rival at a time would find no dependency and report a bare
+    "clinched", which is exactly the overclaim being avoided.
+
+    The gap returned is the largest a rival must close among those that had to
+    move, i.e. the binding constraint: some rival has to make up at least this
+    much. Returns (rival_name, points_gap), or None if the clinch does not
+    depend on the tiebreaker at all.
+    """
+    behind = sorted(
+        (state.points[team] - state.points[u], u)
+        for u in range(state.num_teams)
+        if u != team and state.points[u] < state.points[team]
+    )
+
+    for gap, binding in behind:
+        points = list(state.points)
+        for other_gap, u in behind:
+            if other_gap <= gap:
+                points[u] = state.points[team] + POINTS_EPSILON
+        probe = LeagueState(
+            state.names,
+            state.wins,
+            state.losses,
+            points,
+            state.games,
+            state.playoff_spots,
+        )
+        if status_of(probe, team, budget=budget) != "clinched":
+            return state.names[binding], round(gap, 2)
+    return None
+
+
+def elimination_dependency(state, team, budget=DEFAULT_NODE_BUDGET):
+    """Which rival `team` would have to overtake on points to still have a shot.
+
+    The mirror of clinch_dependency: an elimination that rests on the
+    tiebreaker is "eliminated unless the scoring changes".
+    """
+    rivals = [
+        u
+        for u in range(state.num_teams)
+        if u != team and state.points[u] > state.points[team]
+    ]
+    rivals.sort(key=lambda u: state.points[u] - state.points[team])
+
+    for u in rivals:
+        gap = state.points[u] - state.points[team]
+        probe = _with_points_override(state, team, state.points[u] + POINTS_EPSILON)
+        if status_of(probe, team, budget=budget) != "eliminated":
+            return state.names[u], round(gap, 2)
+    return None
+
+
+def attach_dependencies(standings, remaining_matchups, playoff_spots, budget=DEFAULT_NODE_BUDGET):
+    """Record, per decided team, whether its verdict rests on the tiebreaker.
+
+    Only clinched and eliminated teams get this: they are the ones whose status
+    is stated as a bare fact, so they are the ones that need qualifying. A team
+    still alive already has its dependence on results spelled out as conditions.
+    """
+    state = state_from_standings(standings, remaining_matchups, playoff_spots)
+    for index, team in enumerate(standings):
+        team["tiebreak"] = None
+        verdict = team.get("verdict")
+        if verdict == "clinched":
+            found = clinch_dependency(state, index, budget=budget)
+        elif verdict == "eliminated":
+            found = elimination_dependency(state, index, budget=budget)
+        else:
+            continue
+        if found:
+            rival, gap = found
+            team["tiebreak"] = {"rival": rival, "gap": gap}
+    return standings
+
+
 def anything_decidable(state, budget=DEFAULT_NODE_BUDGET):
     """Could ANY team be clinched or eliminated yet?
 

@@ -1,9 +1,12 @@
 import sys
 import json
 
+import margins
+
 GREEN = "\033[92m"
 RED = "\033[91m"
 RESET = "\033[0m"
+DIM = "\033[2m"
 
 
 def find_scenario(scenarios, team):
@@ -47,17 +50,32 @@ def paths_for(scenarios, name, key):
     return describe("a WIN", paths["win"]) + describe("a LOSS", paths["loss"])
 
 
+def tiebreak_note(team, weeks_remaining, thresholds, eliminated=False):
+    """The clause qualifying a verdict that rests on the tiebreaker."""
+    return margins.describe(
+        team.get("tiebreak"), weeks_remaining, thresholds, eliminated=eliminated
+    )
+
+
 def main():
     data = json.load(sys.stdin)
     standings = data["base_league_data"]["standings"]
     scenarios = data["scenarios"]
+    weeks_remaining = data["base_league_data"]["league_data"]["remaining_weeks"]
+    thresholds = margins.load_thresholds()
 
     print(f"\n===================== {GREEN}CLINCH SCENARIOS{RESET} =====================")
     for team in standings:
         name = team["team_name"]
 
         if "Clinched" in team["status"]:
-            print(f"====== {GREEN}{name}{RESET} Clinched Playoff Spot ======")
+            headline = "Clinched Playoff Spot"
+            if margins.qualifies_headline(team.get("tiebreak"), weeks_remaining, thresholds):
+                headline = "Clinched on current scoring"
+            print(f"====== {GREEN}{name}{RESET} {headline} ======")
+            note = tiebreak_note(team, weeks_remaining, thresholds)
+            if note:
+                print(f"       {DIM}{note}{RESET}")
             continue
 
         lines = paths_for(scenarios, name, "clinch")
@@ -71,7 +89,13 @@ def main():
         name = team["team_name"]
 
         if "Eliminated" in team["status"]:
-            print(f"====== {RED}{name}{RESET} Eliminated from playoffs ======")
+            headline = "Eliminated from playoffs"
+            if margins.qualifies_headline(team.get("tiebreak"), weeks_remaining, thresholds):
+                headline = "Eliminated on current scoring"
+            print(f"====== {RED}{name}{RESET} {headline} ======")
+            note = tiebreak_note(team, weeks_remaining, thresholds, eliminated=True)
+            if note:
+                print(f"       {DIM}{note}{RESET}")
             continue
 
         lines = paths_for(scenarios, name, "elim")
