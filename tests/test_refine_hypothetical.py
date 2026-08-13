@@ -115,20 +115,48 @@ def test_no_team_below_the_cutoff_does_not_crash():
     assert len(standings) == 4
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect: clinch is decided by a two-team magic number with no "
-    "seat cap and no points_for tiebreaker, so more teams can clinch than "
-    "there are playoff spots. Fixing this is the clinch-semantics rework -- "
-    "when it lands, drop this xfail.",
-)
-def test_never_more_clinched_teams_than_playoff_spots(load_fixture):
-    base, perms = base_data_for(load_fixture("week13.json"))
+@pytest.mark.parametrize("name", ["week12.json", "week13.json", "PC_test.json"])
+def test_never_more_clinched_teams_than_playoff_spots(load_fixture, name):
+    """The invariant the magic-number engine violated in 47% of permutations."""
+    base, perms = base_data_for(load_fixture(name))
     spots = base["league_data"]["playoff_spots"]
+    num_teams = len(base["standings"])
 
     for perm in perms:
         standings = stage4.apply_permutation(base, perm)
         clinched = [t for t in standings if t["status"] == "Clinched Playoff Spot"]
+        eliminated = [t for t in standings if t["status"] == "Eliminated"]
+
         assert len(clinched) <= spots, (
             f"{len(clinched)} teams clinched for {spots} spots under {perm}"
         )
+        assert len(eliminated) <= num_teams - spots, (
+            f"{len(eliminated)} eliminated with {num_teams - spots} non-seats under {perm}"
+        )
+
+
+@pytest.mark.parametrize("name", ["week12.json", "week13.json", "PC_test.json"])
+def test_a_clinched_team_holds_a_seat_in_every_completion(load_fixture, name):
+    """Cross-check the pipeline verdict against the math module directly.
+
+    Guards the wiring, not the math: it catches the pipeline passing the wrong
+    slice of remaining weeks, which would silently produce a right-shaped but
+    wrong answer.
+    """
+    import playoff_math
+
+    base, perms = base_data_for(load_fixture(name))
+    spots = base["league_data"]["playoff_spots"]
+
+    for perm in perms:
+        standings = stage4.apply_permutation(base, perm)
+        later = base.get("remaining_matchups", [])[1:]
+        state = playoff_math.state_from_standings(standings, later, spots)
+        verdicts = playoff_math.classify(state)
+
+        for team in standings:
+            expected = verdicts[team["team_name"]]
+            if expected == "clinched":
+                assert team["status"] == "Clinched Playoff Spot"
+            elif expected == "eliminated":
+                assert team["status"] == "Eliminated"

@@ -12,7 +12,13 @@ def league_with(statuses, matchups):
     }
 
 
-def test_matchup_is_dropped_only_when_both_teams_are_decided():
+def test_games_between_decided_teams_are_still_enumerated():
+    """No matchup is pruned, even when both teams' fates are settled.
+
+    Dropping them left those teams' records frozen while everyone else played
+    on, which moved them relative to teams they should have stayed ahead of and
+    corrupted the standings the verdict is computed from.
+    """
     data = league_with(
         {
             "Locked A": "Clinched Playoff Spot",
@@ -21,18 +27,16 @@ def test_matchup_is_dropped_only_when_both_teams_are_decided():
             "Live D": "In contention, needs 2 win(s) to clinch",
         },
         [
-            {"team1": "Locked A", "team2": "Locked B"},  # both decided -> dropped
-            {"team1": "Locked A", "team2": "Live C"},  # one live -> kept
-            {"team1": "Live C", "team2": "Live D"},  # both live -> kept
+            {"team1": "Locked A", "team2": "Locked B"},
+            {"team1": "Locked A", "team2": "Live C"},
+            {"team1": "Live C", "team2": "Live D"},
         ],
     )
 
-    kept = stage3.refine_matchups(data)["next_week_matchups"]
+    perms = stage3.generate_matchup_permutations(data)
 
-    assert kept == [
-        {"team1": "Locked A", "team2": "Live C"},
-        {"team1": "Live C", "team2": "Live D"},
-    ]
+    assert len(perms) == 2**3
+    assert all(len(p) == 3 for p in perms)
 
 
 def test_permutations_are_the_cartesian_product_of_both_outcomes():
@@ -55,10 +59,8 @@ def test_permutations_are_the_cartesian_product_of_both_outcomes():
             assert winner in (matchup["team1"], matchup["team2"])
 
 
-def test_dropping_every_matchup_leaves_a_single_empty_permutation():
-    data = league_with(
-        {"A": "Clinched Playoff Spot", "B": "Eliminated"},
-        [{"team1": "A", "team2": "B"}],
-    )
+def test_no_matchups_leaves_a_single_empty_permutation():
+    """Final week already played: one completion, and it is the empty one."""
+    data = league_with({"A": "Clinched Playoff Spot", "B": "Eliminated"}, [])
 
     assert stage3.generate_matchup_permutations(data) == [()]

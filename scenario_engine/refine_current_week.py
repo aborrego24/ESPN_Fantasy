@@ -1,6 +1,34 @@
 import json
 import sys
-    
+
+import playoff_math
+
+
+def build_remaining_matchups(teams, remaining_weeks):
+    """Pair up each remaining week from the per-team remaining_schedule lists.
+
+    Stage 1 gives every team its own list of upcoming opponents; the exact
+    engine needs them as weeks of matchups instead.
+    """
+    weeks = []
+    for week_index in range(remaining_weeks):
+        seen = set()
+        week = []
+        for team in teams:
+            name = team["name"]
+            schedule = team["remaining_schedule"]
+            if name in seen or week_index >= len(schedule):
+                continue
+            opponent = schedule[week_index]
+            if opponent in seen:
+                continue
+            seen.add(name)
+            seen.add(opponent)
+            week.append({"team1": name, "team2": opponent})
+        weeks.append(week)
+    return weeks
+
+
 def calculate_magic_numbers(standings, playoff_spots, num_weeks, remaining_weeks):
     cutoff_wins = standings[playoff_spots - 1]["wins"]
     first_team_in = standings[playoff_spots - 1]
@@ -89,12 +117,19 @@ if __name__ == "__main__":
     next_week_matchups = [
         league_data["next_week_matchups"]
     ]
+    remaining_matchups = build_remaining_matchups(league_data["teams"], remaining_weeks)
+
     # Calculate Magic Numbers
     expanded_data = calculate_stats(league_data, playoff_spots, num_weeks, remaining_weeks)
+    # Then overwrite the clinched/eliminated verdict with the exact answer
+    expanded_data = playoff_math.apply_verdicts(
+        expanded_data, remaining_matchups, playoff_spots
+    )
     combined = {
         "league_data": metadata[0],
         "next_week_matchups": next_week_matchups[0],
-        "standings": expanded_data 
+        "remaining_matchups": remaining_matchups,
+        "standings": expanded_data
     }
     print(json.dumps(combined, indent=2))
 
