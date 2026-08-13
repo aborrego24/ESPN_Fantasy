@@ -1,4 +1,3 @@
-from espn_api.football import League
 import sys
 import json
 
@@ -32,6 +31,9 @@ if sys.argv[1] == "--test":
     sys.exit(0)
 
 # Otherwise, treat as IRL mode
+# Imported here so --test mode works without espn_api installed
+from espn_api.football import League
+
 try:
     current_week = int(sys.argv[1])
 except ValueError:
