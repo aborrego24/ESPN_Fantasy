@@ -92,3 +92,85 @@ def test_no_team_is_listed_as_its_own_condition(stage1_json, run_stages, all_sta
             assert f"{current} WIN" not in line, (
                 f"{current} is listed as a condition of its own scenario: {line!r}"
             )
+
+
+# --- display sections ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", FIXTURES)
+def test_report_shows_header_standings_and_matchups_by_default(
+    stage1_json, run_stages, all_stages, name
+):
+    code, out, err = run_stages(all_stages, stage1_json(name))
+    assert code == 0, err
+    plain = ANSI.sub("", out)
+
+    assert "Playoff spots" in plain
+    assert "Up for grabs" in plain
+    assert "STANDINGS" in plain
+    assert "MATCHUPS" in plain or "No games left" in plain
+    assert "playoff cut line" in plain
+
+
+@pytest.mark.parametrize(
+    "flag,absent",
+    [
+        ("--no-header", "Playoff spots"),
+        ("--no-standings", "STANDINGS"),
+        ("--no-matchups", "MATCHUPS"),
+    ],
+)
+def test_each_display_section_can_be_switched_off(stage1_json, run_stages, flag, absent):
+    import subprocess
+    import sys as _sys
+    from pathlib import Path
+
+    root = Path(__file__).parent.parent
+    payload = stage1_json("week13.json")
+    for stage in [
+        "scenario_engine/refine_current_week.py",
+        "scenario_engine/generate_perms.py",
+        "scenario_engine/refine_hypothetical.py",
+    ]:
+        result = subprocess.run(
+            [_sys.executable, stage], input=payload, capture_output=True,
+            text=True, cwd=root,
+        )
+        assert result.returncode == 0, result.stderr
+        payload = result.stdout
+
+    result = subprocess.run(
+        [_sys.executable, "scenario_engine/pretty_print.py", flag],
+        input=payload, capture_output=True, text=True, cwd=root,
+    )
+    assert result.returncode == 0, result.stderr
+    plain = ANSI.sub("", result.stdout)
+
+    assert absent not in plain
+    # the scenarios themselves are never suppressed
+    assert "CLINCH SCENARIOS" in plain
+    assert "ELIMINATION SCENARIOS" in plain
+
+
+@pytest.mark.parametrize("name", FIXTURES)
+def test_the_cut_line_sits_below_the_last_playoff_seat(
+    stage1_json, run_stages, all_stages, name
+):
+    code, out, err = run_stages(all_stages, stage1_json(name))
+    assert code == 0, err
+    plain = ANSI.sub("", out)
+
+    rows = []
+    for line in plain.splitlines():
+        stripped = line.strip()
+        if "playoff cut line" in stripped:
+            rows.append("CUT")
+        elif stripped[:2].strip().isdigit() and "  " in stripped:
+            rows.append("team")
+        if "CLINCH SCENARIOS" in stripped:
+            break
+
+    assert "CUT" in rows
+    # every seat above the line, every non-seat below it
+    spots = json.loads(stage1_json(name))["league_settings"]["playoff_spots"]
+    assert rows.index("CUT") == spots

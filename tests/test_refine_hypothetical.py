@@ -136,12 +136,13 @@ def test_never_more_clinched_teams_than_playoff_spots(load_fixture, name):
 
 
 @pytest.mark.parametrize("name", ["week12.json", "week13.json", "PC_test.json"])
-def test_a_clinched_team_holds_a_seat_in_every_completion(load_fixture, name):
-    """Cross-check the pipeline verdict against the math module directly.
+def test_the_tiebreaker_guard_only_ever_downgrades(load_fixture, name):
+    """Anything the pipeline calls decided must be decided on frozen points too.
 
-    Guards the wiring, not the math: it catches the pipeline passing the wrong
-    slice of remaining weeks, which would silently produce a right-shaped but
-    wrong answer.
+    The guard exists to withhold a verdict when it rests on a points gap that
+    could plausibly close, so it may only ever turn clinched/eliminated into
+    alive -- never the reverse. Anything else would mean the pipeline is
+    claiming more than the exact search supports.
     """
     import playoff_math
 
@@ -151,12 +152,16 @@ def test_a_clinched_team_holds_a_seat_in_every_completion(load_fixture, name):
     for perm in perms:
         standings = stage4.apply_permutation(base, perm)
         later = base.get("remaining_matchups", [])[1:]
-        state = playoff_math.state_from_standings(standings, later, spots)
-        verdicts = playoff_math.classify(state)
+        unguarded = playoff_math.classify(
+            playoff_math.state_from_standings(standings, later, spots)
+        )
 
         for team in standings:
-            expected = verdicts[team["team_name"]]
-            if expected == "clinched":
+            if team["verdict"] == "clinched":
+                assert unguarded[team["team_name"]] == "clinched"
                 assert team["status"] == "Clinched Playoff Spot"
-            elif expected == "eliminated":
+            elif team["verdict"] == "eliminated":
+                assert unguarded[team["team_name"]] == "eliminated"
                 assert team["status"] == "Eliminated"
+            else:
+                assert team["status"] == "In contention"

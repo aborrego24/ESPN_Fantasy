@@ -221,6 +221,7 @@ def classify(state, budget=DEFAULT_NODE_BUDGET):
 
 STATUS_CLINCHED = "Clinched Playoff Spot"
 STATUS_ELIMINATED = "Eliminated"
+STATUS_ALIVE = "In contention"
 
 
 def state_from_standings(standings, remaining_matchups, playoff_spots):
@@ -246,23 +247,108 @@ def state_from_standings(standings, remaining_matchups, playoff_spots):
     )
 
 
-def apply_verdicts(standings, remaining_matchups, playoff_spots, budget=DEFAULT_NODE_BUDGET):
+def points_margins(state, team, contested=None):
+    """Points gaps to every rival still in the race you could finish level with.
+
+    Two filters, both needed to keep this useful. A tiebreak only matters against
+    a team whose achievable win range overlaps yours -- records matching today is
+    the wrong test. And it only matters against a team still contesting a seat:
+    listing gaps to teams already clinched or eliminated is noise, since they
+    cannot take the seat from you either way.
+
+    Positive means `team` is ahead. Closest race first.
+    """
+    my_low = state.wins[team]
+    my_high = my_low + state.games_left_for(team)
+
+    margins = []
+    for rival in range(state.num_teams):
+        if rival == team:
+            continue
+        if contested is not None and rival not in contested:
+            continue
+        low = state.wins[rival]
+        high = low + state.games_left_for(rival)
+        if high < my_low or low > my_high:  # the ranges cannot meet
+            continue
+        margins.append(
+            (state.names[rival], round(state.points[team] - state.points[rival], 2))
+        )
+
+    margins.sort(key=lambda pair: abs(pair[1]))
+    return margins
+
+
+def apply_verdicts(
+    standings,
+    remaining_matchups,
+    playoff_spots,
+    swing_envelope=None,
+    budget=DEFAULT_NODE_BUDGET,
+):
     """Set each team's status from the exact full-season verdict, in place.
+
+    Also records, per decided team, whether the verdict rests on the total-points
+    tiebreaker, and **downgrades it to 'alive' when it does and the gap could
+    plausibly close**.
+
+    That downgrade is the difference between a verdict that is right and one that
+    merely sounds right. Verdicts freeze total points at today's values, but
+    points keep accruing, so a "clinch" that depends on holding a 30-point lead
+    is not a clinch -- it is a lead. Backtesting against real results caught
+    exactly this: a team was declared clinched with a 30-point cushion and lost
+    the seat on the final week's scoring.
+
+    `swing_envelope` is the largest points swing considered plausible over the
+    weeks remaining, normally the largest ever observed in this league. Pass
+    None to trust frozen points, which is only safe when nothing is left to
+    play.
 
     The magic numbers are left untouched as display values. They answer "can
     this one rival pass me", which is a different question from "do I finish in
-    a playoff seat" -- only the latter can justify the word "clinched".
+    a playoff seat".
     """
     state = state_from_standings(standings, remaining_matchups, playoff_spots)
     verdicts = classify(state, budget=budget)
-    for team in standings:
+
+    settled = {}
+    for index, team in enumerate(standings):
         verdict = verdicts[team["team_name"]]
-        team["verdict"] = verdict
+        team["tiebreak"] = None
+
+        dependency = None
         if verdict == "clinched":
-            team["status"] = STATUS_CLINCHED
+            dependency = clinch_dependency(state, index, budget=budget)
         elif verdict == "eliminated":
-            team["status"] = STATUS_ELIMINATED
-        # 'alive' keeps whatever in-contention wording the magic number produced
+            dependency = elimination_dependency(state, index, budget=budget)
+
+        if dependency:
+            rival, gap = dependency
+            team["tiebreak"] = {"rival": rival, "gap": gap}
+            if swing_envelope is not None and gap <= swing_envelope:
+                # Decided only if the scoring holds, and it plausibly might not.
+                verdict = "alive"
+
+        settled[index] = verdict
+        team["verdict"] = verdict
+        # Always overwrite. Leaving the magic number's wording in place let a
+        # downgraded team keep a stale "Clinched Playoff Spot" string, which
+        # anything reading status rather than verdict then believed.
+        team["status"] = {
+            "clinched": STATUS_CLINCHED,
+            "eliminated": STATUS_ELIMINATED,
+            "alive": STATUS_ALIVE,
+        }[verdict]
+
+    # Margins need the FINAL verdicts, including any downgrades, so they are
+    # filled in only once every team is settled.
+    contested = {i for i, v in settled.items() if v == "alive"}
+    for index, team in enumerate(standings):
+        team["margins"] = (
+            points_margins(state, index, contested=contested)
+            if settled[index] == "alive"
+            else []
+        )
     return standings
 
 
@@ -339,29 +425,6 @@ def elimination_dependency(state, team, budget=DEFAULT_NODE_BUDGET):
         if status_of(probe, team, budget=budget) != "eliminated":
             return state.names[u], round(gap, 2)
     return None
-
-
-def attach_dependencies(standings, remaining_matchups, playoff_spots, budget=DEFAULT_NODE_BUDGET):
-    """Record, per decided team, whether its verdict rests on the tiebreaker.
-
-    Only clinched and eliminated teams get this: they are the ones whose status
-    is stated as a bare fact, so they are the ones that need qualifying. A team
-    still alive already has its dependence on results spelled out as conditions.
-    """
-    state = state_from_standings(standings, remaining_matchups, playoff_spots)
-    for index, team in enumerate(standings):
-        team["tiebreak"] = None
-        verdict = team.get("verdict")
-        if verdict == "clinched":
-            found = clinch_dependency(state, index, budget=budget)
-        elif verdict == "eliminated":
-            found = elimination_dependency(state, index, budget=budget)
-        else:
-            continue
-        if found:
-            rival, gap = found
-            team["tiebreak"] = {"rival": rival, "gap": gap}
-    return standings
 
 
 def anything_decidable(state, budget=DEFAULT_NODE_BUDGET):

@@ -19,18 +19,27 @@ fi
 
 usage() {
   echo "Usage:"
-  echo "  $0 --irl <week_number>"
-  echo "  $0 --test <path_to_file.json>"
+  echo "  $0 --irl <week_number>  [display flags]"
+  echo "  $0 --test <path.json>   [display flags]"
+  echo
+  echo "Display flags are passed to the report and are all optional:"
+  echo "  --no-header      hide the summary line"
+  echo "  --no-standings   hide the standings table"
+  echo "  --no-matchups    hide next week's matchups"
   exit 1
 }
 
-# Check exactly 2 arguments
-if [ $# -ne 2 ]; then
+# Need at least the mode and its argument; anything after is a display flag
+if [ $# -lt 2 ]; then
   usage
 fi
 
 MODE="$1"
 ARG="$2"
+shift 2
+# Expanded below as ${DISPLAY_FLAGS[@]+...} so an empty array is not
+# treated as unbound under set -u (bash 3.2 on macOS).
+DISPLAY_FLAGS=("$@")
 
 case "$MODE" in
   --irl)
@@ -57,4 +66,4 @@ esac
   | "$PY" scenario_engine/refine_current_week.py \
   | "$PY" scenario_engine/generate_perms.py \
   | "$PY" scenario_engine/refine_hypothetical.py \
-  | "$PY" scenario_engine/pretty_print.py
+  | "$PY" scenario_engine/pretty_print.py ${DISPLAY_FLAGS[@]+"${DISPLAY_FLAGS[@]}"}

@@ -1,6 +1,7 @@
 import json
 import sys
 
+import margins
 import playoff_math
 
 
@@ -122,13 +123,12 @@ if __name__ == "__main__":
     # Calculate Magic Numbers
     expanded_data = calculate_stats(league_data, playoff_spots, num_weeks, remaining_weeks)
     # Then overwrite the clinched/eliminated verdict with the exact answer
+    # A verdict resting on the tiebreaker is only true while the scoring holds,
+    # so it is only reported as decided when the gap is bigger than any swing
+    # this league has produced over the weeks that remain.
+    envelope = margins.swing_envelope(remaining_weeks, margins.load_thresholds())
     expanded_data = playoff_math.apply_verdicts(
-        expanded_data, remaining_matchups, playoff_spots
-    )
-    # A verdict that rests on the total-points tiebreaker is only true while the
-    # scoring holds, so record what would have to change.
-    expanded_data = playoff_math.attach_dependencies(
-        expanded_data, remaining_matchups, playoff_spots
+        expanded_data, remaining_matchups, playoff_spots, swing_envelope=envelope
     )
     combined = {
         "league_data": metadata[0],
