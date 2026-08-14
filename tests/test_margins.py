@@ -165,8 +165,7 @@ def test_dependencies_are_attached_only_to_decided_teams(load_fixture):
         fixture, settings["playoff_spots"], settings["weeks_in_season"], remaining
     )
     matchups = stage2.build_remaining_matchups(fixture["teams"], remaining)
-    standings = playoff_math.apply_verdicts(standings, matchups, settings["playoff_spots"])
-    standings = playoff_math.attach_dependencies(
+    standings = playoff_math.apply_verdicts(
         standings, matchups, settings["playoff_spots"]
     )
 
@@ -210,3 +209,90 @@ def test_empty_sections_explain_themselves():
 
     over = pretty_print.nothing_yet("clinch", 0)
     assert "season is over" in over
+
+
+# --- a verdict must not rest on a gap that could plausibly close ---------------
+
+
+def decided_states():
+    """One league where the last seat comes down to points, nothing left to play
+    on the win side: both teams finish 5-5 whatever happens."""
+    from playoff_math import LeagueState
+
+    return LeagueState(
+        names=["Holder", "Chaser", "Also"],
+        wins=[5, 5, 3],
+        losses=[5, 5, 7],
+        points=[1900.0, 1870.0, 1200.0],  # 30 apart
+        games=[],
+        playoff_spots=1,
+    )
+
+
+def test_a_thirty_point_cushion_is_not_a_clinch_with_a_week_to_play():
+    """The real 2025 failure: declared clinched on a 30-point lead, then lost it.
+
+    A 30-point swing over one week is utterly ordinary in this league (the
+    largest on record is 120), so the seat is not settled and the verdict must
+    say so rather than being confidently wrong.
+    """
+    state = decided_states()
+    standings = [
+        {"team_name": n, "wins": w, "losses": l, "points_for": p, "status": "", "clinch_MN": None, "elim_MN": None}
+        for n, w, l, p in zip(state.names, state.wins, state.losses, state.points)
+    ]
+    # one week left, one game between the two teams that cannot change records
+    remaining = [[{"team1": "Holder", "team2": "Chaser"}]]
+
+    frozen = playoff_math.apply_verdicts(
+        [dict(t) for t in standings], [], 1, swing_envelope=None
+    )
+    assert frozen[0]["verdict"] == "clinched", "frozen points alone would say clinched"
+
+    guarded = playoff_math.apply_verdicts(
+        [dict(t) for t in standings], [], 1, swing_envelope=120.2
+    )
+    assert guarded[0]["verdict"] == "alive"
+    assert guarded[0]["tiebreak"] == {"rival": "Chaser", "gap": 30.0}
+    assert guarded[1]["verdict"] == "alive"
+
+
+def test_a_gap_beyond_the_envelope_still_clinches():
+    from playoff_math import LeagueState
+
+    standings = [
+        {"team_name": "Holder", "wins": 5, "losses": 5, "points_for": 1900.0,
+         "status": "", "clinch_MN": None, "elim_MN": None},
+        {"team_name": "Chaser", "wins": 5, "losses": 5, "points_for": 1500.0,
+         "status": "", "clinch_MN": None, "elim_MN": None},
+        {"team_name": "Also", "wins": 3, "losses": 7, "points_for": 1200.0,
+         "status": "", "clinch_MN": None, "elim_MN": None},
+    ]
+
+    result = playoff_math.apply_verdicts(standings, [], 1, swing_envelope=120.2)
+
+    assert result[0]["verdict"] == "clinched"  # 400 apart, far beyond any swing
+
+
+def test_status_never_keeps_stale_wording_from_the_magic_number():
+    """A downgraded team must not keep a "Clinched Playoff Spot" string.
+
+    It did, and two places read that string instead of the verdict -- so a team
+    the engine considered alive was bucketed as clinched. Same class of bug as
+    letting the magic number decide anything.
+    """
+    standings = [
+        {"team_name": "Holder", "wins": 5, "losses": 5, "points_for": 1900.0,
+         "status": "Clinched Playoff Spot", "clinch_MN": -3, "elim_MN": None},
+        {"team_name": "Chaser", "wins": 5, "losses": 5, "points_for": 1870.0,
+         "status": "Clinched Playoff Spot", "clinch_MN": -1, "elim_MN": None},
+        {"team_name": "Also", "wins": 3, "losses": 7, "points_for": 1200.0,
+         "status": "Clinched Playoff Spot", "clinch_MN": 0, "elim_MN": None},
+    ]
+
+    result = playoff_math.apply_verdicts(standings, [], 1, swing_envelope=120.2)
+
+    for team in result:
+        if team["verdict"] == "alive":
+            assert team["status"] == playoff_math.STATUS_ALIVE
+            assert "Clinched" not in team["status"]

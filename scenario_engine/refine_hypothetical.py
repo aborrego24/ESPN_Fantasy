@@ -3,6 +3,7 @@ import sys
 import copy
 
 import conditions
+import margins
 import playoff_math
 
 
@@ -94,7 +95,14 @@ def apply_permutation(base_data, permutation):
     # team actually holds a playoff seat is decided exactly, over every
     # completion of the weeks still left after this one.
     later_weeks = base_data.get("remaining_matchups", [])[1:]
-    standings = playoff_math.apply_verdicts(standings, later_weeks, playoff_spots)
+    # +1 for next week itself: its win/loss has been applied, but its POINTS
+    # have not -- those scores do not exist yet. Sizing the envelope on
+    # later_weeks alone treated next week's scoring as already known, so a seat
+    # resting on a 30-point gap came back as clinched whatever the result.
+    envelope = margins.swing_envelope(len(later_weeks) + 1, margins.load_thresholds())
+    standings = playoff_math.apply_verdicts(
+        standings, later_weeks, playoff_spots, swing_envelope=envelope
+    )
     return standings
 
 def build_team_scenarios(base_data, permutations):
@@ -104,7 +112,7 @@ def build_team_scenarios(base_data, permutations):
     tracked_teams = {
         team["team_name"]
         for team in base_data["standings"]
-        if team["status"] not in {"Clinched Playoff Spot", "Eliminated"}
+        if team.get("verdict", "alive") == "alive"
     }
 
     for i, perm in enumerate(permutations):
@@ -112,7 +120,7 @@ def build_team_scenarios(base_data, permutations):
 
         for team in standings:
             name = team["team_name"]
-            status = team["status"]
+            verdict = team["verdict"]
             # print(f"{name}'s status = {status}, i = {i}")
 
             if name not in tracked_teams:
@@ -125,9 +133,9 @@ def build_team_scenarios(base_data, permutations):
                     "still_alive_in": []
                 }
 
-            if "Clinched Playoff Spot" in status:
+            if verdict == "clinched":
                 scenario_map[name]["clinched_in"].append(i)
-            elif "Eliminated" in status:
+            elif verdict == "eliminated":
                 scenario_map[name]["eliminated_in"].append(i)
             else:
                 scenario_map[name]["still_alive_in"].append(i)

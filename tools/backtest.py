@@ -34,6 +34,7 @@ sys.path.insert(
 
 import generate_perms
 import league_data
+import margins
 import playoff_math
 import refine_current_week
 import refine_hypothetical
@@ -53,8 +54,9 @@ def verdicts_at(league, week):
     remaining_matchups = refine_current_week.build_remaining_matchups(
         payload["teams"], remaining
     )
+    envelope = margins.swing_envelope(remaining, margins.load_thresholds())
     standings = playoff_math.apply_verdicts(
-        standings, remaining_matchups, settings["playoff_spots"]
+        standings, remaining_matchups, settings["playoff_spots"], swing_envelope=envelope
     )
     base = {
         "league_data": {
@@ -100,6 +102,7 @@ def check_season(year):
             print(f"   #{t.final_standing} {t.team_name}  ({t.wins}-{t.losses}, PF {t.points_for:.1f})")
 
     failures = []
+    points_shifts = []
 
     # Does the seeding model match reality at all?
     final_order = sorted(
@@ -151,8 +154,9 @@ def check_season(year):
 
         # 4. CONDITIONS -- compare against what really happened next week
         if week < weeks:
-            problems = check_conditions(league, base, week, history)
+            problems, shifted = check_conditions(league, base, week, history)
             failures.extend(f"{year} {p}" for p in problems)
+            points_shifts.extend(f"{year} {p}" for p in shifted)
 
     # 2. MONOTONICITY
     for week in range(0, weeks):
@@ -180,21 +184,41 @@ def check_season(year):
 
 
 def check_conditions(league, base, week, history):
-    """Verify the stated conditions against the real following week."""
+    """Verify the stated conditions against the real following week.
+
+    Two things are deliberately kept apart here.
+
+    The COMBINATORIAL claim -- "if these results happen, that outcome follows" --
+    is the engine's own. It is checked by replaying the real week through stage 4
+    and confirming the verdict matches what the conditions predicted. A
+    disagreement is a genuine bug.
+
+    The POINTS assumption is not a claim about the future. A prediction made in
+    week N freezes total points at week N, because next week's scores do not
+    exist yet. When they arrive the tiebreaker picture can move, so the week N+1
+    verdict may legitimately differ. That is counted and reported, not failed --
+    the alternative would be to demand the tool predict scoring.
+    """
     problems = []
+    shifted = []
     permutations = generate_perms.generate_matchup_permutations(base)
     team_results = refine_hypothetical.build_team_scenarios(base, permutations)
     matchups = base["next_week_matchups"]
     real = actual_winners(league, week + 1)
 
-    # Which permutation index actually happened?
     real_perm = []
     for matchup in matchups:
         pair = frozenset((matchup["team1"], matchup["team2"]))
         if pair not in real:  # a tie, or a pairing the scoreboard disagrees about
-            return problems
+            return problems, shifted
         real_perm.append(real[pair])
     real_perm = tuple(real_perm)
+
+    # What stage 4 itself says once the real week is applied
+    replayed = {
+        t["team_name"]: t["verdict"]
+        for t in refine_hypothetical.apply_permutation(base, real_perm)
+    }
 
     for team, outcomes in team_results.items():
         scenario = refine_hypothetical.output_scenarios(
@@ -211,18 +235,20 @@ def check_conditions(league, base, week, history):
                 all(real_perm[c["matchup"]] == c["winner"] for c in alternative)
                 for alternative in side
             )
-            became = history[week + 1][team] == target
-            if stated and not became:
+            predicted = replayed[team] == target
+
+            if stated != predicted:
                 problems.append(
-                    f"wk{week}: {team} -- {key} conditions were met in reality "
-                    f"but the team was {history[week+1][team]} in wk{week+1}"
+                    f"wk{week}: {team} -- {key} conditions say "
+                    f"{'yes' if stated else 'no'} but replaying the real week gives "
+                    f"{replayed[team]!r}"
                 )
-            if became and not stated:
-                problems.append(
-                    f"wk{week}: {team} -- became {target} in wk{week+1} but no stated "
-                    f"{key} alternative covered what happened"
+            elif stated and history[week + 1][team] != target:
+                shifted.append(
+                    f"wk{week}: {team} -- predicted {target} and the results came in, "
+                    f"but next week's scoring moved it to {history[week+1][team]!r}"
                 )
-    return problems
+    return problems, shifted
 
 
 def main(years):

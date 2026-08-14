@@ -85,7 +85,7 @@ def main():
     for team in standings:
         name = team["team_name"]
 
-        if "Clinched" in team["status"]:
+        if team["verdict"] == "clinched":
             headline = "Clinched Playoff Spot"
             if margins.qualifies_headline(team.get("tiebreak"), weeks_remaining, thresholds):
                 headline = "Clinched on current scoring"
@@ -102,6 +102,9 @@ def main():
         reported += 1
         print(f"====== {GREEN}{name}{RESET} Clinches a playoff spot with: ======")
         emit(lines)
+        note = tiebreak_note(team, weeks_remaining, thresholds)
+        if note:
+            print(f"       {DIM}{note}{RESET}")
 
     if not reported:
         print(nothing_yet("clinch", weeks_remaining))
@@ -111,7 +114,7 @@ def main():
     for team in standings:
         name = team["team_name"]
 
-        if "Eliminated" in team["status"]:
+        if team["verdict"] == "eliminated":
             headline = "Eliminated from playoffs"
             if margins.qualifies_headline(team.get("tiebreak"), weeks_remaining, thresholds):
                 headline = "Eliminated on current scoring"
@@ -128,6 +131,9 @@ def main():
         reported += 1
         print(f"====== {RED}{name}{RESET} Eliminated from playoffs with: ======")
         emit(lines)
+        note = tiebreak_note(team, weeks_remaining, thresholds, eliminated=True)
+        if note:
+            print(f"       {DIM}{note}{RESET}")
 
     if not reported:
         print(nothing_yet("elimination", weeks_remaining))

@@ -40,6 +40,19 @@ def _row_for(weeks_remaining, thresholds):
     return by_weeks[str(key)]
 
 
+def swing_envelope(weeks_remaining, thresholds):
+    """The largest points swing this league has ever produced over N weeks.
+
+    Used as the bar a verdict must clear before the word "clinched" is earned:
+    if a rival could close the gap with a swing the league has actually managed
+    before, the seat is not settled.
+    """
+    if weeks_remaining <= 0:
+        return 0.0
+    row = _row_for(weeks_remaining, thresholds)
+    return row["max_observed"] if row else 0.0
+
+
 def plausibility(gap, weeks_remaining, thresholds):
     """Classify a points gap as never-observed, beyond-p99, or a live race.
 
