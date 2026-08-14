@@ -1,0 +1,306 @@
+"""Stage 1: shaping an ESPN League into the pipeline payload.
+
+This path was previously untestable -- the module executed everything at import
+time, including a live network call -- so none of it was covered. It is now
+exercised against a fake league, with no network access.
+
+The fake mirrors the parts of espn_api the code touches, including the awkward
+part: Matchup declares home_team/away_team as bare annotations and only assigns
+them when a team id matches, so on a bye the attribute does not exist at all.
+"""
+
+import json
+import sys
+
+import pytest
+
+import league_data
+
+
+class FakeSettings:
+    def __init__(self, weeks, playoff_spots):
+        self.reg_season_count = weeks
+        self.playoff_team_count = playoff_spots
+
+
+class FakeTeam:
+    """Carries per-week scores, since records are recomputed from them.
+
+    wins/losses/ties/points_for are the CURRENT totals espn_api reports. They
+    are deliberately set to values that disagree with the weekly scores, so a
+    test fails if the code reads them instead of recomputing.
+    """
+
+    def __init__(self, name, scores, wins=99, losses=99, ties=99, points_for=99999.0):
+        self.team_name = name
+        self.scores = list(scores)
+        self.wins = wins
+        self.losses = losses
+        self.ties = ties
+        self.points_for = points_for
+        self.schedule = []
+
+
+class FakeMatchup:
+    """Set home/away only when given, mirroring espn_api's bye behaviour."""
+
+    def __init__(self, home=None, away=None):
+        if home is not None:
+            self.home_team = home
+        if away is not None:
+            self.away_team = away
+
+
+class FakeLeague:
+    def __init__(self, teams, weeks, playoff_spots, schedule_by_week, current_week=None):
+        self.teams = teams
+        self.settings = FakeSettings(weeks, playoff_spots)
+        # schedule_by_week[w] is a list of (home, away) for 1-based week w
+        self._schedule = schedule_by_week
+        # Deliberately wrong: on a finished season espn_api clamps this to the
+        # final scoring period, so any code trusting it describes another week.
+        self.current_week = current_week if current_week is not None else weeks
+        self.scoreboard_calls = []
+        for team in teams:
+            for week in range(1, weeks + 1):
+                for home, away in self._schedule.get(week, []):
+                    if home is team:
+                        team.schedule.append(away)
+                    elif away is team:
+                        team.schedule.append(home)
+
+    def scoreboard(self, week=None):
+        self.scoreboard_calls.append(week)
+        return [
+            FakeMatchup(home, away) for home, away in self._schedule.get(week, [])
+        ]
+
+
+def four_team_league(weeks=4, playoff_spots=2, current_week_override=None):
+    # Week:              1      2      3      4
+    a = FakeTeam("Alpha", [120.0, 110.0, 100.0, 130.0])
+    b = FakeTeam("Bravo", [100.0, 105.0, 115.0, 90.0])
+    c = FakeTeam("Charlie", [90.0, 100.0, 118.0, 95.0])
+    d = FakeTeam("Delta", [80.0, 95.0, 90.0, 85.0])
+    schedule = {
+        1: [(a, b), (c, d)],
+        2: [(a, c), (b, d)],
+        3: [(a, d), (b, c)],
+        4: [(a, b), (c, d)],
+    }
+    return FakeLeague(
+        [a, b, c, d], weeks, playoff_spots, schedule, current_week_override
+    )
+
+
+def test_payload_has_the_shape_stage_two_expects():
+    payload = league_data.build_payload(four_team_league(), current_week=2)
+
+    assert set(payload) == {"league_settings", "teams", "next_week_matchups"}
+    assert payload["league_settings"] == {
+        "num_teams": 4,
+        "playoff_spots": 2,
+        "weeks_in_season": 4,
+        "current_week": 2,
+        "tiebreaker": "points_for",
+    }
+    assert [t["name"] for t in payload["teams"]] == [
+        "Alpha",
+        "Bravo",
+        "Charlie",
+        "Delta",
+    ]
+    # Alpha beat Bravo 120-100 in week 1 and Charlie 110-100 in week 2
+    assert payload["teams"][0]["record"] == {"wins": 2, "losses": 0, "ties": 0}
+    assert payload["teams"][0]["points_for"] == 230.0
+
+
+def test_next_week_matchups_come_from_the_requested_week():
+    """Regression: the scoreboard used to be asked for league.current_week.
+
+    On a finished season that clamps to the final scoring period, so the
+    standings described one week and the matchups another.
+    """
+    league = four_team_league(current_week_override=4)
+
+    payload = league_data.build_payload(league, current_week=2)
+
+    assert league.scoreboard_calls == [3], "must ask for the week after the one played"
+    pairs = {frozenset((m["team1"], m["team2"])) for m in payload["next_week_matchups"]}
+    assert pairs == {frozenset(("Alpha", "Delta")), frozenset(("Bravo", "Charlie"))}
+
+
+def test_next_week_matchups_read_the_matchup_not_the_schedule():
+    """Regression: team2 used to be remaining_schedule[0] of the home team.
+
+    That only agreed with reality when the schedule slice and the scoreboard
+    lined up exactly, and raised TypeError when the slice was empty.
+    """
+    payload = league_data.build_payload(four_team_league(), current_week=2)
+
+    for matchup in payload["next_week_matchups"]:
+        assert matchup["team1"] != matchup["team2"]
+
+    # Every team plays exactly once next week
+    named = [t for m in payload["next_week_matchups"] for t in (m["team1"], m["team2"])]
+    assert sorted(named) == ["Alpha", "Bravo", "Charlie", "Delta"]
+
+
+def test_remaining_schedule_covers_only_unplayed_weeks():
+    payload = league_data.build_payload(four_team_league(), current_week=2)
+
+    for team in payload["teams"]:
+        assert len(team["remaining_schedule"]) == 2
+        assert team["name"] not in team["remaining_schedule"]
+
+
+def test_the_first_remaining_opponent_agrees_with_next_week():
+    """The two views of next week must not disagree -- stage 2 uses both."""
+    payload = league_data.build_payload(four_team_league(), current_week=2)
+    by_name = {t["name"]: t for t in payload["teams"]}
+
+    for matchup in payload["next_week_matchups"]:
+        assert by_name[matchup["team1"]]["remaining_schedule"][0] == matchup["team2"]
+        assert by_name[matchup["team2"]]["remaining_schedule"][0] == matchup["team1"]
+
+
+def test_final_week_played_leaves_no_matchups():
+    """Season over: nothing left to enumerate, and no scoreboard call."""
+    league = four_team_league()
+
+    payload = league_data.build_payload(league, current_week=4)
+
+    assert payload["next_week_matchups"] == []
+    assert all(t["remaining_schedule"] == [] for t in payload["teams"])
+    assert league.scoreboard_calls == []
+
+
+def test_a_bye_week_is_skipped_rather_than_crashing():
+    """An odd-sized league leaves home_team/away_team unset on the bye."""
+    a = FakeTeam("Alpha", [110.0, 120.0, 100.0])
+    b = FakeTeam("Bravo", [100.0, 90.0, 95.0])
+    c = FakeTeam("Charlie", [90.0, 105.0, 115.0])
+    schedule = {1: [(a, b)], 2: [(a, c)], 3: [(b, c)]}
+    league = FakeLeague([a, b, c], 3, 2, schedule)
+    # Charlie has a bye in week 2's real scoreboard
+    league._schedule[2] = [(a, c), (b, None)]
+
+    payload = league_data.build_payload(league, current_week=1)
+
+    assert payload["next_week_matchups"] == [{"team1": "Alpha", "team2": "Charlie"}]
+
+
+def test_an_equal_score_is_recorded_as_a_tie():
+    """matchupTieRule is NONE in this league, so equal scores stand."""
+    league = four_team_league()
+    # Make week 1 Alpha vs Bravo a dead heat
+    league.teams[0].scores[0] = 100.0
+
+    payload = league_data.build_payload(league, current_week=1)
+
+    assert payload["teams"][0]["record"] == {"wins": 0, "losses": 0, "ties": 1}
+    assert payload["teams"][1]["record"] == {"wins": 0, "losses": 0, "ties": 1}
+
+
+# --- argument handling --------------------------------------------------------
+
+
+def test_test_mode_needs_no_network_and_no_week(tmp_path, capsys):
+    fixture = tmp_path / "payload.json"
+    fixture.write_text(json.dumps({"league_settings": {}, "teams": []}))
+
+    assert league_data.main(["--test", str(fixture)]) == 0
+
+    assert json.loads(capsys.readouterr().out) == {"league_settings": {}, "teams": []}
+
+
+def test_league_and_year_are_configurable():
+    args, _ = league_data.parse_args(["3", "--league-id", "999", "--year", "2025"])
+
+    assert (args.week, args.league_id, args.year) == (3, 999, 2025)
+
+
+def test_league_and_year_default_to_the_known_league():
+    args, _ = league_data.parse_args(["3"])
+
+    assert args.league_id == league_data.DEFAULT_LEAGUE_ID
+    assert args.year == league_data.DEFAULT_YEAR
+
+
+def test_environment_overrides_the_defaults(monkeypatch):
+    monkeypatch.setenv("ESPN_LEAGUE_ID", "4242")
+    monkeypatch.setenv("ESPN_YEAR", "2019")
+
+    args, _ = league_data.parse_args(["3"])
+
+    assert (args.league_id, args.year) == (4242, 2019)
+
+
+def test_no_arguments_at_all_is_an_error():
+    with pytest.raises(SystemExit):
+        league_data.main([])
+
+
+def test_a_non_integer_week_is_an_error():
+    with pytest.raises(SystemExit):
+        league_data.main(["not-a-week"])
+
+
+# --- records must describe the week asked for, not the current one -------------
+
+
+@pytest.mark.parametrize("week", [0, 1, 2, 3, 4])
+def test_games_played_always_equals_the_week_asked_for(week):
+    """The regression that produced 7 clinched teams for 6 seats.
+
+    espn_api reports CURRENT totals. Reading them while asking about an earlier
+    week gave a finished 14-game record plus 2 games still listed as remaining,
+    so the engine built 16-game seasons and everyone clinched.
+    """
+    payload = league_data.build_payload(four_team_league(), current_week=week)
+
+    for team in payload["teams"]:
+        record = team["record"]
+        played = record["wins"] + record["losses"] + record["ties"]
+        assert played == week, f"{team['name']} shows {played} games at week {week}"
+        assert played + len(team["remaining_schedule"]) == 4
+
+
+def test_current_totals_are_ignored_in_favour_of_the_weekly_scores():
+    league = four_team_league()
+    for team in league.teams:
+        assert team.wins == 99, "fake should disagree with its own scores"
+
+    payload = league_data.build_payload(league, current_week=2)
+
+    assert all(t["record"]["wins"] != 99 for t in payload["teams"])
+
+
+def test_record_through_week_counts_each_result_once():
+    league = four_team_league()
+    alpha = league.teams[0]
+
+    assert league_data.record_through_week(alpha, 0) == (0, 0, 0, 0.0)
+    # w1 beat Bravo 120-100, w2 beat Charlie 110-100, w3 beat Delta 100-90
+    assert league_data.record_through_week(alpha, 3) == (3, 0, 0, 330.0)
+
+
+def test_points_for_accumulates_only_the_weeks_played():
+    league = four_team_league()
+
+    through_two = league_data.build_payload(league, current_week=2)
+    through_four = league_data.build_payload(league, current_week=4)
+
+    for early, late in zip(through_two["teams"], through_four["teams"]):
+        assert early["points_for"] < late["points_for"]
+
+
+def test_played_weeks_counts_only_scored_weeks():
+    league = four_team_league()
+    assert league_data.played_weeks(league) == 4
+
+    # A live season: weeks 3 and 4 not yet played
+    for team in league.teams:
+        team.scores[2] = 0
+        team.scores[3] = 0
+    assert league_data.played_weeks(league) == 2
