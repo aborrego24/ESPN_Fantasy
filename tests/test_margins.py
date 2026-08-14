@@ -179,3 +179,34 @@ def test_dependencies_are_attached_only_to_decided_teams(load_fixture):
         if team["tiebreak"]:
             assert team["tiebreak"]["gap"] > 0
             assert team["tiebreak"]["rival"] != team["team_name"]
+
+
+def test_a_finished_season_has_no_tiebreaker_dependency(thresholds):
+    """With no weeks left nothing can be scored, so no gap can close.
+
+    Regression: the threshold lookup clamped 0 weeks to the 1-week window, so a
+    settled final standing was reported as a "live points race with 0 weeks to
+    play" -- and a certainty was downgraded to "on current scoring".
+    """
+    tiebreak = {"rival": "Somebody", "gap": 38.0}
+
+    assert margins.plausibility(38.0, 0, thresholds) == margins.SETTLED
+    assert margins.describe(tiebreak, 0, thresholds) is None
+    assert margins.qualifies_headline(tiebreak, 0, thresholds) is False
+
+
+def test_the_same_gap_is_still_live_with_a_week_to_go(thresholds):
+    tiebreak = {"rival": "Somebody", "gap": 38.0}
+
+    assert margins.qualifies_headline(tiebreak, 1, thresholds) is True
+    assert "1 week to play" in margins.describe(tiebreak, 1, thresholds)
+
+
+def test_empty_sections_explain_themselves():
+    import pretty_print
+
+    early = pretty_print.nothing_yet("clinch", 11)
+    assert "11 weeks" in early and "clinch" in early
+
+    over = pretty_print.nothing_yet("clinch", 0)
+    assert "season is over" in over

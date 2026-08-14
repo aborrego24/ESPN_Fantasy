@@ -19,6 +19,7 @@ THRESHOLDS_PATH = os.path.join(
 )
 
 # Plausibility bands, widest gap first
+SETTLED = "settled"  # no weeks left: nothing can change
 NEVER_OBSERVED = "never_observed"
 BEYOND_P99 = "beyond_p99"
 LIVE_RACE = "live_race"
@@ -40,7 +41,13 @@ def _row_for(weeks_remaining, thresholds):
 
 
 def plausibility(gap, weeks_remaining, thresholds):
-    """Classify a points gap as never-observed, beyond-p99, or a live race."""
+    """Classify a points gap as never-observed, beyond-p99, or a live race.
+
+    With no weeks left there is nothing left to score, so no gap can close --
+    every verdict is final and no swing is possible.
+    """
+    if weeks_remaining <= 0:
+        return SETTLED
     row = _row_for(weeks_remaining, thresholds)
     if row is None:
         return LIVE_RACE
@@ -62,8 +69,12 @@ def describe(tiebreak, weeks_remaining, thresholds, eliminated=False):
 
     rival = tiebreak["rival"]
     gap = tiebreak["gap"]
-    row = _row_for(weeks_remaining, thresholds)
     band = plausibility(gap, weeks_remaining, thresholds)
+    if band == SETTLED:
+        # The season is over; the tiebreaker has already been settled, so there
+        # is no dependency left to warn about.
+        return None
+    row = _row_for(weeks_remaining, thresholds)
     final = "the final week" if weeks_remaining == 1 else f"the final {weeks_remaining} weeks"
     left = "1 week" if weeks_remaining == 1 else f"{weeks_remaining} weeks"
 
