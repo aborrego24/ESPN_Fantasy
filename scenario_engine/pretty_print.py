@@ -46,9 +46,9 @@ def find_scenario(scenarios, team):
 def describe(alternatives):
     """One line per alternative, e.g. 'a WIN and Momma Gus WIN'.
 
-    An alternative that does not pin the team's own game says so explicitly --
-    the result follows however that team does, which is a stronger and simpler
-    statement than naming a result that turned out not to matter.
+    A line that names the team's own result pins it; a line that does not is
+    silent about it because it genuinely does not matter. Saying so out loud read
+    as a caveat and pulled attention away from the condition that counts.
     """
     lines = []
     for alternative in alternatives:
@@ -61,7 +61,7 @@ def describe(alternatives):
         elif head:
             lines.append(f"  - {head}")
         elif needed:
-            lines.append(f"  - {' and '.join(needed)}, win or lose")
+            lines.append(f"  - {' and '.join(needed)}")
         else:
             lines.append("  - any result")
     return lines
@@ -132,7 +132,7 @@ def print_header(standings, league):
     elif remaining == 1:
         # The last week before the playoffs is its own occasion; counting weeks
         # remaining and announcing when the playoffs start says nothing here.
-        title = f"FINAL WEEK OF THE REGULAR SEASON  ·  WEEK {week + 1}"
+        title = "FINAL WEEK OF THE REGULAR SEASON"
     else:
         title = (
             f"GOING INTO WEEK {week + 1}"
