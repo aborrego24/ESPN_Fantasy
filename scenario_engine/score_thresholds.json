@@ -1,0 +1,50 @@
+{
+  "provenance": {
+    "league_id": 123564885,
+    "seasons": [
+      {
+        "year": 2024,
+        "teams": 10,
+        "weeks": 14
+      },
+      {
+        "year": 2025,
+        "teams": 10,
+        "weeks": 14
+      }
+    ],
+    "note": "Point differentials between two teams over N consecutive weeks."
+  },
+  "by_weeks_remaining": {
+    "1": {
+      "max_observed": 120.2,
+      "p99": 87.0,
+      "samples": 1260
+    },
+    "2": {
+      "max_observed": 163.9,
+      "p99": 129.5,
+      "samples": 1170
+    },
+    "3": {
+      "max_observed": 201.5,
+      "p99": 163.4,
+      "samples": 1080
+    },
+    "4": {
+      "max_observed": 242.1,
+      "p99": 197.8,
+      "samples": 990
+    },
+    "5": {
+      "max_observed": 319.8,
+      "p99": 220.5,
+      "samples": 900
+    },
+    "6": {
+      "max_observed": 319.8,
+      "p99": 230.5,
+      "samples": 810
+    }
+  }
+}

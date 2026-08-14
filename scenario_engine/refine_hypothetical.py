@@ -1,8 +1,8 @@
 import json
 import sys
 import copy
-from itertools import zip_longest
 
+import conditions
 import playoff_math
 
 
@@ -134,78 +134,59 @@ def build_team_scenarios(base_data, permutations):
 
     return scenario_map
 
-def calc_clinching(team, clinched_idx, permutations, base_data, matchups):
-    if len(clinched_idx) == 0:
-        return [], []
-    win_clinch = []
-    loss_clinch = []
-    matchup_index = next(
-        (i for i, m in enumerate(matchups) if team in (m["team1"], m["team2"])), 
-        None
-    )
-    # print(f"clinch clinchedidx: {clinched_idx}")
-    for clinch in clinched_idx:
-        # team won & clinched
-        if team in permutations[clinch]:
-            if not win_clinch:
-                win_clinch = list(permutations[clinch])
-            else:
-                win_clinch = [x if x == y else None for x, y in zip_longest(win_clinch, permutations[clinch])]
-        # team lost & clinched
-        else:
-            if not loss_clinch:
-                loss_clinch = list(permutations[clinch])                
-            else:
-                loss_clinch = [x if x == y else None for x, y in zip_longest(loss_clinch, permutations[clinch])]
+def own_matchup_index(matchups, team):
+    for i, matchup in enumerate(matchups):
+        if team in (matchup["team1"], matchup["team2"]):
+            return i
+    return None
 
-    # print(f"{team} win clinch before clear own: {win_clinch} ---- loss clinch: {loss_clinch}")
-    # Clear team's own game out of the stuff 
-    # if loss_clinch and 0 <= matchup_index < len(loss_clinch):
-    #     loss_clinch.pop(matchup_index)
-    
-    # if win_clinch and 0 <= matchup_index < len(win_clinch):
-    #     win_clinch.pop(matchup_index)
-    return win_clinch, loss_clinch
 
-def calc_elim(team, eliminated_idx, permutations, base_data, matchups):
-    if len(eliminated_idx) == 0:
-        return [], []
-    win_elim = []
-    loss_elim = []
-    matchup_index = next(
-        (i for i, m in enumerate(matchups) if team in (m["team1"], m["team2"])), 
-        None
-    )
-    # print(f"elim elimidx: {eliminated_idx}")
-    for elim in eliminated_idx:
-        # team won & clinched
-        if team in permutations[elim]:
-            if not win_elim:
-                win_elim = list(permutations[elim])
-                # win_elim.pop(matchup_index)
-            else:
-                win_elim = [x if x == y else None for x, y in zip_longest(win_elim, permutations[elim])]
-        # team lost & clinched
-        else:
-            if not loss_elim:
-                loss_elim = list(permutations[elim])
-                # loss_elim.pop(matchup_index)
-            else:
-                loss_elim = [x if x == y else None for x, y in zip_longest(loss_elim, permutations[elim])]
-    return win_elim, loss_elim
+def describe_side(indices, permutations, matchups, team, team_won):
+    """Exact conditions for the outcomes in `indices` where `team` won (or lost).
 
-def output_scenarios(team, clinched_idx, eliminated_idx, permutations, base_data, matchups):
-    clinch_scenarios = calc_clinching(team, clinched_idx, permutations, base_data, matchups)
-    elim_scenarios = calc_elim(team, eliminated_idx, permutations, base_data, matchups)
-    # print(f"clinching scenarios: {clinch_scenarios}")
-    # print(f"elim scen: {elim_scenarios}")
+    The team's own game is held out of the conditions -- it is stated separately
+    as "a WIN" or "a LOSS" -- so a team can never appear as a condition of its
+    own scenario, and neither can its opponent.
 
+    Returns a list of alternatives, any one of which is sufficient. `[]` means
+    that side is impossible; `[[]]` means it needs no other results at all.
+    """
+    own = own_matchup_index(matchups, team)
+    others = [k for k in range(len(matchups)) if k != own]
+
+    selected = set()
+    for i in indices:
+        permutation = permutations[i]
+        won = own is not None and permutation[own] == team
+        if won != team_won:
+            continue
+        outcome = 0
+        for bit, k in enumerate(others):
+            if permutation[k] == matchups[k]["team2"]:
+                outcome |= 1 << bit
+        selected.add(outcome)
+
+    described = []
+    for implicant in conditions.minimal_dnf(selected, len(others)):
+        described.append(
+            [
+                {
+                    "matchup": others[bit],
+                    "winner": matchups[others[bit]]["team2" if value else "team1"],
+                }
+                for bit, value in sorted(implicant.items())
+            ]
+        )
+    return described
+
+
+def output_scenarios(team, clinched_idx, eliminated_idx, permutations, matchups):
     result = {}
-    if any(clinch_scenarios):  # At least one of the two lists is non-empty
-        result["clinch_scenarios"] = clinch_scenarios
-    if any(elim_scenarios):  # At least one of the two lists is non-empty
-        result["elim_scenarios"] = elim_scenarios
-    # print(f"team: {team} scenarios: {result}")
+    for label, indices in (("clinch", clinched_idx), ("elim", eliminated_idx)):
+        win = describe_side(indices, permutations, matchups, team, True)
+        loss = describe_side(indices, permutations, matchups, team, False)
+        if win or loss:
+            result[label] = {"win": win, "loss": loss}
     return result
 
 
@@ -215,22 +196,18 @@ if __name__ == "__main__":
     permutations = payload["permutations"]
 
     team_results = build_team_scenarios(base_data, permutations)
-    # print(json.dumps(team_results, indent=2))
-    # total = len(permutations)
     matchups = base_data["next_week_matchups"]
-    # print(json.dumps(matchups, indent=2))
 
     scenarios = []
-
     for team, outcomes in team_results.items():
-        clinched = outcomes["clinched_in"]
-        eliminated = outcomes["eliminated_in"]
-        # print(f"team: {team} =====================================")
-        # print(f"clinched in: {clinched}")
-        # print(f"eliminated in: {eliminated}")
-        # print(f"got here for {team}")
-        scenario = output_scenarios(team, clinched, eliminated, permutations, base_data, matchups)
-        scenarios.append({f"{team}": scenario})
+        scenario = output_scenarios(
+            team,
+            outcomes["clinched_in"],
+            outcomes["eliminated_in"],
+            permutations,
+            matchups,
+        )
+        scenarios.append({"team": team, **scenario})
     output_payload = {
         "base_league_data": base_data,
         "scenarios": scenarios

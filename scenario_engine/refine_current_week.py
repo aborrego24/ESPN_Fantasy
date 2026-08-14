@@ -125,6 +125,11 @@ if __name__ == "__main__":
     expanded_data = playoff_math.apply_verdicts(
         expanded_data, remaining_matchups, playoff_spots
     )
+    # A verdict that rests on the total-points tiebreaker is only true while the
+    # scoring holds, so record what would have to change.
+    expanded_data = playoff_math.attach_dependencies(
+        expanded_data, remaining_matchups, playoff_spots
+    )
     combined = {
         "league_data": metadata[0],
         "next_week_matchups": next_week_matchups[0],
