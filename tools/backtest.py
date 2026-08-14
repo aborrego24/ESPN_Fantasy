@@ -183,6 +183,25 @@ def check_season(year):
     return failures
 
 
+def satisfied_by(permutation, alternatives, team, own):
+    """Does what really happened match any stated alternative?
+
+    Each alternative is {"own": "win"|"loss"|None, "conditions": [...]}; `own`
+    None means the outcome holds whichever way the team's own game went.
+    """
+    for alternative in alternatives:
+        if not all(
+            permutation[c["matchup"]] == c["winner"] for c in alternative["conditions"]
+        ):
+            continue
+        if alternative["own"] is not None:
+            won = own is not None and permutation[own] == team
+            if (alternative["own"] == "win") != won:
+                continue
+        return True
+    return False
+
+
 def check_conditions(league, base, week, history):
     """Verify the stated conditions against the real following week.
 
@@ -230,11 +249,7 @@ def check_conditions(league, base, week, history):
         for key, target in (("clinch", "clinched"), ("elim", "eliminated")):
             if key not in scenario:
                 continue
-            side = scenario[key]["win" if team_won else "loss"]
-            stated = any(
-                all(real_perm[c["matchup"]] == c["winner"] for c in alternative)
-                for alternative in side
-            )
+            stated = satisfied_by(real_perm, scenario[key], team, own)
             predicted = replayed[team] == target
 
             if stated != predicted:

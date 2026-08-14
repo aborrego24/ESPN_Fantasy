@@ -1,10 +1,12 @@
 """End-to-end anti-overclaim test.
 
-For every team and every side, the conditions stage 4 reports must be satisfied
-by exactly the permutations in which that outcome actually occurs. This is the
-regression for the bug where an intersection with nothing in common rendered as
-"unconditional" -- on week13, Weezer Africa was reported as both clinching with
-a win and eliminated with a win.
+For every team and every outcome, the conditions stage 4 reports must be
+satisfied by exactly the permutations in which that outcome actually occurs.
+
+Each alternative is {"own": "win"|"loss"|None, "conditions": [...]}. `own` None
+means the outcome holds however the team itself does -- a stronger claim than
+naming a result that turned out not to matter, and the reason the team's own game
+is part of the reduction rather than held out of it.
 """
 
 import pytest
@@ -17,18 +19,18 @@ FIXTURES = ["week12.json", "week13.json", "PC_test.json"]
 
 
 def pipeline_through_stage4(fixture):
+    import margins
+    import playoff_math
+
     settings = fixture["league_settings"]
     remaining = settings["weeks_in_season"] - settings["current_week"]
     standings = stage2.calculate_stats(
         fixture, settings["playoff_spots"], settings["weeks_in_season"], remaining
     )
-    remaining_matchups = stage2.build_remaining_matchups(
-        fixture["teams"], remaining
-    )
-    import playoff_math
-
+    remaining_matchups = stage2.build_remaining_matchups(fixture["teams"], remaining)
+    envelope = margins.swing_envelope(remaining, margins.load_thresholds())
     standings = playoff_math.apply_verdicts(
-        standings, remaining_matchups, settings["playoff_spots"]
+        standings, remaining_matchups, settings["playoff_spots"], swing_envelope=envelope
     )
     base = {
         "league_data": {
@@ -46,19 +48,23 @@ def pipeline_through_stage4(fixture):
     return base, perms, team_results
 
 
-def satisfies(permutation, alternatives):
+def satisfies(permutation, alternatives, team, own):
     """Does this permutation match any stated alternative?"""
-    for conditions in alternatives:
-        if all(permutation[c["matchup"]] == c["winner"] for c in conditions):
-            return True
+    for alternative in alternatives:
+        if not all(
+            permutation[c["matchup"]] == c["winner"] for c in alternative["conditions"]
+        ):
+            continue
+        if alternative["own"] is not None:
+            won = own is not None and permutation[own] == team
+            if (alternative["own"] == "win") != won:
+                continue
+        return True
     return False
 
 
-@pytest.mark.parametrize("name", FIXTURES)
-def test_conditions_match_the_qualifying_permutations_exactly(load_fixture, name):
-    base, perms, team_results = pipeline_through_stage4(load_fixture(name))
+def scenarios_for(base, perms, team_results):
     matchups = base["next_week_matchups"]
-
     for team, outcomes in team_results.items():
         scenario = stage4.output_scenarios(
             team,
@@ -68,7 +74,14 @@ def test_conditions_match_the_qualifying_permutations_exactly(load_fixture, name
             matchups,
         )
         own = stage4.own_matchup_index(matchups, team)
+        yield team, own, scenario, outcomes
 
+
+@pytest.mark.parametrize("name", FIXTURES)
+def test_conditions_match_the_qualifying_permutations_exactly(load_fixture, name):
+    base, perms, team_results = pipeline_through_stage4(load_fixture(name))
+
+    for team, own, scenario, outcomes in scenarios_for(base, perms, team_results):
         for key, indices in (
             ("clinch", outcomes["clinched_in"]),
             ("elim", outcomes["eliminated_in"]),
@@ -77,94 +90,90 @@ def test_conditions_match_the_qualifying_permutations_exactly(load_fixture, name
                 continue
             qualifying = set(indices)
 
-            for team_won, alternatives in (
-                (True, scenario[key]["win"]),
-                (False, scenario[key]["loss"]),
-            ):
-                for i, permutation in enumerate(perms):
-                    won = own is not None and permutation[own] == team
-                    if won != team_won:
-                        continue
-                    stated = satisfies(permutation, alternatives)
-                    actual = i in qualifying
-                    assert stated == actual, (
-                        f"{name} {team} {key} "
-                        f"({'win' if team_won else 'loss'} side): "
-                        f"permutation {permutation} is "
-                        f"{'stated as' if stated else 'not stated as'} qualifying "
-                        f"but {'is' if actual else 'is not'}"
-                    )
+            for i, permutation in enumerate(perms):
+                stated = satisfies(permutation, scenario[key], team, own)
+                actual = i in qualifying
+                assert stated == actual, (
+                    f"{name} {team} {key}: permutation {permutation} is "
+                    f"{'stated as' if stated else 'not stated as'} qualifying "
+                    f"but {'is' if actual else 'is not'}"
+                )
 
 
 @pytest.mark.parametrize("name", FIXTURES)
 def test_a_team_is_never_a_condition_of_its_own_scenario(load_fixture, name):
-    """The team's own game is stated as 'a WIN'/'a LOSS', never as a condition.
+    """The team's own game is carried in `own`, never as a named condition.
 
-    Holding the team's own matchup out of the condition set makes this
-    structural rather than something a filter has to remember to do -- and the
-    opponent cannot appear either, for the same reason.
+    So neither the team nor its opponent can appear in a condition list, and the
+    property holds structurally rather than depending on a filter remembering to
+    strip them.
     """
     base, perms, team_results = pipeline_through_stage4(load_fixture(name))
     matchups = base["next_week_matchups"]
 
-    for team, outcomes in team_results.items():
-        scenario = stage4.output_scenarios(
-            team,
-            outcomes["clinched_in"],
-            outcomes["eliminated_in"],
-            perms,
-            matchups,
-        )
-        own = stage4.own_matchup_index(matchups, team)
+    for team, own, scenario, _ in scenarios_for(base, perms, team_results):
         opponent = None
         if own is not None:
             pair = matchups[own]
             opponent = pair["team2"] if pair["team1"] == team else pair["team1"]
 
-        for paths in scenario.values():
-            for alternatives in paths.values():
-                for conditions in alternatives:
-                    for condition in conditions:
-                        assert condition["matchup"] != own
-                        assert condition["winner"] != team
-                        assert condition["winner"] != opponent
+        for alternatives in scenario.values():
+            for alternative in alternatives:
+                for condition in alternative["conditions"]:
+                    assert condition["matchup"] != own
+                    assert condition["winner"] != team
+                    assert condition["winner"] != opponent
 
 
 @pytest.mark.parametrize("name", FIXTURES)
-def test_unconditional_claims_really_are_unconditional(load_fixture, name):
-    """'a WIN' with no conditions must hold for every outcome on that side."""
+def test_an_alternative_that_ignores_your_own_game_really_does(load_fixture, name):
+    """`own: None` claims the outcome holds whichever way the team's game goes.
+
+    That has to be true for both results, otherwise it is the overclaim this
+    module exists to prevent, just relocated.
+    """
     base, perms, team_results = pipeline_through_stage4(load_fixture(name))
-    matchups = base["next_week_matchups"]
-    side_total = 2 ** (len(matchups) - 1) if matchups else 1
 
-    for team, outcomes in team_results.items():
-        scenario = stage4.output_scenarios(
-            team,
-            outcomes["clinched_in"],
-            outcomes["eliminated_in"],
-            perms,
-            matchups,
-        )
-        own = stage4.own_matchup_index(matchups, team)
-
+    for team, own, scenario, outcomes in scenarios_for(base, perms, team_results):
         for key, indices in (
             ("clinch", outcomes["clinched_in"]),
             ("elim", outcomes["eliminated_in"]),
         ):
             if key not in scenario:
                 continue
-            for team_won, alternatives in (
-                (True, scenario[key]["win"]),
-                (False, scenario[key]["loss"]),
-            ):
-                if alternatives != [[]]:
+            qualifying = set(indices)
+
+            for alternative in scenario[key]:
+                if alternative["own"] is not None:
                     continue
-                on_this_side = sum(
-                    1
-                    for i in indices
-                    if (own is not None and perms[i][own] == team) == team_won
+                matching = [
+                    i
+                    for i, permutation in enumerate(perms)
+                    if all(
+                        permutation[c["matchup"]] == c["winner"]
+                        for c in alternative["conditions"]
+                    )
+                ]
+                assert matching, "an alternative must match something"
+                # every outcome meeting the conditions qualifies, win or lose
+                assert set(matching) <= qualifying, (
+                    f"{name} {team} {key}: alternative {alternative} claims to hold "
+                    f"win or lose, but some matching outcomes do not qualify"
                 )
-                assert on_this_side == side_total, (
-                    f"{name} {team} {key} claims to need nothing else, but only "
-                    f"{on_this_side} of {side_total} outcomes on that side qualify"
+                won = {i for i in matching if own is not None and perms[i][own] == team}
+                assert won and (set(matching) - won), (
+                    "the claim only means something if both results are covered"
                 )
+
+
+@pytest.mark.parametrize("name", FIXTURES)
+def test_simplest_alternative_is_listed_first(load_fixture, name):
+    base, perms, team_results = pipeline_through_stage4(load_fixture(name))
+
+    for team, _, scenario, _ in scenarios_for(base, perms, team_results):
+        for alternatives in scenario.values():
+            sizes = [
+                len(a["conditions"]) + (1 if a["own"] is not None else 0)
+                for a in alternatives
+            ]
+            assert sizes == sorted(sizes), f"{name} {team}: {sizes} not ordered"

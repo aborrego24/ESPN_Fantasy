@@ -247,6 +247,38 @@ def state_from_standings(standings, remaining_matchups, playoff_spots):
     )
 
 
+def points_margins(state, team, contested=None):
+    """Points gaps to every rival still in the race you could finish level with.
+
+    Two filters, both needed to keep this useful. A tiebreak only matters against
+    a team whose achievable win range overlaps yours -- records matching today is
+    the wrong test. And it only matters against a team still contesting a seat:
+    listing gaps to teams already clinched or eliminated is noise, since they
+    cannot take the seat from you either way.
+
+    Positive means `team` is ahead. Closest race first.
+    """
+    my_low = state.wins[team]
+    my_high = my_low + state.games_left_for(team)
+
+    margins = []
+    for rival in range(state.num_teams):
+        if rival == team:
+            continue
+        if contested is not None and rival not in contested:
+            continue
+        low = state.wins[rival]
+        high = low + state.games_left_for(rival)
+        if high < my_low or low > my_high:  # the ranges cannot meet
+            continue
+        margins.append(
+            (state.names[rival], round(state.points[team] - state.points[rival], 2))
+        )
+
+    margins.sort(key=lambda pair: abs(pair[1]))
+    return margins
+
+
 def apply_verdicts(
     standings,
     remaining_matchups,
@@ -279,6 +311,7 @@ def apply_verdicts(
     state = state_from_standings(standings, remaining_matchups, playoff_spots)
     verdicts = classify(state, budget=budget)
 
+    settled = {}
     for index, team in enumerate(standings):
         verdict = verdicts[team["team_name"]]
         team["tiebreak"] = None
@@ -296,6 +329,7 @@ def apply_verdicts(
                 # Decided only if the scoring holds, and it plausibly might not.
                 verdict = "alive"
 
+        settled[index] = verdict
         team["verdict"] = verdict
         # Always overwrite. Leaving the magic number's wording in place let a
         # downgraded team keep a stale "Clinched Playoff Spot" string, which
@@ -305,6 +339,16 @@ def apply_verdicts(
             "eliminated": STATUS_ELIMINATED,
             "alive": STATUS_ALIVE,
         }[verdict]
+
+    # Margins need the FINAL verdicts, including any downgrades, so they are
+    # filled in only once every team is settled.
+    contested = {i for i, v in settled.items() if v == "alive"}
+    for index, team in enumerate(standings):
+        team["margins"] = (
+            points_margins(state, index, contested=contested)
+            if settled[index] == "alive"
+            else []
+        )
     return standings
 
 

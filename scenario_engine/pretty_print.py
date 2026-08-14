@@ -43,20 +43,27 @@ def find_scenario(scenarios, team):
     return None
 
 
-def describe(prefix, alternatives):
+def describe(alternatives):
     """One line per alternative, e.g. 'a WIN and Momma Gus WIN'.
 
-    An alternative with no conditions means that result alone is enough, so the
-    line is just the prefix. Stage 4 only produces that when the outcome really
-    does hold regardless of the other games.
+    An alternative that does not pin the team's own game says so explicitly --
+    the result follows however that team does, which is a stronger and simpler
+    statement than naming a result that turned out not to matter.
     """
     lines = []
-    for conditions in alternatives:
-        if not conditions:
-            lines.append(f"  - {prefix}")
+    for alternative in alternatives:
+        needed = [f"{c['winner']} WIN" for c in alternative["conditions"]]
+        own = alternative["own"]
+        head = {"win": "a WIN", "loss": "a LOSS"}.get(own)
+
+        if head and needed:
+            lines.append(f"  - {head} and {' and '.join(needed)}")
+        elif head:
+            lines.append(f"  - {head}")
+        elif needed:
+            lines.append(f"  - {' and '.join(needed)}, win or lose")
         else:
-            joined = " and ".join(f"{c['winner']} WIN" for c in conditions)
-            lines.append(f"  - {prefix} and {joined}")
+            lines.append("  - any result")
     return lines
 
 
@@ -71,10 +78,10 @@ def paths_for(scenarios, name, key):
     entry = find_scenario(scenarios, name)
     if not entry:
         return None
-    paths = entry.get(key)
-    if not paths:
+    alternatives = entry.get(key)
+    if not alternatives:
         return None
-    return describe("a WIN", paths["win"]) + describe("a LOSS", paths["loss"])
+    return describe(alternatives)
 
 
 def nothing_yet(kind, weeks_remaining):
@@ -96,7 +103,11 @@ def nothing_yet(kind, weeks_remaining):
 def tiebreak_note(team, weeks_remaining, thresholds, eliminated=False):
     """The clause qualifying a verdict that rests on the tiebreaker."""
     return margins.describe(
-        team.get("tiebreak"), weeks_remaining, thresholds, eliminated=eliminated
+        team.get("tiebreak"),
+        weeks_remaining,
+        thresholds,
+        eliminated=eliminated,
+        margins=team.get("margins"),
     )
 
 
@@ -115,11 +126,18 @@ def print_header(standings, league):
     remaining = league["remaining_weeks"]
     counts = summarise(standings, league)
 
-    if remaining > 0:
-        weeks = "1 week left" if remaining == 1 else f"{remaining} weeks left"
-        title = f"AFTER WEEK {week}  ·  WEEK {week + 1} UP NEXT  ·  {weeks}"
+    playoffs_start = league["num_weeks"] + 1
+    if remaining == 0:
+        title = f"REGULAR SEASON COMPLETE  ·  PLAYOFFS BEGIN WEEK {playoffs_start}"
+    elif remaining == 1:
+        # The last week before the playoffs is its own occasion; counting weeks
+        # remaining and announcing when the playoffs start says nothing here.
+        title = f"FINAL WEEK OF THE REGULAR SEASON  ·  WEEK {week + 1}"
     else:
-        title = f"AFTER WEEK {week}  ·  REGULAR SEASON COMPLETE"
+        title = (
+            f"GOING INTO WEEK {week + 1}"
+            f"  ·  PLAYOFFS BEGIN WEEK {playoffs_start}"
+        )
 
     print(f"\n{BOLD}{banner(title)}{RESET}")
     print(
@@ -137,6 +155,9 @@ def print_standings(standings, league):
     width = max(len(t["team_name"]) for t in standings)
 
     print(f"\n{rule('STANDINGS')}")
+    print(
+        f"{DIM}      {'TEAM':<{width}}  {'RECORD':>6}  {'POINTS FOR':>10}  STATUS{RESET}"
+    )
     for position, team in enumerate(standings, 1):
         if position == spots + 1:
             print(f"{DIM}{rule('playoff cut line')}{RESET}")
@@ -144,7 +165,7 @@ def print_standings(standings, league):
         colour = VERDICT_COLOUR.get(team["verdict"], "")
         print(
             f"  {position:2d}  {team['team_name']:<{width}}  "
-            f"{record:>6}  {team['points_for']:8.1f}  "
+            f"{record:>6}  {team['points_for']:>10.1f}  "
             f"{colour}{team['verdict']}{RESET}"
         )
 

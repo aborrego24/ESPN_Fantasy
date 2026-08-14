@@ -149,52 +149,58 @@ def own_matchup_index(matchups, team):
     return None
 
 
-def describe_side(indices, permutations, matchups, team, team_won):
-    """Exact conditions for the outcomes in `indices` where `team` won (or lost).
+def describe_scenario(indices, permutations, matchups, team):
+    """Minimal exact alternatives for the outcomes in `indices`.
 
-    The team's own game is held out of the conditions -- it is stated separately
-    as "a WIN" or "a LOSS" -- so a team can never appear as a condition of its
-    own scenario, and neither can its opponent.
+    The team's own game is part of the reduction, not held out of it. Holding it
+    out forced every alternative to pin the team's own result, which is exact but
+    over-specifies: if a rival winning settles the matter, saying "a WIN and that
+    rival WIN" implies your own result mattered when it did not.
 
-    Returns a list of alternatives, any one of which is sufficient. `[]` means
-    that side is impossible; `[[]]` means it needs no other results at all.
+    The own-game literal is separated out afterwards, so it renders as "a WIN" or
+    "a LOSS" rather than as a condition -- a team still never appears as a
+    condition of its own scenario, and neither does its opponent.
+
+    Each alternative is {"own": "win"|"loss"|None, "conditions": [...]}, where
+    None means the outcome holds whatever the team itself does.
     """
     own = own_matchup_index(matchups, team)
-    others = [k for k in range(len(matchups)) if k != own]
+    count = len(matchups)
 
     selected = set()
     for i in indices:
         permutation = permutations[i]
-        won = own is not None and permutation[own] == team
-        if won != team_won:
-            continue
         outcome = 0
-        for bit, k in enumerate(others):
+        for k in range(count):
             if permutation[k] == matchups[k]["team2"]:
-                outcome |= 1 << bit
+                outcome |= 1 << k
         selected.add(outcome)
 
-    described = []
-    for implicant in conditions.minimal_dnf(selected, len(others)):
-        described.append(
-            [
-                {
-                    "matchup": others[bit],
-                    "winner": matchups[others[bit]]["team2" if value else "team1"],
-                }
-                for bit, value in sorted(implicant.items())
-            ]
-        )
-    return described
+    alternatives = []
+    for implicant in conditions.minimal_dnf(selected, count):
+        own_result = None
+        needed = []
+        for bit, value in sorted(implicant.items()):
+            winner = matchups[bit]["team2" if value else "team1"]
+            if bit == own:
+                own_result = "win" if winner == team else "loss"
+            else:
+                needed.append({"matchup": bit, "winner": winner})
+        alternatives.append({"own": own_result, "conditions": needed})
+
+    # Fewest requirements first: the easiest path to read comes first, and an
+    # alternative that does not depend on your own result outranks one that does.
+    alternatives.sort(key=lambda a: (len(a["conditions"]) + (a["own"] is not None),
+                                     a["own"] is not None))
+    return alternatives
 
 
 def output_scenarios(team, clinched_idx, eliminated_idx, permutations, matchups):
     result = {}
     for label, indices in (("clinch", clinched_idx), ("elim", eliminated_idx)):
-        win = describe_side(indices, permutations, matchups, team, True)
-        loss = describe_side(indices, permutations, matchups, team, False)
-        if win or loss:
-            result[label] = {"win": win, "loss": loss}
+        alternatives = describe_scenario(indices, permutations, matchups, team)
+        if alternatives:
+            result[label] = alternatives
     return result
 
 

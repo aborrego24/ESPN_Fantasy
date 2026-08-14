@@ -71,7 +71,18 @@ def plausibility(gap, weeks_remaining, thresholds):
     return LIVE_RACE
 
 
-def describe(tiebreak, weeks_remaining, thresholds, eliminated=False):
+def describe_margins(margins):
+    """'30 up on Epsteins, 70 up on State to State'."""
+    parts = []
+    for rival, gap in margins:
+        if gap >= 0:
+            parts.append(f"{gap:.0f} up on {rival}")
+        else:
+            parts.append(f"{abs(gap):.0f} behind {rival}")
+    return ", ".join(parts)
+
+
+def describe(tiebreak, weeks_remaining, thresholds, eliminated=False, margins=None):
     """One clause qualifying a clinched/eliminated verdict, or None.
 
     `tiebreak` is {"rival": name, "gap": points} as attached by
@@ -101,9 +112,11 @@ def describe(tiebreak, weeks_remaining, thresholds, eliminated=False):
             f"unless {gap:.0f} points swing against {rival} in {final} "
             f"— beyond this league's 99th percentile of {row['p99']:.0f}"
         )
-    return (
-        f"live points race with {rival} — {gap:.0f} apart with {left} to play"
-    )
+    if margins:
+        # Name everyone the tiebreak could involve, not just the nearest -- a
+        # reader wants to know the whole race they are in.
+        return f"points tiebreak in play: {describe_margins(margins)} ({left} to play)"
+    return f"live points race with {rival} — {gap:.0f} apart with {left} to play"
 
 
 def qualifies_headline(tiebreak, weeks_remaining, thresholds):
