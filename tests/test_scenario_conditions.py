@@ -167,13 +167,27 @@ def test_an_alternative_that_ignores_your_own_game_really_does(load_fixture, nam
 
 
 @pytest.mark.parametrize("name", FIXTURES)
-def test_simplest_alternative_is_listed_first(load_fixture, name):
+def test_what_a_team_can_control_is_listed_first(load_fixture, name):
+    """Actionable alternatives before ones that turn only on other teams.
+
+    "a WIN" is something a team can go and do; "Ben's WIN" is not. The
+    actionable path leads however few conditions the other carries. Within each
+    group, fewest requirements first.
+    """
     base, perms, team_results = pipeline_through_stage4(load_fixture(name))
 
     for team, _, scenario, _ in scenarios_for(base, perms, team_results):
         for alternatives in scenario.values():
-            sizes = [
-                len(a["conditions"]) + (1 if a["own"] is not None else 0)
-                for a in alternatives
-            ]
-            assert sizes == sorted(sizes), f"{name} {team}: {sizes} not ordered"
+            controllable = [a["own"] is not None for a in alternatives]
+            # every True before every False
+            assert controllable == sorted(controllable, reverse=True), (
+                f"{name} {team}: {alternatives} puts an out-of-control path first"
+            )
+
+            for own_involved in (True, False):
+                sizes = [
+                    len(a["conditions"])
+                    for a in alternatives
+                    if (a["own"] is not None) is own_involved
+                ]
+                assert sizes == sorted(sizes), f"{name} {team}: {sizes} not ordered"

@@ -188,10 +188,11 @@ def describe_scenario(indices, permutations, matchups, team):
                 needed.append({"matchup": bit, "winner": winner})
         alternatives.append({"own": own_result, "conditions": needed})
 
-    # Fewest requirements first: the easiest path to read comes first, and an
-    # alternative that does not depend on your own result outranks one that does.
-    alternatives.sort(key=lambda a: (len(a["conditions"]) + (a["own"] is not None),
-                                     a["own"] is not None))
+    # What the team can do about it comes first. An alternative that turns on its
+    # own result is actionable; one that turns only on other teams is not, so it
+    # is listed second however few conditions it carries. Within each group,
+    # fewest requirements first.
+    alternatives.sort(key=lambda a: (a["own"] is None, len(a["conditions"])))
     return alternatives
 
 
