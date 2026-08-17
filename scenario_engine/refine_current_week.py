@@ -21,7 +21,9 @@ def build_remaining_matchups(teams, remaining_weeks):
             if name in seen or week_index >= len(schedule):
                 continue
             opponent = schedule[week_index]
-            if opponent in seen:
+            # None is a bye: the slot is kept so the weeks stay aligned, but
+            # there is no game to enumerate.
+            if opponent is None or opponent in seen:
                 continue
             seen.add(name)
             seen.add(opponent)

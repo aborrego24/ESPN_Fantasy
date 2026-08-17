@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+from collections import Counter
 
 # Known-good leagues, kept as defaults because they are the ones actually used
 # and their data is a known quantity. Override with --league-id / --year, or
@@ -35,6 +36,63 @@ def played_weeks(league):
     return min(counts) if counts else 0
 
 
+class DuplicateTeamNames(Exception):
+    """Raised rather than letting two teams silently become one."""
+
+
+def unique_names(league):
+    """A display name per team id, guaranteed unique within the league.
+
+    The whole pipeline treats the team name as the team's identity: the standings
+    key on it, the exact engine builds a name-to-index map from it, a permutation
+    names its winner by it, and the scenario map buckets by it. **ESPN does not
+    require names to be unique**, and when two collide the results are not subtle:
+
+      - a matchup vanishes from the remaining schedule, because the pairing loop
+        tracks which teams are already placed by name, so the second team of a
+        colliding pair is skipped and its opponent is left unpaired -- the engine
+        then decides verdicts over an incomplete season;
+      - the two lookups disagree with each other. `state_from_standings` builds a
+        dict, so a repeated name resolves to the *last* team, while
+        `LeagueState.index_of` uses `list.index` and resolves it to the *first*.
+
+    Threading ids through all five stages would fix the internals and still print
+    two identical names in the report, which is its own kind of wrong. So identity
+    is repaired here instead, at the single point where data enters, and the name
+    stays the label everywhere downstream.
+
+    Only colliding names are touched, so the ordinary case is untouched. The tag
+    prefers ESPN's abbreviation because it means something to a reader, and falls
+    back to the team id; both come from ESPN and are stable, so a team gets the
+    same label on every run and for every week.
+    """
+    counts = Counter(team.team_name for team in league.teams)
+
+    chosen = {}
+    for team in league.teams:
+        name = team.team_name
+        if counts[name] > 1:
+            abbrev = getattr(team, "team_abbrev", None)
+            chosen[team.team_id] = f"{name} ({abbrev or team.team_id})"
+        else:
+            chosen[team.team_id] = name
+
+    # Two teams can share an abbreviation as easily as a name, so the tagged
+    # result is not unique by construction. Fall back to the id, which is.
+    tagged = Counter(chosen.values())
+    for team in league.teams:
+        if tagged[chosen[team.team_id]] > 1:
+            chosen[team.team_id] = f"{team.team_name} (id {team.team_id})"
+
+    if len(set(chosen.values())) != len(chosen):
+        # Only reachable if a team is literally named what a tag produced. Better
+        # to refuse than to carry on and merge two teams.
+        raise DuplicateTeamNames(
+            f"cannot make team names unique: {sorted(chosen.values())}"
+        )
+    return chosen
+
+
 def opponent_in_week(team, index):
     """The team this team played in week `index`, or None if it played nobody.
 
@@ -44,7 +102,11 @@ def opponent_in_week(team, index):
     before it could report anything.
     """
     opponent = team.schedule[index] if index < len(team.schedule) else None
-    if getattr(opponent, "team_name", None) == team.team_name:
+    # Compared by identity, not by name. Two distinct teams are allowed to share
+    # a name, and comparing names made each of them look like the other's own
+    # self-matchup -- so both weeks were recorded as byes, and two teams sat at
+    # 0-0 having scored a full slate of points.
+    if opponent is team:
         return None
     return opponent
 
@@ -82,7 +144,7 @@ def record_through_week(team, weeks):
     return wins, losses, ties, round(points, 2)
 
 
-def weekly_history(team, weeks):
+def weekly_history(team, weeks, names):
     """Per-week score and opponent for the first `weeks` matchups.
 
     Reference data for the season-review tables, which need to compare any two
@@ -99,7 +161,7 @@ def weekly_history(team, weeks):
             {
                 "week": index + 1,
                 "points": team.scores[index],
-                "opponent": getattr(opponent, "team_name", None),
+                "opponent": None if opponent is None else names[opponent.team_id],
             }
         )
     return history
@@ -116,21 +178,27 @@ def build_payload(league, current_week):
     against a fake league with no network access.
     """
     weeks_in_season = league.settings.reg_season_count
+    # One mapping, used for every place a team is named below. Building it once
+    # is what makes the four views of the schedule agree with each other.
+    names = unique_names(league)
 
     teams = []
     for team in league.teams:
         wins, losses, ties, points_for = record_through_week(team, current_week)
         teams.append(
             {
-                "name": team.team_name,
+                "name": names[team.team_id],
                 "record": {
                     "wins": wins,
                     "losses": losses,
                     "ties": ties,
                 },
                 "points_for": points_for,
+                # A bye keeps its slot as None rather than being dropped: stage 2
+                # pairs teams up by position in this list, so removing an entry
+                # would silently shift every later week forward one.
                 "remaining_schedule": [
-                    opponent.team_name
+                    None if opponent is None else names[opponent.team_id]
                     for opponent in team.schedule[current_week:weeks_in_season]
                 ],
             }
@@ -147,7 +215,7 @@ def build_payload(league, current_week):
             if home is None or away is None:
                 continue  # bye week: no pair to enumerate
             next_week_matchups.append(
-                {"team1": home.team_name, "team2": away.team_name}
+                {"team1": names[home.team_id], "team2": names[away.team_id]}
             )
 
     return {
@@ -165,7 +233,10 @@ def build_payload(league, current_week):
         # standings once per permutation, so per-team history would be both
         # dropped and copied thousands of times.
         "weekly_scores": [
-            {"name": team.team_name, "weeks": weekly_history(team, current_week)}
+            {
+                "name": names[team.team_id],
+                "weeks": weekly_history(team, current_week, names),
+            }
             for team in league.teams
         ],
     }
