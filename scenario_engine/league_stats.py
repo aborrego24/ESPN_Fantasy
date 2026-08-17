@@ -112,6 +112,19 @@ def all_play_records(weekly_scores):
     return rows
 
 
+def weekly_finish(tally):
+    """Where a week's score placed in the league, 1 being the highest.
+
+    A weekly tally already counts the rivals a team out-scored and the rivals
+    that out-scored it, so its place is the number above it plus one. Equal
+    scores share a place, as they do in the standings. Returns None for a week
+    the team did not score, which has no place to report.
+    """
+    if not (tally["wins"] + tally["losses"] + tally["ties"]):
+        return None
+    return tally["losses"] + 1
+
+
 def win_pct(tally):
     """Ties count as half a win, the usual convention."""
     played = tally["wins"] + tally["losses"] + tally["ties"]
