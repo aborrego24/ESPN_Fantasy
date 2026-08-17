@@ -105,20 +105,27 @@ def bye_spots(league):
     spots, seeds 1 and 2 played no week-15 game and the formula gives 2. In 2024,
     with five, three seeds sat out and the formula gives 3.
 
-    Returns 0 when the seeding itself cannot be trusted to be record-then-points.
-    That same 2024 check paired the model's third and fifth seeds in round one
-    rather than the fourth and fifth a pure record-then-points bracket implies, so
-    in a divisional season ESPN evidently seeds division winners first. The
-    playoff *field* is still right -- the backtest confirms it both seasons -- but
-    the *order* within it is not ours to claim, and a bye is a claim about order.
+    A divisional league used to return 0 here, because a bye is a claim about
+    seed *order* and the engine only ordered by record. Now that division winners
+    are seeded ahead of everyone else, as ESPN does, the order is modelled and the
+    claim can be made -- and the backtest checks it against who really sat out.
     """
     spots = league.settings.playoff_team_count
     if spots < 2:
         return 0
-    if len(getattr(league.settings, "division_map", None) or {1: None}) > 1:
-        return 0
     bracket = 1 << (spots - 1).bit_length()  # next power of two at or above spots
     return bracket - spots
+
+
+def divisions_of(league, names):
+    """One division id per team, keyed by the unique name, or None if there is one.
+
+    Returned as a name-to-id map so it survives the later stages, which rebuild
+    the team dicts and re-sort them: an index-aligned list would silently attach
+    the wrong division to the wrong team the moment the standings were sorted.
+    """
+    ids = {names[t.team_id]: getattr(t, "division_id", 0) for t in league.teams}
+    return ids if len(set(ids.values())) > 1 else None
 
 
 def opponent_in_week(team, index):
@@ -268,6 +275,9 @@ def build_payload(league, current_week):
             }
             for team in league.teams
         ],
+        # One division id per team when the league has more than one division,
+        # because that changes the seeding order and so every verdict.
+        "divisions": divisions_of(league, names),
         # ESPN's own short code per team, for the report to label a row with.
         # Keyed by the unique name because that is what the later stages carry;
         # only teams that actually have one appear.

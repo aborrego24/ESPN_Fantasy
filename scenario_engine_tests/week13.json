@@ -2,6 +2,7 @@
   "league_settings": {
     "num_teams": 10,
     "playoff_spots": 5,
+    "bye_spots": 3,
     "weeks_in_season": 14,
     "current_week": 13,
     "tiebreaker": "points_for"
@@ -852,6 +853,18 @@
       ]
     }
   ],
+  "divisions": {
+    "Weezer Africa": 1,
+    "\"I can't build\"": 0,
+    "John Fortnite Kennedy": 0,
+    "Villoni Boutique #2 Fan": 1,
+    "A courageous team": 0,
+    "La Puerta": 1,
+    "Momma Gus": 1,
+    "Ben's Underrated Tennis Team": 0,
+    "Njigba's In Paris": 0,
+    "Caitlyn clarks balls": 1
+  },
   "abbreviations": {
     "Weezer Africa": "OVEN",
     "\"I can't build\"": "SCHU",

@@ -251,6 +251,13 @@ python3 scenario_engine/league_data.py --test scenario_engine_tests/week13.json 
 
 New to this? This is the idea the tool leans on most.
 
+**Divisional seeding** — if your league has divisions, ESPN doesn't seed purely by
+record. Every **division winner** is seeded ahead of every team that didn't win one,
+with each group then ordered by record and points. That means a team can be seeded
+above another *with fewer wins*. The tool models this, so the standings table is
+printed in true seed order rather than record order. A single-division league is
+unaffected.
+
 **[Magic number](https://en.wikipedia.org/wiki/Magic_number_(sports))** — the classic sports shortcut for "how many more wins do I need." Useful for a quick gut check, but it only compares you against *one* rival at a time, so it can't answer "do I finish in the top six?" This project used to rely on it and gave wrong answers because of it. It has been removed — the exact search below answers the real question, and nothing read the magic number anyway.
 
 ## Running the tests
@@ -291,7 +298,6 @@ ESPN_LEAGUE_ID=123456789 python3 tools/derive_score_thresholds.py 2024 2025
 | **Low** | Duplicate team names get a tag | ESPN allows two teams to share a name. They're told apart by abbreviation — `Ringers (OVEN)` / `Ringers (SCHU)` — so the label differs slightly from what ESPN shows |
 | **Medium** | Future points are frozen | Tiebreaker maths assumes current point totals hold. The output always says when a verdict depends on this |
 | **Low** | Conditions cover next week only | Verdicts use the whole remaining season, but the printed conditions describe next week — "you need someone to lose in five weeks" isn't actionable |
-| **High** | Divisional seeding isn't modelled | Seeding is treated as record-then-points. A league with divisions seeds **division winners first**, so the seed *order* is wrong there, and in principle the playoff *field* can be too — a division winner with a poor record may take a place from a better team. Verified against one two-division season, where both division winners were top-5 on record anyway, so the field came out right. **Bye status is withheld entirely in a divisional league** rather than guessed |
 | **Low** | Future ties are not simulated | Past ties are read and reported correctly; possible *future* results are only ever win or loss. A tie is rare enough that enumerating it costs more than it explains |
 
 ### Planned

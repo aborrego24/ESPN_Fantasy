@@ -37,7 +37,11 @@ def brute_force_statuses(state):
             wins[winner] += 1
             losses[loser] += 1
         for t in range(n):
-            if makes_playoffs(t, wins, state.points, n, state.playoff_spots):
+            # divisions is None for a league without them, so this is the same
+            # oracle it has always been for every existing caller
+            if makes_playoffs(
+                t, wins, state.points, n, state.playoff_spots, state.divisions
+            ):
                 ever_in[t] = True
             else:
                 ever_out[t] = True

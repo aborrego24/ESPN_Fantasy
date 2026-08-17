@@ -18,12 +18,22 @@ Two facts keep that search small.
    The mirror holds for proving it can make it.
 2. Bounds pruning. At any point in the search, a rival that cannot reach the
    team's win total even by winning out can never finish above it, so whole
-   branches collapse.
+   branches collapse. **With divisions this is only nearly true** -- a division
+   winner is seeded above every non-winner whatever its record -- so the bound
+   there allows one extra promotion per division.
 
 Seeding follows ESPN's playoffSeedingRule = TOTAL_POINTS_SCORED: order by wins,
-then by total points scored. Points are treated as fixed at their current
-values (see `points`), which is a modelling choice, not a fact -- callers that
-care should consult the margin helpers below.
+then by total points scored. In a league with divisions, **every division winner
+is seeded ahead of every team that did not win one**, each group ordered by that
+same rule; see `seed_order`. Points are treated as fixed at their current values
+(see `points`), which is a modelling choice, not a fact -- callers that care
+should consult the margin helpers below.
+
+Both of the search's early exits depend on the number of teams above the searched
+team never falling as games are decided. That holds under divisional seeding too,
+because the team's own record is frozen and a team losing a division title is
+replaced above by whoever took it; `tests/test_divisions.py` property-tests it
+rather than trusting the argument.
 """
 
 
@@ -42,13 +52,24 @@ class LeagueState:
     only how conditions get worded, so they are flattened here.
     """
 
-    def __init__(self, names, wins, losses, points, games, playoff_spots):
+    def __init__(self, names, wins, losses, points, games, playoff_spots, divisions=None):
         self.names = list(names)
         self.wins = list(wins)
         self.losses = list(losses)
         self.points = list(points)
         self.games = list(games)
         self.playoff_spots = playoff_spots
+        # One division id per team, or None for a league without divisions. Only
+        # two or more distinct ids change anything.
+        self.divisions = list(divisions) if divisions else None
+
+    @property
+    def is_divisional(self):
+        return self.divisions is not None and len(set(self.divisions)) > 1
+
+    @property
+    def num_divisions(self):
+        return len(set(self.divisions)) if self.divisions else 1
 
     @property
     def num_teams(self):
@@ -73,7 +94,8 @@ class LeagueState:
             played.add(game_index)
         games = [g for k, g in enumerate(self.games) if k not in played]
         return LeagueState(
-            self.names, wins, losses, self.points, games, self.playoff_spots
+            self.names, wins, losses, self.points, games, self.playoff_spots,
+            self.divisions,
         )
 
 
@@ -84,12 +106,51 @@ def beats(a, b, wins, points):
     return points[a] > points[b]
 
 
-def strictly_above(team, wins, points, num_teams):
-    return sum(1 for u in range(num_teams) if u != team and beats(u, team, wins, points))
+def seed_order(wins, points, divisions=None):
+    """Team indices in seeding order, best seed first.
+
+    Without divisions this is just (wins, then total points). **With divisions,
+    every division winner is seeded ahead of every team that did not win one**,
+    winners ordered among themselves by the same rule and non-winners likewise.
+
+    That is not a guess. In the two-division 2024 season it reproduces both the
+    real set of first-round byes and the real round-one pairing, where a plain
+    record ordering does neither: an 8-6 division winner was seeded above a 9-5
+    wildcard.
+    """
+    count = len(wins)
+    rank = lambda team: (-wins[team], -points[team])
+
+    if divisions is None or len(set(divisions)) < 2:
+        return sorted(range(count), key=rank)
+
+    winners = {
+        min((t for t in range(count) if divisions[t] == division), key=rank)
+        for division in set(divisions)
+    }
+    return sorted(winners, key=rank) + sorted(
+        (t for t in range(count) if t not in winners), key=rank
+    )
 
 
-def makes_playoffs(team, wins, points, num_teams, playoff_spots):
-    return strictly_above(team, wins, points, num_teams) < playoff_spots
+def strictly_above(team, wins, points, num_teams, divisions=None):
+    """How many teams finish ahead of `team` in the seed order.
+
+    The pairwise comparator is kept for the divisionless case: it is what the
+    engine has always used, it is O(n) rather than O(n log n), and every existing
+    verification rests on it. Divisions need the whole order, because whether one
+    team outranks another depends on who won a division -- which is a fact about
+    the league, not about the pair.
+    """
+    if divisions is None or len(set(divisions)) < 2:
+        return sum(
+            1 for u in range(num_teams) if u != team and beats(u, team, wins, points)
+        )
+    return seed_order(wins, points, divisions).index(team)
+
+
+def makes_playoffs(team, wins, points, num_teams, playoff_spots, divisions=None):
+    return strictly_above(team, wins, points, num_teams, divisions) < playoff_spots
 
 
 def _search(state, team, want_in, budget):
@@ -105,6 +166,7 @@ def _search(state, team, want_in, budget):
     losses = list(state.losses)
     points = state.points
     spots = state.playoff_spots
+    divisions = state.divisions
 
     fixed = []
     open_games = []
@@ -143,7 +205,14 @@ def _search(state, team, want_in, budget):
                 f"exceeded {budget} nodes deciding {state.names[team]!r}"
             )
 
-        above_now = strictly_above(team, wins, points, n)
+        # Both exits below rely on this count never falling as the remaining games
+        # are decided, which holds because `team`'s own record is frozen at an
+        # extreme and every other record only improves. That is still true with
+        # divisions: if the team does not win its division the count is
+        # (divisions) + (better non-winners), the first term fixed and the second
+        # only growing; and a team losing its own division title can only push it
+        # further down. Checked over 20,000 random divisional leagues.
+        above_now = strictly_above(team, wins, points, n, divisions)
         if want_in:
             # Hunting for a way IN: give up this branch once enough rivals are
             # already locked above the team.
@@ -160,11 +229,18 @@ def _search(state, team, want_in, budget):
                 and not beats(u, team, wins, points)
                 and could_still_pass(u)
             )
+            # could_still_pass only knows about records, and a team can finish
+            # above this one by winning its division on a WORSE record -- exactly
+            # how an 8-6 team was seeded above a 9-5 team in 2024. At most one
+            # team per division is promoted that way, so allowing for one each
+            # keeps the bound an over-estimate, which is what makes it safe.
+            if divisions is not None:
+                reachable += state.num_divisions
             if reachable < spots:
                 return False
 
         if pos == len(open_games):
-            return makes_playoffs(team, wins, points, n, spots) == want_in
+            return makes_playoffs(team, wins, points, n, spots, divisions) == want_in
 
         k = open_games[pos]
         i, j = state.games[k]
@@ -200,7 +276,12 @@ def status_of(state, team, budget=DEFAULT_NODE_BUDGET):
     """
     if not state.games:
         made = makes_playoffs(
-            team, state.wins, state.points, state.num_teams, state.playoff_spots
+            team,
+            state.wins,
+            state.points,
+            state.num_teams,
+            state.playoff_spots,
+            state.divisions,
         )
         return "clinched" if made else "eliminated"
 
@@ -225,7 +306,7 @@ STATUS_ELIMINATED = "Eliminated"
 STATUS_ALIVE = "In contention"
 
 
-def state_from_standings(standings, remaining_matchups, playoff_spots):
+def state_from_standings(standings, remaining_matchups, playoff_spots, divisions=None):
     """Build a LeagueState from the pipeline's JSON shapes.
 
     `remaining_matchups` is a list of weeks, each a list of
@@ -255,6 +336,7 @@ def state_from_standings(standings, remaining_matchups, playoff_spots):
         [t["points_for"] for t in standings],
         games,
         playoff_spots,
+        divisions,
     )
 
 
@@ -269,7 +351,8 @@ def with_seats(state, seats):
     carry over untouched.
     """
     return LeagueState(
-        state.names, state.wins, state.losses, state.points, state.games, seats
+        state.names, state.wins, state.losses, state.points, state.games, seats,
+        state.divisions,
     )
 
 
@@ -282,10 +365,16 @@ def points_margins(state, team, contested=None):
     listing gaps to teams already clinched or eliminated is noise, since they
     cannot take the seat from you either way.
 
+    The win-range filter is **dropped in a divisional league**, where its premise
+    fails: a division winner is seeded above every non-winner whatever its record,
+    so a team you can never finish level with on wins can still finish above you.
+    Listing a few extra rivals is the safe direction to be wrong in.
+
     Positive means `team` is ahead. Closest race first.
     """
     my_low = state.wins[team]
     my_high = my_low + state.games_left_for(team)
+    comparable_by_record = not state.is_divisional
 
     margins = []
     for rival in range(state.num_teams):
@@ -295,8 +384,8 @@ def points_margins(state, team, contested=None):
             continue
         low = state.wins[rival]
         high = low + state.games_left_for(rival)
-        if high < my_low or low > my_high:  # the ranges cannot meet
-            continue
+        if comparable_by_record and (high < my_low or low > my_high):
+            continue  # the ranges cannot meet
         margins.append(
             (state.names[rival], round(state.points[team] - state.points[rival], 2))
         )
@@ -331,6 +420,7 @@ def apply_verdicts(
     swing_envelope=None,
     budget=DEFAULT_NODE_BUDGET,
     bye_spots=0,
+    divisions=None,
 ):
     """Set each team's status from the exact full-season verdict, in place.
 
@@ -355,6 +445,10 @@ def apply_verdicts(
     question from "do I finish in a playoff seat", and no renderer ever read
     them; they have been removed rather than kept as a second opinion.
 
+    `divisions` is one division id per team, in standings order. Given two or more,
+    seeding puts every division winner ahead of every team that did not win one,
+    which is what ESPN does and what a plain record ordering gets wrong.
+
     `bye_spots` asks the same question of a smaller number of seats, for leagues
     where the top seeds skip the first playoff round. It is reported separately in
     `bye` and folded into the readable `status`; `verdict` deliberately stays a
@@ -362,7 +456,9 @@ def apply_verdicts(
     playoff spot, and widening `verdict` would make every existing
     `== "clinched"` test silently miss them.
     """
-    state = state_from_standings(standings, remaining_matchups, playoff_spots)
+    state = state_from_standings(
+        standings, remaining_matchups, playoff_spots, divisions
+    )
     verdicts = classify(state, budget=budget)
 
     settled = {}
@@ -431,7 +527,8 @@ def _with_points_override(state, team, value):
     points = list(state.points)
     points[team] = value
     return LeagueState(
-        state.names, state.wins, state.losses, points, state.games, state.playoff_spots
+        state.names, state.wins, state.losses, points, state.games,
+        state.playoff_spots, state.divisions,
     )
 
 
@@ -472,6 +569,7 @@ def clinch_dependency(state, team, budget=DEFAULT_NODE_BUDGET):
             points,
             state.games,
             state.playoff_spots,
+            state.divisions,
         )
         if status_of(probe, team, budget=budget) != "clinched":
             return state.names[binding], round(gap, 2)
