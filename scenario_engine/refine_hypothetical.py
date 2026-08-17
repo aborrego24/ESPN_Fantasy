@@ -4,6 +4,7 @@ import copy
 
 import conditions
 import margins
+import refine_current_week
 import playoff_math
 
 
@@ -21,10 +22,13 @@ def apply_permutation(base_data, permutation):
             elif team["team_name"] in (t1, t2):
                 team["losses"] += 1
 
-    # Re-seed on the updated records
-    standings = sorted(
-        data["standings"],
-        key=lambda t: (-t["wins"], t["losses"], -t["points_for"])
+    # Re-seed on the updated records, divisionally where that applies
+    standings = refine_current_week.order_by_seed(
+        sorted(
+            data["standings"],
+            key=lambda t: (-t["wins"], t["losses"], -t["points_for"]),
+        ),
+        base_data.get("divisions"),
     )
 
     # Every team's fate is then decided exactly, over every completion of the
@@ -36,8 +40,13 @@ def apply_permutation(base_data, permutation):
     # later_weeks alone treated next week's scoring as already known, so a seat
     # resting on a 30-point gap came back as clinched whatever the result.
     envelope = margins.swing_envelope(len(later_weeks) + 1, margins.load_thresholds())
+    divisions = base_data.get("divisions")
     standings = playoff_math.apply_verdicts(
-        standings, later_weeks, playoff_spots, swing_envelope=envelope
+        standings,
+        later_weeks,
+        playoff_spots,
+        swing_envelope=envelope,
+        divisions=refine_current_week.divisions_in_order(standings, divisions),
     )
     return standings
 

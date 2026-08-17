@@ -64,6 +64,9 @@ def verdicts_at(league, week):
         settings["playoff_spots"],
         swing_envelope=envelope,
         bye_spots=settings.get("bye_spots", 0),
+        divisions=refine_current_week.divisions_in_order(
+            standings, payload.get("divisions")
+        ),
     )
     base = {
         "league_data": {
@@ -117,42 +120,43 @@ def check_season(year):
     print(f"\n{'=' * 78}")
     print(f"{year}  --  {len(names)} teams, {weeks} weeks, {spots} playoff spots")
     print(f"{'=' * 78}")
+    failures = []
+    points_shifts = []
+
+    # Does the seeding model match reality at all?
+    final_payload = league_data.build_payload(league, weeks)
+    final_standings = refine_current_week.calculate_stats(final_payload, spots, weeks, 0)
+    final_divisions = refine_current_week.divisions_in_order(
+        final_standings, final_payload.get("divisions")
+    )
+    order = playoff_math.seed_order(
+        [t["wins"] for t in final_standings],
+        [t["points_for"] for t in final_standings],
+        final_divisions,
+    )
+    model_field = {final_standings[i]["team_name"] for i in order[:spots]}
+
     # Seeding going INTO the playoffs, which is the order the engine models.
     # final_standing is the post-playoff finish and is shown separately, because
     # numbering the field by it implies a seeding it is not: a consolation winner
     # can outrank a better regular-season team.
     divisional = len(getattr(league.settings, "division_map", None) or {1: None}) > 1
     print(
-        f"ESPN's actual playoff field ({len(made_playoffs)}), ordered by the "
-        f"engine's seeding model:"
+        f"ESPN's actual playoff field ({len(made_playoffs)}), by the engine's seeding"
+        + (" (division winners first)" if divisional else "")
+        + ":"
     )
-    seeded = [
-        t
-        for t in sorted(league.teams, key=lambda t: (-t.wins, t.losses, -t.points_for))
-        if t.team_name in made_playoffs
-    ]
-    for seed, t in enumerate(seeded, 1):
+    finish = {t.team_name: t.final_standing for t in league.teams}
+    for seed, index in enumerate(order[:spots], 1):
+        t = final_standings[index]
         print(
-            f"   #{seed} by record/points  {t.team_name}  ({t.wins}-{t.losses}, "
-            f"PF {t.points_for:.1f})  -> finished #{t.final_standing}"
-        )
-    if divisional:
-        print(
-            "       note: this league has divisions, and ESPN seeds division "
-            "winners first,\n             so the order above is NOT the real "
-            "bracket order -- only the set is."
+            f"   seed {seed}  {t['team_name']}  ({t['wins']}-{t['losses']}, "
+            f"PF {t['points_for']:.1f})  -> finished #{finish[t['team_name']]}"
         )
 
-    failures = []
-    points_shifts = []
-
-    # Does the seeding model match reality at all?
-    final_order = sorted(
-        league.teams, key=lambda t: (-t.wins, t.losses, -t.points_for)
-    )
-    model_field = {t.team_name for t in final_order[:spots]}
     if model_field == made_playoffs:
-        print(f"\n[OK]   seeding model (record, then points) reproduces the real field")
+        label = "division winners first" if divisional else "record, then points"
+        print(f"\n[OK]   seeding model ({label}) reproduces the real field")
     else:
         print(f"\n[FAIL] seeding model disagrees with ESPN")
         print(f"       model says: {sorted(model_field)}")

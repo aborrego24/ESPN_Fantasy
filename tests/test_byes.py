@@ -175,12 +175,17 @@ def test_the_bye_count_is_the_gap_to_the_next_power_of_two(spots, expected):
     assert league_data.bye_spots(league) == expected
 
 
-def test_a_divisional_league_claims_no_byes():
-    """2024 seeded division winners first, so the order is not ours to claim."""
+def test_a_divisional_league_now_claims_byes_too():
+    """This used to return 0.
+
+    A bye is a claim about seed order, and the engine only ordered by record, so
+    a divisional league was given no answer. The order is modelled now, so the
+    count is the same derivation as anywhere else.
+    """
     league = FakeLeague([FakeTeam("A", [1.0])], 1, 6, {})
     league.settings.division_map = {0: "Trump", 1: "Biden"}
 
-    assert league_data.bye_spots(league) == 0
+    assert league_data.bye_spots(league) == 2
 
 
 def test_a_league_with_no_division_information_still_answers():
