@@ -375,7 +375,24 @@ def test_the_all_play_totals_shown_are_the_computed_ones():
         assert to_html.record_text(row["total"]) in document
 
 
-def test_the_matrix_is_square_and_numbered_to_match_its_rows():
+def luck_matrix(document):
+    return document.split("Schedule Luck")[1].split("</table>")[0]
+
+
+def all_play_cells(document):
+    """The weekly cells, row by row, as (text, css class) pairs."""
+    table = document.split("All-Play Record")[1].split("</table>")[0]
+    body = table.split("<tbody>")[1]
+    rows = []
+    for row in re.findall(r"<tr>(.*?)</tr>", body):
+        cells = re.findall(r'<td class="num([^"]*)">([^<]*)</td>', row)
+        # the last two are the all-play record and the percentage, not weeks
+        rows.append([(text, css.strip()) for css, text in cells[:-2]])
+    return rows
+
+
+def test_a_weekly_cell_is_a_placing_counted_from_one():
+    """Not "teams out-scored", which starts at zero for the week's worst score."""
     names = ["Alpha", "Bravo", "Charlie", "Delta"]
     document = to_html.render(
         payload(
@@ -383,12 +400,133 @@ def test_the_matrix_is_square_and_numbered_to_match_its_rows():
             weekly_scores=weekly(names),
         )
     )
-    matrix = document.split("Schedule Luck")[1].split("</table>")[0]
-    body = matrix.split("<tbody>")[1]
 
-    for index, row in enumerate(re.findall(r"<tr>(.*?)</tr>", body), 1):
+    rows = all_play_cells(document)
+    assert [len(row) for row in rows] == [2] * len(names), "one cell per team per week"
+    placings = {int(text) for row in rows for text, _ in row}
+    assert placings <= set(range(1, len(names) + 1)), "outside 1..teams"
+    assert 0 not in placings
+    # weekly() gives every team a distinct score, so every place is taken
+    for column in zip(*rows):
+        assert sorted(int(text) for text, _ in column) == list(
+            range(1, len(names) + 1)
+        ), "a week's placings must be 1..N with no repeats"
+
+
+def test_only_the_weeks_best_and_worst_score_are_marked():
+    """Shading the near-misses too coloured most of the table."""
+    names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo"]
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+        )
+    )
+
+    rows = all_play_cells(document)
+    for column in zip(*rows):
+        marked = {css: text for text, css in column if css}
+        assert marked == {"best": "1", "worst": str(len(names))}, (
+            f"expected exactly the first and last place marked, got {marked}"
+        )
+
+
+def test_the_placings_agree_with_the_all_play_record_beside_them():
+    """The record is the same comparisons counted a different way.
+
+    A team placing Nth out of T out-scored T-N rivals, so the places across a row
+    must add up to the wins in the record printed at the end of it.
+    """
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    history = weekly(names, weeks=3)
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names], weekly_scores=history
+        )
+    )
+
+    rows = all_play_cells(document)
+    computed = league_stats.all_play_records(history)
+    for cells, row in zip(rows, computed):
+        assert sum(len(names) - int(text) for text, _ in cells) == row["total"]["wins"]
+
+
+def test_the_matrix_is_square():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+        )
+    )
+    body = luck_matrix(document).split("<tbody>")[1]
+
+    for row in re.findall(r"<tr>(.*?)</tr>", body):
         assert row.count("<td") == len(names) + 1, "one cell per schedule, plus the name"
-        assert f'class="name">{index}. ' in row
+
+
+def test_each_schedule_column_is_labelled_with_whose_schedule_it_is():
+    """A bare column number makes the reader count back to the rows to decode it.
+
+    The point of the table is "my scores against your opponents", so a cell is
+    unreadable until both the row's team and the column's team are named.
+    """
+    names = ["Alpha", "Bravo", "Charlie"]
+    abbreviations = {"Alpha": "ALF", "Bravo": "BRV", "Charlie": "CHZ"}
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+            abbreviations=abbreviations,
+        )
+    )
+    matrix = luck_matrix(document)
+    head, body = matrix.split("<tbody>")
+
+    for name, tag in abbreviations.items():
+        assert f">{tag}</span>" in head, f"{name} is not a column head"
+    # and the row carries the same tag, so the two axes can be matched up
+    for row in re.findall(r"<tr>(.*?)</tr>", body):
+        name = re.search(r"</span>([^<]+)</td>", row).group(1)
+        assert f">{abbreviations[name]}</span>" in row
+
+
+def test_colliding_short_labels_fall_back_to_numbers():
+    """Two columns sharing a label is worse than a label that carries no meaning.
+
+    Without ESPN's abbreviations the labels are initials, which can collide --
+    here on "B". Numbering is then the only unambiguous option left.
+    """
+    assert to_html.column_labels(["Bravo Two", "Bravo Three"], {}) == ["1", "2"]
+    assert to_html.column_labels(["Alpha", "Bravo"], {}) == ["A", "B"]
+    assert to_html.column_labels(
+        ["Bravo Two", "Bravo Three"], {"Bravo Two": "B2", "Bravo Three": "B3"}
+    ) == ["B2", "B3"]
+
+
+def test_the_axes_are_named_in_the_table_head():
+    names = ["Alpha", "Bravo", "Charlie"]
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+        )
+    )
+
+    assert "borrowing the schedule of" in text_of(luck_matrix(document))
+
+
+def test_a_one_team_league_does_not_claim_a_team_borrowed_its_own_schedule():
+    """The worked example names the first row and the last column, which with a
+    single team would be the same team."""
+    document = to_html.render(
+        payload(
+            [team("Alpha", 1, 1, 100.0, "alive")], weekly_scores=weekly(["Alpha"])
+        )
+    )
+
+    assert "had it played Alpha's schedule" not in text_of(document)
+    assert_wellformed(document)
 
 
 def test_the_diagonal_is_marked_as_the_teams_own_record():

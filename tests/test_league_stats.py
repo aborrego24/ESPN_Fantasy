@@ -146,6 +146,34 @@ def test_all_play_disagrees_with_the_real_standings():
     assert all_play["Charlie"] == all_play["Bravo"]
 
 
+# --- weekly placing -----------------------------------------------------------
+
+
+def test_a_placing_counts_the_teams_above_and_starts_at_one():
+    assert league_stats.weekly_finish({"wins": 3, "losses": 0, "ties": 0}) == 1
+    assert league_stats.weekly_finish({"wins": 0, "losses": 3, "ties": 0}) == 4
+    assert league_stats.weekly_finish({"wins": 2, "losses": 1, "ties": 0}) == 2
+
+
+def test_equal_scores_share_a_placing():
+    """As they do in the standings: two teams tied for second, nobody third."""
+    assert league_stats.weekly_finish({"wins": 2, "losses": 0, "ties": 1}) == 1
+    assert league_stats.weekly_finish({"wins": 1, "losses": 1, "ties": 1}) == 2
+
+
+def test_an_unscored_week_has_no_placing():
+    """Distinguishable from last place, which is what a 0 would have read as."""
+    assert league_stats.weekly_finish({"wins": 0, "losses": 0, "ties": 0}) is None
+
+
+def test_every_placing_in_a_week_is_taken_exactly_once():
+    weeks = list(zip(*[row["weeks"] for row in league_stats.all_play_records(build())]))
+
+    for week in weeks:
+        placings = sorted(league_stats.weekly_finish(tally) for tally in week)
+        assert placings == [1, 2, 3, 4]
+
+
 # --- schedule luck ------------------------------------------------------------
 
 

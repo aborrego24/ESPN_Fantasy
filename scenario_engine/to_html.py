@@ -143,8 +143,12 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .grid td, .grid th { padding: .3rem .4rem; font-size: .82rem; text-align: center; }
 .grid td.name, .grid th.name { text-align: left; white-space: nowrap; font-size: .85rem; }
 .grid td.total { font-weight: 700; border-left: 1px solid var(--line); }
-.w-hi { background: var(--good-bg); }
-.w-lo { background: var(--bad-bg); }
+/* Named for what they mark rather than for high and low: in the all-play table a
+   1 is the best week a team can have, so "hi" would mean the smallest number. */
+.best { background: var(--good-bg); color: var(--good); font-weight: 700; }
+.worst { background: var(--bad-bg); color: var(--bad); font-weight: 700; }
+.grid th .mono { min-width: 0; margin-right: 0; padding: .1rem .25rem; }
+.grid td.name .mono { min-width: 2.6rem; }
 .self { outline: 2px solid var(--ink); outline-offset: -2px; font-weight: 700; }
 .better { background: var(--good-bg); color: var(--good); }
 .worse { background: var(--bad-bg); color: var(--bad); }
@@ -282,15 +286,20 @@ def render_all_play(weekly_scores):
     for row in rows:
         cells = []
         for week in row["weeks"]:
-            played = sum(week.values())
-            # Shade the weeks a team beat, or lost to, most of the league
-            shade = ""
-            if played:
-                if week["wins"] >= played - 1:
-                    shade = " w-hi"
-                elif week["losses"] >= played - 1:
-                    shade = " w-lo"
-            cells.append(f'<td class="num{shade}">{week["wins"]}</td>')
+            finish = league_stats.weekly_finish(week)
+            if finish is None:
+                cells.append('<td class="num"></td>')
+                continue
+            # Only the week's highest and lowest scorer are marked. Shading the
+            # near-misses too left most of the table coloured, which reads as
+            # decoration rather than as the outliers it is meant to pick out.
+            if finish == 1:
+                shade = " best"
+            elif not week["wins"]:
+                shade = " worst"
+            else:
+                shade = ""
+            cells.append(f'<td class="num{shade}">{finish}</td>')
         body.append(
             f'<tr><td class="name">{esc(row["name"])}</td>{"".join(cells)}'
             f'<td class="num total">{record_text(row["total"])}</td>'
@@ -299,9 +308,10 @@ def render_all_play(weekly_scores):
 
     return f"""<h2>All-Play Record</h2>
 <p class="lede">Each week, every team is scored against <em>every</em> other team rather than
-just the one the schedule gave it. The number in each week is how many of the other
-{rivals} teams it out-scored. A team well above its real record was beating the
-league and losing anyway.</p>
+just the one the schedule gave it. The number is where that week's score placed in the
+league &mdash; <strong>1 is the week's highest score</strong>, and the marked cells are the
+week's highest and lowest. The record on the right is all {weeks * rivals} of those
+comparisons: a team well above its real record was beating the league and losing anyway.</p>
 <table class="grid">
 <thead><tr><th class="name">Team</th>{head}
 <th class="num total">All-play</th><th class="num">Pct</th></tr></thead>
@@ -309,17 +319,40 @@ league and losing anyway.</p>
 </table>"""
 
 
-def render_schedule_luck(weekly_scores):
+def column_labels(names, abbreviations):
+    """Short, unique labels for the schedule-luck columns.
+
+    Full names are far too long for a column head -- truncating them left "Ben's
+    Und" beside "Villoni B", which the reader has to guess at. ESPN's
+    abbreviations are short and already recognisable, but a payload saved before
+    stage 1 recorded them falls back to initials, which are not guaranteed
+    unique. Where they collide, number the columns instead: two columns sharing a
+    label is worse than a label carrying no meaning.
+    """
+    labels = [monogram(name, abbreviations) for name in names]
+    if len(set(labels)) == len(names):
+        return labels
+    return [str(i + 1) for i in range(len(names))]
+
+
+def tag_html(label, name):
+    """The chip that ties a row to its column, coloured per team."""
+    return (
+        f'<span class="mono" style="background:{monogram_colour(name)}">'
+        f"{esc(label)}</span>"
+    )
+
+
+def render_schedule_luck(weekly_scores, abbreviations=None):
     result = league_stats.schedule_luck(weekly_scores)
     if not result["rows"]:
         return ""
     order = result["teams"]
-    # Columns are numbered rather than named: the names are long enough that
-    # truncating them left "Ben's Und" against "Villoni B", which the reader has
-    # to guess at. The rows are in the same order, so the number is the label.
-    column_of = {name: i + 1 for i, name in enumerate(order)}
+    label_of = dict(zip(order, column_labels(order, abbreviations)))
 
-    head = "".join(f'<th class="num">{i + 1}</th>' for i in range(len(order)))
+    # Every column head carries its team's own tag and colour, so the schedule a
+    # cell belongs to can be read off the column without counting back to a row.
+    head = "".join(f'<th class="num">{tag_html(label_of[n], n)}</th>' for n in order)
     body = []
     spread_rows = []
     for row in result["rows"]:
@@ -339,7 +372,7 @@ def render_schedule_luck(weekly_scores):
                 css = ""
             cells.append(f'<td class="num{css}">{record_text(tally)}</td>')
         body.append(
-            f'<tr><td class="name">{column_of[row["name"]]}. '
+            f'<tr><td class="name">{tag_html(label_of[row["name"]], row["name"])}'
             f'{esc(row["name"])}</td>{"".join(cells)}</tr>'
         )
 
@@ -353,16 +386,31 @@ def render_schedule_luck(weekly_scores):
             f"<td>{esc(worst_name)}</td></tr>"
         )
 
+    # Naming a real row and a real column beats describing the axes in the
+    # abstract, but with one team the two would be the same team and the sentence
+    # would say a team borrowed its own schedule.
+    example = ""
+    if len(order) > 1:
+        first, last = order[0], order[-1]
+        example = (
+            f"So the cell where row {tag_html(label_of[first], first)} meets column "
+            f"{tag_html(label_of[last], last)} is what {esc(first)} would have finished "
+            f"with had it played {esc(last)}'s schedule. "
+        )
+
     return f"""<h2>Schedule Luck</h2>
-<p class="lede">Every team's record had it played every other team's schedule. Read across a
-row: the outlined cell is that team's real record, green is a schedule it would have
-preferred, red one it would not. Identical scores, different opponents. Columns are
-numbered as the rows are, so column 3 is the schedule belonging to row 3.</p>
+<p class="lede">Every team keeps its own scores and takes on someone else's opponents.
+<strong>Each row is a team; each column is the team whose schedule it borrowed</strong>, tagged
+and coloured to match that team's own row. {example}The outlined cell on the diagonal is a
+team playing its own schedule, which is its real record: green beats it, red falls short
+of it.</p>
 <table class="grid">
-<thead><tr><th class="name">Team &rsaquo; playing schedule of</th>{head}</tr></thead>
+<thead><tr><th class="name">Team &darr; &nbsp; borrowing the schedule of &rarr;</th>{head}</tr></thead>
 <tbody>{''.join(body)}</tbody>
 </table>
 <h2>What The Draw Was Worth</h2>
+<p class="lede">The best and worst that each team's own scores could have produced against
+somebody else's opponents, and whose schedule it would have taken.</p>
 <table>
 <thead><tr><th>Team</th><th class="num">Real</th><th class="num">Best</th>
 <th>with schedule of</th><th class="num">Worst</th><th>with schedule of</th></tr></thead>
@@ -397,7 +445,7 @@ def render(payload, show=None):
         parts.append(render_scenarios(standings, scenarios, league, thresholds, "elim"))
     if "stats" in show and weekly_scores:
         parts.append(render_all_play(weekly_scores))
-        parts.append(render_schedule_luck(weekly_scores))
+        parts.append(render_schedule_luck(weekly_scores, abbreviations))
 
     played = league["current_week"]
     return f"""<!DOCTYPE html>
