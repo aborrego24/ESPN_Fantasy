@@ -175,6 +175,20 @@ There are four things the tool can tell you about a team, and the wording is del
 
 Mathematically certain. There is no combination of remaining results that keeps this team out.
 
+The standings status goes one level further where the league has them. A **`bye`**
+means the team is certain to finish high enough to skip the first playoff round —
+the same question as clinching, asked of fewer seats:
+
+```
+      TEAM                       RECORD  POINTS FOR  STATUS
+   1  Momma Gus                    10-4      1844.4  bye
+   2  I can't let you get close    10-4      1795.9  bye
+   3  Villoni Boutique #2 Fan       9-5      1817.2  clinched
+```
+
+A bye implies a place, so those teams are also counted in `Clinched` in the summary
+line. The four statuses are `bye`, `clinched`, `alive`, `eliminated`.
+
 ### 2. Clinched, but leans on the tiebreaker
 
 ```
@@ -277,6 +291,7 @@ ESPN_LEAGUE_ID=123456789 python3 tools/derive_score_thresholds.py 2024 2025
 | **Low** | Duplicate team names get a tag | ESPN allows two teams to share a name. They're told apart by abbreviation — `Ringers (OVEN)` / `Ringers (SCHU)` — so the label differs slightly from what ESPN shows |
 | **Medium** | Future points are frozen | Tiebreaker maths assumes current point totals hold. The output always says when a verdict depends on this |
 | **Low** | Conditions cover next week only | Verdicts use the whole remaining season, but the printed conditions describe next week — "you need someone to lose in five weeks" isn't actionable |
+| **Low** | No bye status in a divisional league | The bracket order isn't published, and a divisional season seeds division winners first, so the tool declines to claim a bye rather than guess. Playoff verdicts are unaffected |
 | **Low** | Future ties are not simulated | Past ties are read and reported correctly; possible *future* results are only ever win or loss. A tie is rare enough that enumerating it costs more than it explains |
 
 ### Planned

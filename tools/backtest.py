@@ -11,7 +11,10 @@ week and holds every statement against the real result:
                     clinched in every later week.
   3. COMPLETENESS -- once the season is over, every team must be decided, and
                     the clinched set must be exactly the real playoff field.
-  4. CONDITIONS  -- given what really happened the following week, the stated
+  4. BYES        -- a team told it has a first-round bye must actually have sat
+                    out the first playoff week, and once the season is over the
+                    bye set must be exactly the set that did.
+  5. CONDITIONS  -- given what really happened the following week, the stated
                     conditions must predict the right status. Checked both ways:
                     conditions met => outcome happened, and outcome happened =>
                     some stated alternative was met.
@@ -56,7 +59,11 @@ def verdicts_at(league, week):
     )
     envelope = margins.swing_envelope(remaining, margins.load_thresholds())
     standings = playoff_math.apply_verdicts(
-        standings, remaining_matchups, settings["playoff_spots"], swing_envelope=envelope
+        standings,
+        remaining_matchups,
+        settings["playoff_spots"],
+        swing_envelope=envelope,
+        bye_spots=settings.get("bye_spots", 0),
     )
     base = {
         "league_data": {
@@ -69,7 +76,8 @@ def verdicts_at(league, week):
         "remaining_matchups": remaining_matchups,
         "standings": standings,
     }
-    return {t["team_name"]: t["verdict"] for t in standings}, base
+    byes = {t["team_name"] for t in standings if t.get("bye") == "clinched"}
+    return {t["team_name"]: t["verdict"] for t in standings}, base, byes
 
 
 def actual_winners(league, week):
@@ -82,6 +90,19 @@ def actual_winners(league, week):
         if own > against:
             results[frozenset((team.team_name, opponent.team_name))] = team.team_name
     return results
+
+
+def really_had_a_bye(league, weeks, spots):
+    """Playoff teams that played no game in the first playoff week."""
+    played = set()
+    for matchup in league.scoreboard(week=weeks + 1):
+        home = getattr(matchup, "home_team", None)
+        away = getattr(matchup, "away_team", None)
+        scored = getattr(matchup, "home_score", 0) or getattr(matchup, "away_score", 0)
+        if home is not None and away is not None and scored:
+            played |= {home.team_name, away.team_name}
+    field = {t.team_name for t in league.teams if t.final_standing <= spots}
+    return field - played
 
 
 def check_season(year):
@@ -121,8 +142,9 @@ def check_season(year):
     # check for week N needs to know what really happened in week N+1.
     history = {}
     bases = {}
+    byes = {}
     for week in range(0, weeks + 1):
-        history[week], bases[week] = verdicts_at(league, week)
+        history[week], bases[week], byes[week] = verdicts_at(league, week)
 
     print(f"\n{'wk':>3}  {'clinched':>8} {'elim':>5} {'alive':>5}   soundness")
     for week in range(0, weeks + 1):
@@ -179,6 +201,30 @@ def check_season(year):
         )
     else:
         print(f"\n[OK]   after the final week, the clinched set is exactly the real playoff field")
+
+    # 4. BYES
+    bye_spots = league_data.bye_spots(league)
+    if not bye_spots:
+        print(f"[--]   no bye claims made for {year} (bye_spots=0)")
+    else:
+        actual = really_had_a_bye(league, weeks, spots)
+        for week in range(0, weeks + 1):
+            wrong = byes[week] - actual
+            if wrong:
+                failures.append(
+                    f"{year} wk{week}: told {sorted(wrong)} they had a first-round "
+                    f"bye; they played in week {weeks + 1}"
+                )
+        if byes[weeks] != actual:
+            failures.append(
+                f"{year}: final bye set {sorted(byes[weeks])} != really idle "
+                f"{sorted(actual)}"
+            )
+        else:
+            print(
+                f"[OK]   the {bye_spots} teams told they had a bye are exactly the "
+                f"{len(actual)} who sat out week {weeks + 1}"
+            )
 
     return failures
 

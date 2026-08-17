@@ -7,13 +7,27 @@ import margins
 GREEN = "\033[92m"
 RED = "\033[91m"
 YELLOW = "\033[93m"
+CYAN = "\033[96m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 DIM = "\033[2m"
 
 WIDTH = 78
 
-VERDICT_COLOUR = {"clinched": GREEN, "eliminated": RED, "alive": YELLOW}
+VERDICT_COLOUR = {"bye": CYAN, "clinched": GREEN, "eliminated": RED, "alive": YELLOW}
+
+
+def display_status(team):
+    """The one word for where a team stands, best first.
+
+    Four levels, and a bye outranks a plain place because it is strictly more:
+    nobody holds a bye without also holding a seat. Kept separate from `verdict`,
+    which stays a three-way playoff answer so that code asking "did they clinch a
+    place" still counts the teams who did.
+    """
+    if team.get("bye") == "clinched":
+        return "bye"
+    return team["verdict"]
 
 
 def rule(title=""):
@@ -173,11 +187,12 @@ def print_standings(standings, league):
         if position == spots + 1:
             print(f"{DIM}{rule('playoff cut line')}{RESET}")
         record = f"{team['wins']}-{team['losses']}"
-        colour = VERDICT_COLOUR.get(team["verdict"], "")
+        status = display_status(team)
+        colour = VERDICT_COLOUR.get(status, "")
         print(
             f"  {position:2d}  {team['team_name']:<{width}}  "
             f"{record:>6}  {team['points_for']:>10.1f}  "
-            f"{colour}{team['verdict']}{RESET}"
+            f"{colour}{status}{RESET}"
         )
 
 

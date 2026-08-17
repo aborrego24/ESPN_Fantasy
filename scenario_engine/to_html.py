@@ -83,6 +83,7 @@ CSS = """
   --ink: #14181d; --dim: #6b7684; --line: #dde3ea; --panel: #f6f8fa;
   --good: #1a7f37; --good-bg: #e7f5ea; --bad: #b42318; --bad-bg: #fdeceb;
   --open: #9a6700; --open-bg: #fdf6e3;
+  --bye: #0b6bcb; --bye-bg: #e6f0fb;
 }
 * { box-sizing: border-box; }
 body {
@@ -115,6 +116,7 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 /* The colour carries the verdict on its own. Only the standings table adds the
    chip, because a name set in a small pill reads as less important than the
    sentence beside it -- which is backwards, since the name is the subject. */
+.bye { color: var(--bye); }
 .clinched { color: var(--good); }
 .eliminated { color: var(--bad); }
 .alive { color: var(--open); }
@@ -122,6 +124,7 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
   display: inline-block; padding: .05rem .45rem; border-radius: 999px;
   font-size: .75rem; font-weight: 600;
 }
+.pill.bye { background: var(--bye-bg); }
 .pill.clinched { background: var(--good-bg); }
 .pill.eliminated { background: var(--bad-bg); }
 .pill.alive { background: var(--open-bg); }
@@ -163,7 +166,7 @@ def render_standings(standings, league, abbreviations=None):
     spots = league["playoff_spots"]
     rows = []
     for position, team in enumerate(standings, 1):
-        verdict = team["verdict"]
+        status = pretty_print.display_status(team)
         # The cut line is drawn under the last team holding a seat
         cut = ' class="cut"' if position == spots else ""
         rows.append(
@@ -172,7 +175,7 @@ def render_standings(standings, league, abbreviations=None):
             f"{esc(team['team_name'])}</td>"
             f"<td class=\"num\">{team['wins']}-{team['losses']}</td>"
             f"<td class=\"num\">{team['points_for']:.1f}</td>"
-            f'<td><span class="pill {verdict}">{esc(verdict)}</span></td></tr>'
+            f'<td><span class="pill {status}">{esc(status)}</span></td></tr>'
         )
     return f"""<h2>Standings</h2>
 <table>

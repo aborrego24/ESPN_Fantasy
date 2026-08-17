@@ -67,11 +67,14 @@ if __name__ == "__main__":
     league_data = json.load(sys.stdin)
 
     playoff_spots = league_data["league_settings"]["playoff_spots"]
+    # 0 when the league has no byes, or when the bracket order cannot be derived
+    bye_spots = league_data["league_settings"].get("bye_spots", 0)
     num_weeks = league_data["league_settings"]["weeks_in_season"]
     remaining_weeks = num_weeks - league_data["league_settings"]["current_week"]
 
     metadata= [{
         "playoff_spots": playoff_spots,
+        "bye_spots": bye_spots,
         "num_weeks": num_weeks,
         "remaining_weeks": remaining_weeks,
         "current_week": league_data["league_settings"]["current_week"]
@@ -81,15 +84,17 @@ if __name__ == "__main__":
     ]
     remaining_matchups = build_remaining_matchups(league_data["teams"], remaining_weeks)
 
-    # Calculate Magic Numbers
     expanded_data = calculate_stats(league_data, playoff_spots, num_weeks, remaining_weeks)
-    # Then overwrite the clinched/eliminated verdict with the exact answer
     # A verdict resting on the tiebreaker is only true while the scoring holds,
     # so it is only reported as decided when the gap is bigger than any swing
     # this league has produced over the weeks that remain.
     envelope = margins.swing_envelope(remaining_weeks, margins.load_thresholds())
     expanded_data = playoff_math.apply_verdicts(
-        expanded_data, remaining_matchups, playoff_spots, swing_envelope=envelope
+        expanded_data,
+        remaining_matchups,
+        playoff_spots,
+        swing_envelope=envelope,
+        bye_spots=bye_spots,
     )
     combined = {
         "league_data": metadata[0],
