@@ -2,9 +2,5 @@
 # Stages 2-5 of the pipeline run on the standard library alone.
 espn-api>=0.44,<1.0
 
-# report_generator/ only
-matplotlib>=3.9,<4.0
-pandas>=2.2,<4.0
-
 # old_files/calc_playoffs.py only
 tabulate>=0.9,<1.0

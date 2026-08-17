@@ -109,6 +109,11 @@ pip install -r requirements.txt
 | `--league-id <id>` | Which league to read | aborrego24's public league |
 | `--year <season>` | Which season | `2024` |
 | `--test <path>` | Replay a saved payload instead of downloading | — |
+| `--html <path>` | Write an HTML report instead of printing | prints to the terminal |
+| `--no-header` | Hide the summary line | shown |
+| `--no-standings` | Hide the standings table | shown |
+| `--no-matchups` | Hide next week's matchups | shown |
+| `--no-stats` | Hide the season-review tables (HTML only) | shown |
 
 Environment variables work too, which is handy if you always use the same league:
 
@@ -117,6 +122,32 @@ export ESPN_LEAGUE_ID=123456789
 export ESPN_YEAR=2026
 ./run_scenarios.sh --irl 12
 ```
+
+### The HTML report
+
+Everything the terminal shows, plus two tables that need more than 78 columns:
+
+```bash
+./run_scenarios.sh --irl 13 --html report.html
+open report.html          # Linux: xdg-open
+```
+
+One file, no server, no assets, nothing to install — you can mail it or keep it as a
+record of where a season stood. It adds:
+
+**All-play record** — each week, your score against *every* team's rather than just the
+one the schedule handed you. This is the honest measure of how you played, and it
+regularly disagrees with the standings: in the 2025 season one team sat at 4-9 with the
+fourth-best all-play record, while an 8-5 team was in the bottom four. One was unlucky;
+the other was not good.
+
+**Schedule luck** — your record had you played each rival's schedule instead of your
+own, for all of them. Your real record is on the highlighted diagonal; green cells are
+schedules you'd have preferred. The summary underneath names the best and worst draw
+available to each team, which is the closest thing to a number for "how much did the
+schedule cost me".
+
+Both read only completed weeks, so they take no part in any clinch verdict.
 
 ---
 
@@ -174,7 +205,12 @@ Five small programs, each doing one job, passing [JSON](https://en.wikipedia.org
 | 2 | `refine_current_week.py` | Sort the standings; decide who has clinched or been eliminated |
 | 3 | `generate_perms.py` | Enumerate every win/loss combination for next week |
 | 4 | `refine_hypothetical.py` | Replay each combination, re-decide everyone's fate, work out the minimum conditions |
-| 5 | `pretty_print.py` | Turn all that into English |
+| 5 | `pretty_print.py` **or** `to_html.py` | Turn all that into English, for a terminal or a page |
+
+Stage 5 is where `--html` swaps one renderer for the other. Both read the same payload,
+and the wording lives in `pretty_print.py` so the two cannot describe a verdict
+differently. `league_stats.py` sits alongside them, computing the season-review tables
+from the weekly history stage 1 records.
 
 Because each stage just reads JSON and writes JSON, you can stop anywhere and look:
 
@@ -229,7 +265,7 @@ ESPN_LEAGUE_ID=123456789 python3 tools/derive_score_thresholds.py 2024 2025
 | **High** | Duplicate team names break things | Teams are tracked by name, so two identically-named teams get merged. ESPN allows duplicates |
 | **Medium** | Future points are frozen | Tiebreaker maths assumes current point totals hold. The output always says when a verdict depends on this |
 | **Low** | Conditions cover next week only | Verdicts use the whole remaining season, but the printed conditions describe next week — "you need someone to lose in five weeks" isn't actionable |
-| **Low** | The report generator is unfinished | `report_generator/` builds all-play record PDFs and has known bugs. Not part of the main pipeline |
+| **Low** | Future ties are not simulated | Past ties are read and reported correctly; possible *future* results are only ever win or loss. A tie is rare enough that enumerating it costs more than it explains |
 
 ### Planned
 
@@ -239,10 +275,8 @@ ESPN_LEAGUE_ID=123456789 python3 tools/derive_score_thresholds.py 2024 2025
 - **Track teams by ID** instead of name, removing the duplicate-name problem
 - **A projections mode** — use ESPN's own forecasts for future scoring, clearly labelled as a forecast rather than maths
 - **`--dump` flag** to save a live download as a replayable file, so any week becomes a permanent offline test case
-- **A real interface** — the Unix pipeline is great for debugging and poor for humans. A web page is the obvious next step
-- **Nicer CLI** — better colours, a standings table, less shouting
 - **Smarter pruning** — rule out whole classes of outcome earlier
-- **Fix or retire `report_generator/`**
+- **Charts in the HTML report** — scoring trends over the season, drawn inline as SVG
 - **Add a LICENSE** — there isn't one yet, so all rights are technically reserved
 
 ---
