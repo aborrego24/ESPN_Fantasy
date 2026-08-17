@@ -80,3 +80,27 @@ def test_no_team_below_the_cutoff_does_not_crash(load_fixture):
 
     standings = standings_for(fixture)
     assert len(standings) == 4
+
+
+def test_a_bye_slot_is_skipped_rather_than_paired_against_nothing():
+    """A None opponent means no game that week, not a matchup with no team 2.
+
+    The slot is kept in remaining_schedule so the weeks stay aligned, so stage 2
+    is the place that has to recognise it.
+    """
+    teams = [
+        {"name": "Alpha", "remaining_schedule": ["Bravo", None]},
+        {"name": "Bravo", "remaining_schedule": ["Alpha", None]},
+        {"name": "Charlie", "remaining_schedule": [None, "Delta"]},
+        {"name": "Delta", "remaining_schedule": [None, "Charlie"]},
+    ]
+
+    weeks = stage2.build_remaining_matchups(teams, 2)
+
+    assert weeks == [
+        [{"team1": "Alpha", "team2": "Bravo"}],
+        [{"team1": "Charlie", "team2": "Delta"}],
+    ]
+    for week in weeks:
+        for matchup in week:
+            assert matchup["team1"] and matchup["team2"]

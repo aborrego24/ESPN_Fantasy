@@ -231,6 +231,16 @@ def state_from_standings(standings, remaining_matchups, playoff_spots):
     {"team1": ..., "team2": ...}.
     """
     names = [t["team_name"] for t in standings]
+    # Identity is the name here, so a repeated one is not recoverable: this dict
+    # would resolve it to the LAST team while index_of, which uses list.index,
+    # resolves it to the FIRST -- two lookups of one name giving two teams.
+    # Stage 1 guarantees uniqueness; anything reaching here without that
+    # guarantee is refused rather than quietly answered wrong.
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise ValueError(
+            f"team names must be unique to decide anything; repeated: {duplicates}"
+        )
     index = {name: i for i, name in enumerate(names)}
     games = [
         (index[m["team1"]], index[m["team2"]])

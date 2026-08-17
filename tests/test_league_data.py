@@ -29,9 +29,25 @@ class FakeTeam:
     wins/losses/ties/points_for are the CURRENT totals espn_api reports. They
     are deliberately set to values that disagree with the weekly scores, so a
     test fails if the code reads them instead of recomputing.
+
+    team_id is what espn_api actually guarantees to be unique, so it is assigned
+    automatically and never repeats -- a fake that let two teams share an id
+    would hide exactly the bug the id exists to prevent.
     """
 
-    def __init__(self, name, scores, wins=99, losses=99, ties=99, points_for=99999.0):
+    _next_id = 1
+
+    def __init__(
+        self,
+        name,
+        scores,
+        wins=99,
+        losses=99,
+        ties=99,
+        points_for=99999.0,
+        team_id=None,
+        team_abbrev=None,
+    ):
         self.team_name = name
         self.scores = list(scores)
         self.wins = wins
@@ -39,6 +55,11 @@ class FakeTeam:
         self.ties = ties
         self.points_for = points_for
         self.schedule = []
+        if team_id is None:
+            team_id = FakeTeam._next_id
+            FakeTeam._next_id += 1
+        self.team_id = team_id
+        self.team_abbrev = team_abbrev
 
 
 class FakeMatchup:
@@ -357,6 +378,21 @@ def test_a_team_is_never_its_own_weekly_opponent():
     for entry in payload["weekly_scores"]:
         for week in entry["weeks"]:
             assert week["opponent"] != entry["name"]
+
+
+def test_a_future_bye_keeps_its_slot_in_the_remaining_schedule():
+    """The slot has to stay, because stage 2 pairs teams up by position.
+
+    Dropping the entry would silently shift every later week one earlier, which
+    is worse than the bye it was meant to handle.
+    """
+    league = four_team_league()
+    league.teams[0].schedule[2] = None  # Alpha idle in week 3
+
+    payload = league_data.build_payload(league, current_week=1)
+    alpha = payload["teams"][0]
+
+    assert alpha["remaining_schedule"] == ["Charlie", None, "Bravo"]
 
 
 def test_a_week_with_no_opponent_is_recorded_as_a_bye():

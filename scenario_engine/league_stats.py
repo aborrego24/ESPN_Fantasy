@@ -26,7 +26,19 @@ this league's matchupTieRule is NONE, so equal scores stand.
 
 
 def _points_and_opponents(weekly_scores):
-    """Split the payload into {team: [points]} and {team: [opponent]} lookups."""
+    """Split the payload into {team: [points]} and {team: [opponent]} lookups.
+
+    Both are keyed by name, so a repeated name would drop a team's whole season
+    and silently shrink the league. Stage 1 guarantees names are unique; refuse
+    anything that arrives without that guarantee.
+    """
+    names = [entry["name"] for entry in weekly_scores]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise ValueError(
+            f"team names must be unique to compare seasons; repeated: {duplicates}"
+        )
+
     points = {}
     opponents = {}
     for entry in weekly_scores:
