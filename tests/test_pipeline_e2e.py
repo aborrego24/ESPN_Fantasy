@@ -178,3 +178,50 @@ def test_the_cut_line_sits_below_the_last_playoff_seat(
     # every seat above the line, every non-seat below it
     spots = json.loads(stage1_json(name))["league_settings"]["playoff_spots"]
     assert rows.index("CUT") == spots
+
+
+# --- failing politely ---------------------------------------------------------
+
+
+def run_script(args):
+    """Invoke run_scenarios.sh and return (returncode, stdout, stderr)."""
+    import subprocess
+    from pathlib import Path
+
+    result = subprocess.run(
+        ["./run_scenarios.sh", *args],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).parent.parent,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+def test_a_stage_one_failure_is_reported_once_and_cleanly():
+    """Regression: `--irl 15` on a 14-week season buried its own message.
+
+    Every stage of a shell pipeline starts at once, so stage 1's one clear
+    sentence was followed by four more stages dying on empty stdin. Stage 1 now
+    runs on its own first, so the message is all you get.
+    """
+    code, out, err = run_script(["--test", "/tmp/definitely-not-a-file.json"])
+
+    assert code != 0
+    assert "Traceback" not in err, err
+    assert "JSONDecodeError" not in err
+    assert "no such file" in err
+
+
+def test_a_non_numeric_week_says_so_without_a_traceback():
+    code, out, err = run_script(["--irl", "not-a-week"])
+
+    assert code != 0
+    assert "Traceback" not in err
+    assert "whole number of weeks" in err
+
+
+def test_usage_is_shown_when_called_with_nothing():
+    code, out, err = run_script([])
+
+    assert code != 0
+    assert "Usage:" in out or "Usage:" in err

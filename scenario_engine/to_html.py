@@ -84,6 +84,7 @@ CSS = """
   --good: #1a7f37; --good-bg: #e7f5ea; --bad: #b42318; --bad-bg: #fdeceb;
   --open: #9a6700; --open-bg: #fdf6e3;
   --bye: #0b6bcb; --bye-bg: #e6f0fb;
+  --top: #7c3aed; --top-bg: #f1eafd;
 }
 * { box-sizing: border-box; }
 body {
@@ -116,6 +117,7 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 /* The colour carries the verdict on its own. Only the standings table adds the
    chip, because a name set in a small pill reads as less important than the
    sentence beside it -- which is backwards, since the name is the subject. */
+.top_seed { color: var(--top); }
 .bye { color: var(--bye); }
 .clinched { color: var(--good); }
 .eliminated { color: var(--bad); }
@@ -124,6 +126,7 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
   display: inline-block; padding: .05rem .45rem; border-radius: 999px;
   font-size: .75rem; font-weight: 600;
 }
+.pill.top_seed { background: var(--top-bg); }
 .pill.bye { background: var(--bye-bg); }
 .pill.clinched { background: var(--good-bg); }
 .pill.eliminated { background: var(--bad-bg); }

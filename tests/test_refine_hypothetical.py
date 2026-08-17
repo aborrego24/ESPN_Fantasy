@@ -26,6 +26,8 @@ def base_data_for(fixture):
         },
         "next_week_matchups": fixture["next_week_matchups"],
         "standings": standings,
+        # the real pipeline carries this, and seeding depends on it
+        "divisions": fixture.get("divisions"),
     }
     perms = stage3.generate_matchup_permutations(base)
     return base, perms
@@ -121,23 +123,39 @@ def test_the_tiebreaker_guard_only_ever_downgrades(load_fixture, name):
     claiming more than the exact search supports.
     """
     import playoff_math
+    import refine_current_week
 
-    base, perms = base_data_for(load_fixture(name))
+    fixture = load_fixture(name)
+    base, perms = base_data_for(fixture)
     spots = base["league_data"]["playoff_spots"]
+
+    # a clinched team reads as the strongest claim that is true of it
+    clinched_labels = {
+        playoff_math.STATUS_CLINCHED,
+        playoff_math.STATUS_BYE,
+        playoff_math.STATUS_TOP_SEED,
+    }
 
     for perm in perms:
         standings = stage4.apply_permutation(base, perm)
         later = base.get("remaining_matchups", [])[1:]
         unguarded = playoff_math.classify(
-            playoff_math.state_from_standings(standings, later, spots)
+            playoff_math.state_from_standings(
+                standings,
+                later,
+                spots,
+                refine_current_week.divisions_in_order(
+                    standings, fixture.get("divisions")
+                ),
+            )
         )
 
         for team in standings:
             if team["verdict"] == "clinched":
                 assert unguarded[team["team_name"]] == "clinched"
-                assert team["status"] == "Clinched Playoff Spot"
+                assert team["status"] in clinched_labels
             elif team["verdict"] == "eliminated":
                 assert unguarded[team["team_name"]] == "eliminated"
-                assert team["status"] == "Eliminated"
+                assert team["status"] == playoff_math.STATUS_ELIMINATED
             else:
-                assert team["status"] == "In contention"
+                assert team["status"] == playoff_math.STATUS_ALIVE

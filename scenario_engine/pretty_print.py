@@ -14,11 +14,20 @@ DIM = "\033[2m"
 
 WIDTH = 78
 
-VERDICT_COLOUR = {"bye": CYAN, "clinched": GREEN, "eliminated": RED, "alive": YELLOW}
+MAGENTA = "\033[95m"
+
+VERDICT_COLOUR = {
+    "top_seed": MAGENTA,
+    "bye": CYAN,
+    "clinched": GREEN,
+    "eliminated": RED,
+    "alive": YELLOW,
+}
 
 # The key names the level; the label is what a reader sees. Separate because the
 # key also becomes an HTML class, and "clinched bye" is two words.
 STATUS_LABEL = {
+    "top_seed": "clinched #1 seed",
     "bye": "clinched bye",
     "clinched": "clinched",
     "alive": "alive",
@@ -29,11 +38,14 @@ STATUS_LABEL = {
 def display_status(team):
     """Which of the four levels a team is at, best first.
 
-    A bye outranks a plain place because it is strictly more: nobody holds a bye
-    without also holding a seat. Kept separate from `verdict`, which stays a
-    three-way playoff answer so that code asking "did they clinch a place" still
-    counts the teams who did.
+    Each level is strictly more than the next: the #1 seed is a bye is a place. So
+    only the strongest true claim is shown, and it is reported whatever the bracket
+    looks like -- a league with no byes still has a top seed. Kept separate from
+    `verdict`, which stays a three-way playoff answer so that code asking "did they
+    clinch a place" still counts the teams who did.
     """
+    if team.get("top_seed") == "clinched":
+        return "top_seed"
     if team.get("bye") == "clinched":
         return "bye"
     return team["verdict"]
