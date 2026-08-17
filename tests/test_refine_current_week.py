@@ -1,7 +1,8 @@
-"""Stage 2: standings, magic numbers, and status strings."""
+"""Stage 2: sorting the teams into standings order, and pairing up what is left."""
 
 import pytest
 
+import playoff_math
 import refine_current_week as stage2
 
 
@@ -21,43 +22,46 @@ def standings_for(fixture):
 
 
 @pytest.mark.parametrize("name", ["week12.json", "week13.json", "PC_test.json"])
-def test_standings_are_ranked_and_sorted_by_the_tiebreaker(load_fixture, name):
+def test_standings_are_sorted_by_the_seeding_rule(load_fixture, name):
     standings = standings_for(load_fixture(name))
-
-    assert [t["rank"] for t in standings] == list(range(1, len(standings) + 1))
 
     keys = [sort_key(t) for t in standings]
     assert keys == sorted(keys), "standings must sort by (-wins, losses, -points_for)"
 
 
 @pytest.mark.parametrize("name", ["week12.json", "week13.json", "PC_test.json"])
-def test_every_team_gets_exactly_one_magic_number_and_a_real_status(load_fixture, name):
+def test_only_the_fields_something_reads_are_emitted(load_fixture, name):
+    """Stage 2 states the standings; deciding them belongs to playoff_math.
+
+    It used to also attach magic numbers, an elimination number and a status
+    string that no renderer ever read, computed twice in two drifted copies.
+    """
     for team in standings_for(load_fixture(name)):
-        has_clinch = team["clinch_MN"] is not None
-        has_elim = team["elim_MN"] is not None
-        assert has_clinch != has_elim, (
-            f"{team['team_name']} should have exactly one of clinch_MN/elim_MN, "
-            f"got clinch_MN={team['clinch_MN']} elim_MN={team['elim_MN']}"
-        )
-        assert team["status"] != "Status Unknown"
+        assert set(team) == {"team_name", "wins", "losses", "points_for"}
 
 
 def test_week13_leader_has_clinched(load_fixture):
-    standings = standings_for(load_fixture("week13.json"))
+    """The claim is unchanged; only what proves it has moved."""
+    fixture = load_fixture("week13.json")
+    standings = standings_for(fixture)
     leader = standings[0]
 
     assert leader["team_name"] == "Ben's Underrated Tennis Team"
     assert (leader["wins"], leader["losses"]) == (9, 4)
-    assert leader["clinch_MN"] == -1
-    assert leader["status"] == "Clinched Playoff Spot"
+
+    remaining = stage2.build_remaining_matchups(fixture["teams"], 1)
+    decided = playoff_math.apply_verdicts(
+        standings, remaining, fixture["league_settings"]["playoff_spots"]
+    )
+    assert decided[0]["verdict"] == "clinched"
 
 
 def test_no_team_below_the_cutoff_does_not_crash(load_fixture):
-    """Regression: first_team_out is None when nobody is behind the cutoff.
+    """An all-tied league, which used to be its own special case.
 
-    calculate_magic_numbers looks for the first team with fewer wins than the
-    cutoff team. In an all-tied league there is no such team, and dereferencing
-    it used to raise TypeError.
+    Working out which team was "first out" of the bracket had no answer when
+    nobody was behind, and dereferencing it raised TypeError. Sorting alone has
+    no such edge, but the shape is worth keeping a test on.
     """
     fixture = {
         "league_settings": {

@@ -25,6 +25,7 @@ usage() {
   echo "League options select which league to download (--irl only):"
   echo "  --league-id <id> ESPN league id (default: the author's)"
   echo "  --year <year>    season to read"
+  echo "  --dump <path>    also save the downloaded data, replayable with --test"
   echo
   echo "Display flags are passed to the report and are all optional:"
   echo "  --html <path>    write an HTML report instead of printing to the terminal"
@@ -53,13 +54,14 @@ shift 2
 DISPLAY_FLAGS=()
 LEAGUE_FLAGS=()
 HTML_OUT=""
+DUMP_OUT=""
 
 # Each of these takes a value. A missing value, or another flag in its place, is
 # an error -- otherwise '--html --no-stats' silently writes a file called
 # '--no-stats'.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --html|--league-id|--year)
+    --html|--league-id|--year|--dump)
       option="$1"
       shift
       if [ $# -eq 0 ]; then
@@ -72,11 +74,11 @@ while [ $# -gt 0 ]; do
           exit 1
           ;;
       esac
-      if [ "$option" = "--html" ]; then
-        HTML_OUT="$1"
-      else
-        LEAGUE_FLAGS+=("$option" "$1")
-      fi
+      case "$option" in
+        --html) HTML_OUT="$1" ;;
+        --dump) DUMP_OUT="$1" ;;
+        *)      LEAGUE_FLAGS+=("$option" "$1") ;;
+      esac
       shift
       ;;
     *)
@@ -86,9 +88,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ ${#LEAGUE_FLAGS[@]} -gt 0 ] && [ "$MODE" != "--irl" ]; then
-  echo "Error: --league-id and --year only apply to --irl" >&2
-  exit 1
+if [ "$MODE" != "--irl" ]; then
+  if [ ${#LEAGUE_FLAGS[@]} -gt 0 ]; then
+    echo "Error: --league-id and --year only apply to --irl" >&2
+    exit 1
+  fi
+  # Dumping a replay would just copy the file it was given
+  if [ -n "$DUMP_OUT" ]; then
+    echo "Error: --dump only applies to --irl; $ARG is already a saved payload" >&2
+    exit 1
+  fi
 fi
 
 if [ -n "$HTML_OUT" ]; then
@@ -120,8 +129,18 @@ case "$MODE" in
     ;;
 esac
 
+# --dump saves stage 1's payload on the way past, so one live run produces both
+# the report and a fixture that replays it offline forever. tee rather than a
+# second download: two fetches could straddle a scoring update and disagree.
+if [ -n "$DUMP_OUT" ]; then
+  CAPTURE=(tee "$DUMP_OUT")
+else
+  CAPTURE=(cat)
+fi
+
 # Run pipeline
 "${STAGE1[@]}" \
+  | "${CAPTURE[@]}" \
   | "$PY" scenario_engine/refine_current_week.py \
   | "$PY" scenario_engine/generate_perms.py \
   | "$PY" scenario_engine/refine_hypothetical.py \

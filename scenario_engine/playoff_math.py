@@ -314,9 +314,10 @@ def apply_verdicts(
     None to trust frozen points, which is only safe when nothing is left to
     play.
 
-    The magic numbers are left untouched as display values. They answer "can
-    this one rival pass me", which is a different question from "do I finish in
-    a playoff seat".
+    This is the only place a verdict is decided. The magic numbers that used to
+    run alongside it answered "can this one rival pass me", which is a different
+    question from "do I finish in a playoff seat", and no renderer ever read
+    them; they have been removed rather than kept as a second opinion.
     """
     state = state_from_standings(standings, remaining_matchups, playoff_spots)
     verdicts = classify(state, budget=budget)
@@ -341,9 +342,10 @@ def apply_verdicts(
 
         settled[index] = verdict
         team["verdict"] = verdict
-        # Always overwrite. Leaving the magic number's wording in place let a
-        # downgraded team keep a stale "Clinched Playoff Spot" string, which
-        # anything reading status rather than verdict then believed.
+        # Derived from the verdict, every time, so the readable form cannot
+        # disagree with the decision. A second writer of this field once left a
+        # downgraded team saying "Clinched Playoff Spot", and two places believed
+        # the text over the verdict.
         team["status"] = {
             "clinched": STATUS_CLINCHED,
             "eliminated": STATUS_ELIMINATED,
@@ -437,12 +439,3 @@ def elimination_dependency(state, team, budget=DEFAULT_NODE_BUDGET):
     return None
 
 
-def anything_decidable(state, budget=DEFAULT_NODE_BUDGET):
-    """Could ANY team be clinched or eliminated yet?
-
-    Cheap whole-request short circuit: early in a season nothing is decidable,
-    and answering that costs far less than enumerating completions.
-    """
-    return any(
-        status_of(state, t, budget=budget) != "alive" for t in range(state.num_teams)
-    )

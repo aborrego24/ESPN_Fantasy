@@ -7,62 +7,6 @@ import margins
 import playoff_math
 
 
-def calculate_magic_numbers(standings, playoff_spots, num_weeks, remaining_weeks):
-    cutoff_wins = standings[playoff_spots - 1]["wins"]
-    first_team_in = standings[playoff_spots - 1]
-
-    # Find the first team a game back from a playoff spot
-    first_team_out = None
-    for team in standings[playoff_spots:]:
-        if team["wins"] < cutoff_wins:
-            first_team_out = team
-            break
-
-    # Nobody outside the bracket is behind on wins (everyone tied, e.g. week 1),
-    # so fall back to whoever holds the first non-playoff seat.
-    if first_team_out is None and len(standings) > playoff_spots:
-        first_team_out = standings[playoff_spots]
-
-    if first_team_out is None:  # every team is in a playoff spot
-        for i, team in enumerate(standings):
-            team["rank"] = i + 1
-        return standings
-
-    # recalculate MN, EN and rank
-    for i, team in enumerate(standings):
-        if i < playoff_spots or team["wins"] == first_team_in["wins"]:  # Currently in
-            team["clinch_MN"] = num_weeks + 1 - team["wins"] - first_team_out["losses"]
-            team["elim_MN"] = None
-        else:
-            team["elim_MN"] = remaining_weeks - (first_team_in["wins"] - team["wins"]) + 1
-            team["clinch_MN"] = None
-        team["rank"] = i + 1
-    return standings
-
-def calculate_status(standings, remaining_weeks, playoff_spots):
-    for team in standings:
-        if team.get("clinch_MN") is not None and team["clinch_MN"] <= 0:
-            team["status"] = "Clinched Playoff Spot"
-        elif team.get("elim_MN") is not None and team["elim_MN"] <= 0:
-            team["status"] = "Eliminated"
-        elif remaining_weeks == 0:
-            # At season end: anyone not clinched or eliminated is on the bubble
-            team["status"] = "In contention, need to win tiebreaker"
-        elif team.get("clinch_MN") is not None:
-            if team["clinch_MN"] > remaining_weeks:
-                team["status"] = "Needs help to clinch (Tiebreaker)"
-            else:
-                team["status"] = f"In contention, needs {team['clinch_MN']} win(s) to clinch"
-        elif team.get("elim_MN") is not None:
-            if team["elim_MN"] > remaining_weeks:
-                team["status"] = "Needs help to avoid elimination (Tiebreaker)"
-            else:
-                team["status"] = f"In contention, mathematically eliminated with {team['elim_MN']} loss(es)"
-        else:
-            team["status"] = "Status Unknown"
-    return standings
-
-
 # === Apply permutation and recalculate standings ===
 def apply_permutation(base_data, permutation):
     data = copy.deepcopy(base_data)
@@ -77,23 +21,15 @@ def apply_permutation(base_data, permutation):
             elif team["team_name"] in (t1, t2):
                 team["losses"] += 1
 
-    # Sort and recalculate
-    sorted_teams = sorted(
+    # Re-seed on the updated records
+    standings = sorted(
         data["standings"],
         key=lambda t: (-t["wins"], t["losses"], -t["points_for"])
     )
 
-    # Recalculate magic/elim numbers + status
+    # Every team's fate is then decided exactly, over every completion of the
+    # weeks still left after this one.
     playoff_spots = data["league_data"]["playoff_spots"]
-    num_weeks = data["league_data"]["num_weeks"]
-    remaining_weeks = data["league_data"]["remaining_weeks"]
-
-    standings = calculate_magic_numbers(sorted_teams, playoff_spots, num_weeks, remaining_weeks)
-    standings = calculate_status(standings, remaining_weeks, playoff_spots)
-
-    # The magic number only ever answered "can one rival pass me". Whether a
-    # team actually holds a playoff seat is decided exactly, over every
-    # completion of the weeks still left after this one.
     later_weeks = base_data.get("remaining_matchups", [])[1:]
     # +1 for next week itself: its win/loss has been applied, but its POINTS
     # have not -- those scores do not exist yet. Sizing the envelope on
