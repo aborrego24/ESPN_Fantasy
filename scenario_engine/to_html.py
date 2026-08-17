@@ -27,6 +27,17 @@ def esc(value):
     return html.escape(str(value), quote=True)
 
 
+def title_case(text):
+    """Capitalise the first letter of each word, leaving the rest alone.
+
+    str.title() also lower-cases the remainder of every word, so it would turn
+    "All-play" into "All-Play" and, worse, an apostrophe into a word boundary --
+    "can't" becomes "Can'T". These strings are built from league data, so that
+    matters.
+    """
+    return " ".join(word[:1].upper() + word[1:] for word in text.split(" "))
+
+
 def record_text(tally):
     """'9-4', or '9-4-1' when there is a tie to report."""
     text = f"{tally['wins']}-{tally['losses']}"
@@ -45,10 +56,10 @@ body {
   color: var(--ink); margin: 0; padding: 2.5rem 1.5rem 4rem;
   max-width: 1100px; margin-inline: auto; background: #fff;
 }
-h1 { font-size: 1.5rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+h1 { font-size: 1.75rem; margin: 0 0 .3rem; letter-spacing: -.02em; }
 h2 {
-  font-size: .8rem; text-transform: uppercase; letter-spacing: .09em;
-  color: var(--dim); margin: 2.5rem 0 .75rem;
+  font-size: 1.3rem; letter-spacing: -.01em; font-weight: 700;
+  color: var(--ink); margin: 2.75rem 0 .8rem;
   border-bottom: 1px solid var(--line); padding-bottom: .4rem;
 }
 .counts { color: var(--dim); font-size: .9rem; margin: 0 0 .5rem; }
@@ -62,16 +73,22 @@ th { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color:
 td.num, th.num { text-align: right; }
 tr.cut td { border-bottom: 2px solid var(--ink); }
 .cutnote { font-size: .72rem; color: var(--dim); padding-top: .5rem; }
+/* The colour carries the verdict on its own. Only the standings table adds the
+   chip, because a name set in a small pill reads as less important than the
+   sentence beside it -- which is backwards, since the name is the subject. */
+.clinched { color: var(--good); }
+.eliminated { color: var(--bad); }
+.alive { color: var(--open); }
 .pill {
   display: inline-block; padding: .05rem .45rem; border-radius: 999px;
   font-size: .75rem; font-weight: 600;
 }
-.clinched { color: var(--good); background: var(--good-bg); }
-.eliminated { color: var(--bad); background: var(--bad-bg); }
-.alive { color: var(--open); background: var(--open-bg); }
+.pill.clinched { background: var(--good-bg); }
+.pill.eliminated { background: var(--bad-bg); }
+.pill.alive { background: var(--open-bg); }
 .team { padding: 1rem 0 .25rem; border-top: 1px solid var(--line); }
 .team:first-of-type { border-top: none; }
-.team h3 { font-size: 1rem; margin: 0 0 .35rem; font-weight: 600; }
+.team h3 { font-size: 1.05rem; margin: 0 0 .35rem; font-weight: 600; }
 .alts { margin: 0; padding-left: 1.1rem; }
 .alts li { margin: .15rem 0; }
 .alts li + li { list-style: none; margin-left: -1.1rem; }
@@ -93,7 +110,7 @@ footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 
 def render_header(standings, league):
     counts = pretty_print.summarise(standings, league)
-    return f"""<h1>{esc(pretty_print.header_title(league))}</h1>
+    return f"""<h1>{esc(title_case(pretty_print.header_title(league)))}</h1>
 <p class="counts">
   Playoff spots <b>{league['playoff_spots']}</b>
   &middot; <span class="c-good">Clinched <b>{counts['clinched']}</b></span>
@@ -128,14 +145,14 @@ def render_standings(standings, league):
 
 def render_matchups(matchups, league):
     if not matchups:
-        return '<h2>Next week</h2>\n<p class="empty">No games left to play.</p>'
+        return '<h2>Next Week</h2>\n<p class="empty">No games left to play.</p>'
     rows = "".join(
         f"<tr><td>{esc(m['team1'])}</td><td class=\"empty\">vs</td>"
         f"<td>{esc(m['team2'])}</td></tr>"
         for m in matchups
     )
     return (
-        f"<h2>Week {league['current_week'] + 1} matchups</h2>\n"
+        f"<h2>Week {league['current_week'] + 1} Matchups</h2>\n"
         f"<table><tbody>{rows}</tbody></table>"
     )
 
@@ -148,7 +165,7 @@ def render_scenarios(standings, scenarios, league, thresholds, kind):
     rather than appearing broken.
     """
     eliminated = kind == "elim"
-    heading = "Elimination scenarios" if eliminated else "Clinch scenarios"
+    heading = "Elimination Scenarios" if eliminated else "Clinch Scenarios"
     settled = "eliminated" if eliminated else "clinched"
     decided_headline = (
         "Eliminated from playoffs" if eliminated else "Clinched playoff spot"
@@ -178,8 +195,8 @@ def render_scenarios(standings, scenarios, league, thresholds, kind):
             ):
                 headline = scoring_headline
             blocks.append(
-                f'<div class="team"><h3><span class="pill {settled}">'
-                f"{esc(name)}</span> {esc(headline)}</h3>{note_html}</div>"
+                f'<div class="team"><h3><span class="{settled}">'
+                f"{esc(name)}</span> &mdash; {esc(headline)}</h3>{note_html}</div>"
             )
             continue
 
@@ -191,7 +208,8 @@ def render_scenarios(standings, scenarios, league, thresholds, kind):
             f"<li>{esc(pretty_print.phrase_alternative(a))}</li>" for a in alternatives
         )
         blocks.append(
-            f'<div class="team"><h3>{esc(name)} &mdash; {esc(verb)}:</h3>'
+            f'<div class="team"><h3><span class="{team["verdict"]}">{esc(name)}</span>'
+            f" &mdash; {esc(verb)}:</h3>"
             f'<ul class="alts">{items}</ul>{note_html}</div>'
         )
 
@@ -231,7 +249,7 @@ def render_all_play(weekly_scores):
             f'<td class="num">{league_stats.win_pct(row["total"]):.3f}</td></tr>'
         )
 
-    return f"""<h2>All-play record</h2>
+    return f"""<h2>All-Play Record</h2>
 <p class="lede">Each week, every team is scored against <em>every</em> other team rather than
 just the one the schedule gave it. The number in each week is how many of the other
 {rivals} teams it out-scored. A team well above its real record was beating the
@@ -287,7 +305,7 @@ def render_schedule_luck(weekly_scores):
             f"<td>{esc(worst_name)}</td></tr>"
         )
 
-    return f"""<h2>Schedule luck</h2>
+    return f"""<h2>Schedule Luck</h2>
 <p class="lede">Every team's record had it played every other team's schedule. Read across a
 row: the outlined cell is that team's real record, green is a schedule it would have
 preferred, red one it would not. Identical scores, different opponents. Columns are
@@ -296,7 +314,7 @@ numbered as the rows are, so column 3 is the schedule belonging to row 3.</p>
 <thead><tr><th class="name">Team &rsaquo; playing schedule of</th>{head}</tr></thead>
 <tbody>{''.join(body)}</tbody>
 </table>
-<h2>What the draw was worth</h2>
+<h2>What The Draw Was Worth</h2>
 <table>
 <thead><tr><th>Team</th><th class="num">Real</th><th class="num">Best</th>
 <th>with schedule of</th><th class="num">Worst</th><th>with schedule of</th></tr></thead>
