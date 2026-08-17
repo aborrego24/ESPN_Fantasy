@@ -219,6 +219,7 @@ def classify(state, budget=DEFAULT_NODE_BUDGET):
     }
 
 
+STATUS_BYE = "Clinched a first-round bye"
 STATUS_CLINCHED = "Clinched Playoff Spot"
 STATUS_ELIMINATED = "Eliminated"
 STATUS_ALIVE = "In contention"
@@ -257,6 +258,21 @@ def state_from_standings(standings, remaining_matchups, playoff_spots):
     )
 
 
+def with_seats(state, seats):
+    """The same league, asked about a different number of seats.
+
+    Every question the engine answers is "does this team finish in the top
+    `playoff_spots`", and the threshold is already a field rather than a
+    constant. So "does it finish in the top 2", which is what a first-round bye
+    means, is the identical search over a state that says 2 -- the counterexample
+    hunt, the dominance argument, the bounds pruning and the tiebreak probes all
+    carry over untouched.
+    """
+    return LeagueState(
+        state.names, state.wins, state.losses, state.points, state.games, seats
+    )
+
+
 def points_margins(state, team, contested=None):
     """Points gaps to every rival still in the race you could finish level with.
 
@@ -289,12 +305,32 @@ def points_margins(state, team, contested=None):
     return margins
 
 
+def bye_verdict(state, team, bye_spots, swing_envelope=None, budget=DEFAULT_NODE_BUDGET):
+    """Has `team` locked up one of the `bye_spots` first-round byes?
+
+    The same question as clinching a playoff seat, asked of a smaller number of
+    seats, so it is the same search over `with_seats`. The tiebreak is held to the
+    same standard too: a bye resting on a points gap the scoring could still close
+    is not a bye, it is a lead.
+
+    Returns 'clinched', 'eliminated' or 'alive'.
+    """
+    seats = with_seats(state, bye_spots)
+    verdict = status_of(seats, team, budget=budget)
+    if verdict == "clinched" and swing_envelope is not None:
+        dependency = clinch_dependency(seats, team, budget=budget)
+        if dependency and dependency[1] <= swing_envelope:
+            return "alive"
+    return verdict
+
+
 def apply_verdicts(
     standings,
     remaining_matchups,
     playoff_spots,
     swing_envelope=None,
     budget=DEFAULT_NODE_BUDGET,
+    bye_spots=0,
 ):
     """Set each team's status from the exact full-season verdict, in place.
 
@@ -318,6 +354,13 @@ def apply_verdicts(
     run alongside it answered "can this one rival pass me", which is a different
     question from "do I finish in a playoff seat", and no renderer ever read
     them; they have been removed rather than kept as a second opinion.
+
+    `bye_spots` asks the same question of a smaller number of seats, for leagues
+    where the top seeds skip the first playoff round. It is reported separately in
+    `bye` and folded into the readable `status`; `verdict` deliberately stays a
+    three-way playoff answer, because a team with a bye has also clinched a
+    playoff spot, and widening `verdict` would make every existing
+    `== "clinched"` test silently miss them.
     """
     state = state_from_standings(standings, remaining_matchups, playoff_spots)
     verdicts = classify(state, budget=budget)
@@ -342,15 +385,32 @@ def apply_verdicts(
 
         settled[index] = verdict
         team["verdict"] = verdict
+
+        # Asked of every team, not just the ones already through. Skipping the
+        # rest and calling them 'alive' was a shortcut that produced wrong data:
+        # a team eliminated from the playoffs is certainly out of bye contention,
+        # and one still alive for a place can already be out of bye contention.
+        team["bye"] = (
+            bye_verdict(
+                state, index, bye_spots, swing_envelope=swing_envelope, budget=budget
+            )
+            if bye_spots
+            else None
+        )
+
         # Derived from the verdict, every time, so the readable form cannot
         # disagree with the decision. A second writer of this field once left a
         # downgraded team saying "Clinched Playoff Spot", and two places believed
         # the text over the verdict.
-        team["status"] = {
-            "clinched": STATUS_CLINCHED,
-            "eliminated": STATUS_ELIMINATED,
-            "alive": STATUS_ALIVE,
-        }[verdict]
+        team["status"] = (
+            STATUS_BYE
+            if team["bye"] == "clinched"
+            else {
+                "clinched": STATUS_CLINCHED,
+                "eliminated": STATUS_ELIMINATED,
+                "alive": STATUS_ALIVE,
+            }[verdict]
+        )
 
     # Margins need the FINAL verdicts, including any downgrades, so they are
     # filled in only once every team is settled.

@@ -93,6 +93,34 @@ def unique_names(league):
     return chosen
 
 
+def bye_spots(league):
+    """How many top seeds skip the first playoff round, or 0 if unknowable.
+
+    **ESPN does not publish the bracket shape.** There is no bye field anywhere in
+    `league.settings`; `playoff_matchup_period_length` only says how long a round
+    is. So it is derived: a single-elimination bracket seeded to the next power of
+    two leaves `2**ceil(log2(N)) - N` teams idle in round one.
+
+    Checked against both completed seasons rather than assumed. In 2025, with six
+    spots, seeds 1 and 2 played no week-15 game and the formula gives 2. In 2024,
+    with five, three seeds sat out and the formula gives 3.
+
+    Returns 0 when the seeding itself cannot be trusted to be record-then-points.
+    That same 2024 check paired the model's third and fifth seeds in round one
+    rather than the fourth and fifth a pure record-then-points bracket implies, so
+    in a divisional season ESPN evidently seeds division winners first. The
+    playoff *field* is still right -- the backtest confirms it both seasons -- but
+    the *order* within it is not ours to claim, and a bye is a claim about order.
+    """
+    spots = league.settings.playoff_team_count
+    if spots < 2:
+        return 0
+    if len(getattr(league.settings, "division_map", None) or {1: None}) > 1:
+        return 0
+    bracket = 1 << (spots - 1).bit_length()  # next power of two at or above spots
+    return bracket - spots
+
+
 def opponent_in_week(team, index):
     """The team this team played in week `index`, or None if it played nobody.
 
@@ -222,6 +250,7 @@ def build_payload(league, current_week):
         "league_settings": {
             "num_teams": len(league.teams),
             "playoff_spots": league.settings.playoff_team_count,
+            "bye_spots": bye_spots(league),
             "weeks_in_season": weeks_in_season,
             "current_week": current_week,
             "tiebreaker": "points_for",
