@@ -238,7 +238,7 @@ def test_a_thirty_point_cushion_is_not_a_clinch_with_a_week_to_play():
     """
     state = decided_states()
     standings = [
-        {"team_name": n, "wins": w, "losses": l, "points_for": p, "status": "", "clinch_MN": None, "elim_MN": None}
+        {"team_name": n, "wins": w, "losses": l, "points_for": p}
         for n, w, l, p in zip(state.names, state.wins, state.losses, state.points)
     ]
     # one week left, one game between the two teams that cannot change records
@@ -262,11 +262,11 @@ def test_a_gap_beyond_the_envelope_still_clinches():
 
     standings = [
         {"team_name": "Holder", "wins": 5, "losses": 5, "points_for": 1900.0,
-         "status": "", "clinch_MN": None, "elim_MN": None},
+},
         {"team_name": "Chaser", "wins": 5, "losses": 5, "points_for": 1500.0,
-         "status": "", "clinch_MN": None, "elim_MN": None},
+},
         {"team_name": "Also", "wins": 3, "losses": 7, "points_for": 1200.0,
-         "status": "", "clinch_MN": None, "elim_MN": None},
+},
     ]
 
     result = playoff_math.apply_verdicts(standings, [], 1, swing_envelope=120.2)
@@ -282,12 +282,9 @@ def test_status_never_keeps_stale_wording_from_the_magic_number():
     letting the magic number decide anything.
     """
     standings = [
-        {"team_name": "Holder", "wins": 5, "losses": 5, "points_for": 1900.0,
-         "status": "Clinched Playoff Spot", "clinch_MN": -3, "elim_MN": None},
-        {"team_name": "Chaser", "wins": 5, "losses": 5, "points_for": 1870.0,
-         "status": "Clinched Playoff Spot", "clinch_MN": -1, "elim_MN": None},
-        {"team_name": "Also", "wins": 3, "losses": 7, "points_for": 1200.0,
-         "status": "Clinched Playoff Spot", "clinch_MN": 0, "elim_MN": None},
+        {"team_name": "Holder", "wins": 5, "losses": 5, "points_for": 1900.0},
+        {"team_name": "Chaser", "wins": 5, "losses": 5, "points_for": 1870.0},
+        {"team_name": "Also", "wins": 3, "losses": 7, "points_for": 1200.0},
     ]
 
     result = playoff_math.apply_verdicts(standings, [], 1, swing_envelope=120.2)

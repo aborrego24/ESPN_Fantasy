@@ -71,9 +71,20 @@ The bundled sample data runs with **zero dependencies** — no installs, no acco
 git clone https://github.com/aborrego24/ESPN_Fantasy.git
 cd ESPN_Fantasy
 ./run_scenarios.sh --test scenario_engine_tests/week13.json
+
+# or the full report as a page
+./run_scenarios.sh --test scenario_engine_tests/week13.json --html report.html
 ```
 
 That's real end-of-season data from a 10-team league, and it exercises everything except the download step.
+
+Once you've pointed it at a live league, `--dump` turns any week into another one of
+these, so you only need the network once:
+
+```bash
+./run_scenarios.sh --irl 13 --dump my_week13.json     # downloads and saves
+./run_scenarios.sh --test my_week13.json              # replays it, offline, forever
+```
 
 ### Point it at a live league
 
@@ -110,6 +121,7 @@ pip install -r requirements.txt
 | `--year <season>` | Which season | `2024` |
 | `--test <path>` | Replay a saved payload instead of downloading | — |
 | `--html <path>` | Write an HTML report instead of printing | prints to the terminal |
+| `--dump <path>` | Also save the downloaded data, replayable with `--test` | — |
 | `--no-header` | Hide the summary line | shown |
 | `--no-standings` | Hide the standings table | shown |
 | `--no-matchups` | Hide next week's matchups | shown |
@@ -225,7 +237,7 @@ python3 scenario_engine/league_data.py --test scenario_engine_tests/week13.json 
 
 New to this? This is the idea the tool leans on most.
 
-**[Magic number](https://en.wikipedia.org/wiki/Magic_number_(sports))** — the classic sports shortcut for "how many more wins do I need." Useful for a quick gut check, but it only compares you against *one* rival at a time, so it can't answer "do I finish in the top six?" This project used to rely on it and gave wrong answers because of it; it's kept now only as a display number.
+**[Magic number](https://en.wikipedia.org/wiki/Magic_number_(sports))** — the classic sports shortcut for "how many more wins do I need." Useful for a quick gut check, but it only compares you against *one* rival at a time, so it can't answer "do I finish in the top six?" This project used to rely on it and gave wrong answers because of it. It has been removed — the exact search below answers the real question, and nothing read the magic number anyway.
 
 ## Running the tests
 
@@ -273,10 +285,8 @@ ESPN_LEAGUE_ID=123456789 python3 tools/derive_score_thresholds.py 2024 2025
 - **Provider-neutral configuration** — rename `--league-id` / `ESPN_*` now that more than one platform is coming
 - **Private league support** via `espn_s2` / `SWID` from environment variables
 - **A projections mode** — use ESPN's own forecasts for future scoring, clearly labelled as a forecast rather than maths
-- **`--dump` flag** to save a live download as a replayable file, so any week becomes a permanent offline test case
 - **Smarter pruning** — rule out whole classes of outcome earlier
 - **Charts in the HTML report** — scoring trends over the season, drawn inline as SVG
-- **Add a LICENSE** — there isn't one yet, so all rights are technically reserved
 
 ---
 

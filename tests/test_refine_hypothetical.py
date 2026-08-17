@@ -66,28 +66,8 @@ def test_apply_permutation_does_not_mutate_the_base_payload(load_fixture, name):
     )
 
 
-def test_teams_in_a_playoff_spot_do_not_keep_a_stale_elimination_number(load_fixture):
-    """Regression for the elim_MIN typo.
-
-    A team moved into the clinch bucket must have its elimination number
-    cleared. The typo wrote to a dead key, leaving the previous stage's
-    elim_MN in place. It is only latent today because status checks clinch_MN
-    first -- correcting the clinch logic would make it observable.
-    """
-    base, perms = base_data_for(load_fixture("week13.json"))
-
-    for perm in perms:
-        for team in stage4.apply_permutation(base, perm):
-            if team["clinch_MN"] is not None:
-                assert team["elim_MN"] is None, (
-                    f"{team['team_name']} has clinch_MN={team['clinch_MN']} "
-                    f"but a stale elim_MN={team['elim_MN']}"
-                )
-            assert "elim_MIN" not in team
-
-
 def test_no_team_below_the_cutoff_does_not_crash():
-    """Same missing first_team_out guard as stage 2, two stages downstream."""
+    """An all-tied league, two stages downstream."""
     base = {
         "league_data": {
             "playoff_spots": 2,
@@ -98,13 +78,9 @@ def test_no_team_below_the_cutoff_does_not_crash():
         "next_week_matchups": [{"team1": "T0", "team2": "T1"}],
         "standings": [
             {
-                "rank": i + 1,
                 "team_name": f"T{i}",
-                "status": "In contention",
                 "wins": 7,
                 "losses": 6,
-                "clinch_MN": None,
-                "elim_MN": None,
                 "points_for": 100.0 - i,
             }
             for i in range(4)
