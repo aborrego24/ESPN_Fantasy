@@ -96,7 +96,12 @@ def four_team_league(weeks=4, playoff_spots=2, current_week_override=None):
 def test_payload_has_the_shape_stage_two_expects():
     payload = league_data.build_payload(four_team_league(), current_week=2)
 
-    assert set(payload) == {"league_settings", "teams", "next_week_matchups"}
+    assert set(payload) == {
+        "league_settings",
+        "teams",
+        "next_week_matchups",
+        "weekly_scores",
+    }
     assert payload["league_settings"] == {
         "num_teams": 4,
         "playoff_spots": 2,
@@ -293,6 +298,80 @@ def test_points_for_accumulates_only_the_weeks_played():
 
     for early, late in zip(through_two["teams"], through_four["teams"]):
         assert early["points_for"] < late["points_for"]
+
+
+# --- weekly history, for the season-review tables -----------------------------
+
+
+@pytest.mark.parametrize("week", [0, 1, 2, 3, 4])
+def test_weekly_scores_cover_exactly_the_weeks_played(week):
+    payload = league_data.build_payload(four_team_league(), current_week=week)
+
+    assert len(payload["weekly_scores"]) == 4
+    for entry in payload["weekly_scores"]:
+        assert [w["week"] for w in entry["weeks"]] == list(range(1, week + 1))
+
+
+def test_weekly_scores_report_the_real_score_and_opponent():
+    payload = league_data.build_payload(four_team_league(), current_week=4)
+    by_name = {e["name"]: e["weeks"] for e in payload["weekly_scores"]}
+
+    # Alpha: 120 vs Bravo, 110 vs Charlie, 100 vs Delta, 130 vs Bravo
+    assert [w["points"] for w in by_name["Alpha"]] == [120.0, 110.0, 100.0, 130.0]
+    assert [w["opponent"] for w in by_name["Alpha"]] == [
+        "Bravo",
+        "Charlie",
+        "Delta",
+        "Bravo",
+    ]
+
+
+def test_the_weekly_history_agrees_with_the_record_built_from_it():
+    """Two derivations of the same games must not disagree.
+
+    `record` comes from record_through_week and the history from
+    weekly_history; if they ever diverge, one of them is reading the wrong week.
+    """
+    payload = league_data.build_payload(four_team_league(), current_week=4)
+    points = {e["name"]: [w["points"] for w in e["weeks"]] for e in payload["weekly_scores"]}
+    opponents = {e["name"]: [w["opponent"] for w in e["weeks"]] for e in payload["weekly_scores"]}
+
+    for team in payload["teams"]:
+        name = team["name"]
+        wins = losses = ties = 0
+        for index, opponent in enumerate(opponents[name]):
+            mine, theirs = points[name][index], points[opponent][index]
+            if mine > theirs:
+                wins += 1
+            elif mine < theirs:
+                losses += 1
+            else:
+                ties += 1
+        assert team["record"] == {"wins": wins, "losses": losses, "ties": ties}
+        assert team["points_for"] == pytest.approx(sum(points[name]))
+
+
+def test_a_team_is_never_its_own_weekly_opponent():
+    payload = league_data.build_payload(four_team_league(), current_week=4)
+
+    for entry in payload["weekly_scores"]:
+        for week in entry["weeks"]:
+            assert week["opponent"] != entry["name"]
+
+
+def test_a_week_with_no_opponent_is_recorded_as_a_bye():
+    """A short schedule must read as "no game", not raise IndexError."""
+    a = FakeTeam("Alpha", [110.0, 120.0, 100.0])
+    b = FakeTeam("Bravo", [100.0, 90.0, 95.0])
+    c = FakeTeam("Charlie", [90.0, 105.0, 115.0])
+    # Bravo sits out week 2, so its schedule is a week short of the season
+    league = FakeLeague([a, b, c], 3, 2, {1: [(a, b)], 2: [(a, c)], 3: [(b, c)]})
+
+    payload = league_data.build_payload(league, current_week=3)
+    by_name = {e["name"]: e["weeks"] for e in payload["weekly_scores"]}
+
+    assert [w["opponent"] for w in by_name["Bravo"]] == ["Alpha", "Charlie", None]
+    assert [w["points"] for w in by_name["Bravo"]] == [100.0, 90.0, 95.0]
 
 
 def test_played_weeks_counts_only_scored_weeks():

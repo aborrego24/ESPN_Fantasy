@@ -134,7 +134,10 @@ if __name__ == "__main__":
         "league_data": metadata[0],
         "next_week_matchups": next_week_matchups[0],
         "remaining_matchups": remaining_matchups,
-        "standings": expanded_data
+        "standings": expanded_data,
+        # Passed straight through for the season-review tables in stage 5. Absent
+        # from older saved payloads, so it stays optional the whole way down.
+        "weekly_scores": league_data.get("weekly_scores", []),
     }
     print(json.dumps(combined, indent=2))
 

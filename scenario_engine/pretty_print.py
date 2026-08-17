@@ -43,28 +43,32 @@ def find_scenario(scenarios, team):
     return None
 
 
-def describe(alternatives):
-    """One line per alternative, e.g. 'a WIN and Momma Gus WIN'.
+def phrase_alternative(alternative):
+    """One alternative as a sentence, e.g. 'a WIN and Momma Gus WIN'.
 
-    A line that names the team's own result pins it; a line that does not is
+    A phrase that names the team's own result pins it; one that does not is
     silent about it because it genuinely does not matter. Saying so out loud read
     as a caveat and pulled attention away from the condition that counts.
-    """
-    lines = []
-    for alternative in alternatives:
-        needed = [f"{c['winner']} WIN" for c in alternative["conditions"]]
-        own = alternative["own"]
-        head = {"win": "a WIN", "loss": "a LOSS"}.get(own)
 
-        if head and needed:
-            lines.append(f"  - {head} and {' and '.join(needed)}")
-        elif head:
-            lines.append(f"  - {head}")
-        elif needed:
-            lines.append(f"  - {' and '.join(needed)}")
-        else:
-            lines.append("  - any result")
-    return lines
+    Kept free of any terminal formatting so the HTML report words every scenario
+    identically -- two renderers phrasing the same result differently would be a
+    bug nobody would notice for months.
+    """
+    needed = [f"{c['winner']} WIN" for c in alternative["conditions"]]
+    head = {"win": "a WIN", "loss": "a LOSS"}.get(alternative["own"])
+
+    if head and needed:
+        return f"{head} and {' and '.join(needed)}"
+    if head:
+        return head
+    if needed:
+        return " and ".join(needed)
+    return "any result"
+
+
+def describe(alternatives):
+    """One line per alternative, bulleted for the terminal."""
+    return [f"  - {phrase_alternative(a)}" for a in alternatives]
 
 
 def emit(lines):
@@ -120,26 +124,33 @@ def summarise(standings, league):
     return counts
 
 
-def print_header(standings, league):
-    """Where the league stands at a glance, before any of the detail."""
-    week = league["current_week"]
-    remaining = league["remaining_weeks"]
-    counts = summarise(standings, league)
+def header_title(league):
+    """Where the season stands, worded for the phase it is in.
 
+    Returned in ordinary case; the terminal banner upper-cases it. Keeping the
+    caps out of the wording lets the HTML report share this exact sentence
+    instead of title-casing it back into something else.
+    """
+    remaining = league["remaining_weeks"]
     playoffs_start = league["num_weeks"] + 1
+
     if remaining == 0:
-        title = f"REGULAR SEASON COMPLETE  ·  PLAYOFFS BEGIN WEEK {playoffs_start}"
-    elif remaining == 1:
+        return f"Regular season complete  ·  Playoffs begin week {playoffs_start}"
+    if remaining == 1:
         # The last week before the playoffs is its own occasion; counting weeks
         # remaining and announcing when the playoffs start says nothing here.
-        title = "FINAL WEEK OF THE REGULAR SEASON"
-    else:
-        title = (
-            f"GOING INTO WEEK {week + 1}"
-            f"  ·  PLAYOFFS BEGIN WEEK {playoffs_start}"
-        )
+        return "Final week of the regular season"
+    return (
+        f"Going into week {league['current_week'] + 1}"
+        f"  ·  Playoffs begin week {playoffs_start}"
+    )
 
-    print(f"\n{BOLD}{banner(title)}{RESET}")
+
+def print_header(standings, league):
+    """Where the league stands at a glance, before any of the detail."""
+    counts = summarise(standings, league)
+
+    print(f"\n{BOLD}{banner(header_title(league).upper())}{RESET}")
     print(
         f"  Playoff spots {BOLD}{league['playoff_spots']}{RESET}"
         f"   ·   {GREEN}Clinched {counts['clinched']}{RESET}"

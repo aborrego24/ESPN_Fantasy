@@ -32,6 +32,7 @@ def test_stage2_emits_the_documented_wire_format(stage1_json, run_stages, name):
         "next_week_matchups",
         "remaining_matchups",
         "standings",
+        "weekly_scores",
     }
     assert set(payload["league_data"]) == {
         "playoff_spots",
