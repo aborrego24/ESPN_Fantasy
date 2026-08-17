@@ -214,13 +214,14 @@ def test_the_displayed_status_folds_the_two_verdicts(team, expected):
     assert pretty_print.display_status(team) == expected
 
 
-def test_only_four_statuses_are_ever_displayed():
+def test_only_the_known_statuses_are_ever_displayed():
     shown = {
         pretty_print.display_status(t)
         for t in decided([14, 12, 10, 8, 6, 4], [200.0, 190.0, 180.0, 170.0, 160.0, 150.0])
     }
 
-    assert shown <= {"bye", "clinched", "alive", "eliminated"}
+    assert shown <= {"top_seed", "bye", "clinched", "alive", "eliminated"}
+    assert shown <= set(pretty_print.STATUS_LABEL)
 
 
 def test_the_html_standings_show_the_bye_status():
@@ -278,3 +279,104 @@ def test_the_label_reads_clinched_bye_not_bye(team, expected):
     """The level's key and its label are separate: the key is also a CSS class."""
     assert pretty_print.status_label(team) == expected
     assert pretty_print.display_status(team) in pretty_print.STATUS_LABEL
+
+
+# --- the #1 overall seed ------------------------------------------------------
+
+
+def test_the_top_seed_is_reported_even_where_there_are_no_byes():
+    """"Regardless of league format": 4 or 8 seats give no byes, but still a #1."""
+    decided_standings = decided(
+        [14, 12, 10, 8, 6, 4],
+        [200.0, 190.0, 180.0, 170.0, 160.0, 150.0],
+        spots=4,
+        bye_spots=0,
+    )
+    leader = decided_standings[0]
+
+    assert leader["bye"] is None, "no byes in this format"
+    assert leader["top_seed"] == "clinched"
+    assert pretty_print.display_status(leader) == "top_seed"
+    assert pretty_print.status_label(leader) == "clinched #1 seed"
+
+
+def test_the_top_seed_outranks_a_bye_in_the_label():
+    standings = decided([14, 12, 10, 8, 6, 4], [200.0, 190.0, 180.0, 170.0, 160.0, 150.0])
+
+    assert pretty_print.status_label(standings[0]) == "clinched #1 seed"
+    assert standings[0]["bye"] == "clinched", "it holds a bye as well"
+    assert pretty_print.status_label(standings[1]) == "clinched bye"
+
+
+def test_at_most_one_team_can_clinch_the_top_seed():
+    for spots, byes in ((4, 0), (5, 3), (6, 2)):
+        standings = decided(
+            [14, 12, 10, 8, 6, 4],
+            [200.0, 190.0, 180.0, 170.0, 160.0, 150.0],
+            spots=spots,
+            bye_spots=byes,
+        )
+        assert sum(1 for t in standings if t["top_seed"] == "clinched") <= 1
+
+
+def test_the_claims_nest_from_strongest_to_weakest():
+    """#1 seed implies a bye implies a place. Anything else is incoherent."""
+    standings = decided([14, 12, 10, 8, 6, 4], [200.0, 190.0, 180.0, 170.0, 160.0, 150.0])
+
+    for team in standings:
+        if team["top_seed"] == "clinched":
+            assert team["bye"] == "clinched"
+            assert team["verdict"] == "clinched"
+        if team["bye"] == "clinched":
+            assert team["verdict"] == "clinched"
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_the_top_seed_verdict_matches_brute_force(seed):
+    rng = random.Random(7000 + seed)
+    state = random_state(rng, n=6, weeks=2, spots=4)
+
+    expected = brute_force_statuses(playoff_math.with_seats(state, 1))
+    for team in range(state.num_teams):
+        assert (
+            playoff_math.seed_verdict(state, team, 1) == expected[state.names[team]]
+        )
+
+
+def test_a_top_seed_resting_on_a_thin_points_gap_is_withheld():
+    """Two teams tied on wins, 4 points apart: the leader leads, it has not won."""
+    wins = [10, 10, 4, 4]
+    points = [200.0, 196.0, 90.0, 80.0]
+
+    frozen = decided(wins, points, spots=2, bye_spots=0, envelope=None)
+    guarded = decided(wins, points, spots=2, bye_spots=0, envelope=50.0)
+
+    assert frozen[0]["top_seed"] == "clinched"
+    assert guarded[0]["top_seed"] == "alive", "4 points is not the #1 seed"
+    assert pretty_print.status_label(guarded[0]) != "clinched #1 seed"
+
+
+def test_the_html_shows_the_top_seed_with_its_own_colour():
+    standings = decided(
+        [14, 12, 10, 8, 6, 4], [200.0, 190.0, 180.0, 170.0, 160.0, 150.0]
+    )
+    document = to_html.render(
+        {
+            "base_league_data": {
+                "league_data": {
+                    "playoff_spots": 4,
+                    "bye_spots": 2,
+                    "num_weeks": 14,
+                    "remaining_weeks": 0,
+                    "current_week": 14,
+                },
+                "standings": standings,
+                "next_week_matchups": [],
+                "weekly_scores": [],
+            },
+            "scenarios": [],
+        }
+    )
+
+    assert '<span class="pill top_seed">clinched #1 seed</span>' in document
+    assert ".top_seed { color:" in document

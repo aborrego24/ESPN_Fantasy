@@ -300,6 +300,7 @@ def classify(state, budget=DEFAULT_NODE_BUDGET):
     }
 
 
+STATUS_TOP_SEED = "Clinched the #1 overall seed"
 STATUS_BYE = "Clinched a first-round bye"
 STATUS_CLINCHED = "Clinched Playoff Spot"
 STATUS_ELIMINATED = "Eliminated"
@@ -394,23 +395,29 @@ def points_margins(state, team, contested=None):
     return margins
 
 
-def bye_verdict(state, team, bye_spots, swing_envelope=None, budget=DEFAULT_NODE_BUDGET):
-    """Has `team` locked up one of the `bye_spots` first-round byes?
+def seed_verdict(state, team, seats, swing_envelope=None, budget=DEFAULT_NODE_BUDGET):
+    """Has `team` locked up a finish inside the top `seats`?
 
-    The same question as clinching a playoff seat, asked of a smaller number of
-    seats, so it is the same search over `with_seats`. The tiebreak is held to the
-    same standard too: a bye resting on a points gap the scoring could still close
-    is not a bye, it is a lead.
+    The same question as clinching a playoff place, asked of a smaller number of
+    seats, so it is the same search over `with_seats`. `seats=1` asks about the #1
+    overall seed and `seats=bye_spots` about a first-round bye. The tiebreak is
+    held to the same standard either way: a claim resting on a points gap the
+    scoring could still close is not a claim, it is a lead.
 
     Returns 'clinched', 'eliminated' or 'alive'.
     """
-    seats = with_seats(state, bye_spots)
-    verdict = status_of(seats, team, budget=budget)
+    narrowed = with_seats(state, seats)
+    verdict = status_of(narrowed, team, budget=budget)
     if verdict == "clinched" and swing_envelope is not None:
-        dependency = clinch_dependency(seats, team, budget=budget)
+        dependency = clinch_dependency(narrowed, team, budget=budget)
         if dependency and dependency[1] <= swing_envelope:
             return "alive"
     return verdict
+
+
+def bye_verdict(state, team, bye_spots, swing_envelope=None, budget=DEFAULT_NODE_BUDGET):
+    """Has `team` locked up one of the `bye_spots` first-round byes?"""
+    return seed_verdict(state, team, bye_spots, swing_envelope, budget)
 
 
 def apply_verdicts(
@@ -487,11 +494,16 @@ def apply_verdicts(
         # a team eliminated from the playoffs is certainly out of bye contention,
         # and one still alive for a place can already be out of bye contention.
         team["bye"] = (
-            bye_verdict(
+            seed_verdict(
                 state, index, bye_spots, swing_envelope=swing_envelope, budget=budget
             )
             if bye_spots
             else None
+        )
+        # The #1 overall seed is asked of every league, byes or not: finishing top
+        # of the table is worth saying whatever the bracket looks like.
+        team["top_seed"] = seed_verdict(
+            state, index, 1, swing_envelope=swing_envelope, budget=budget
         )
 
         # Derived from the verdict, every time, so the readable form cannot
@@ -499,7 +511,9 @@ def apply_verdicts(
         # downgraded team saying "Clinched Playoff Spot", and two places believed
         # the text over the verdict.
         team["status"] = (
-            STATUS_BYE
+            STATUS_TOP_SEED
+            if team["top_seed"] == "clinched"
+            else STATUS_BYE
             if team["bye"] == "clinched"
             else {
                 "clinched": STATUS_CLINCHED,

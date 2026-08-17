@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playoff scenarios &middot; after week 14</title>
+<style>
+:root {
+  --ink: #14181d; --dim: #6b7684; --line: #dde3ea; --panel: #f6f8fa;
+  --good: #1a7f37; --good-bg: #e7f5ea; --bad: #b42318; --bad-bg: #fdeceb;
+  --open: #9a6700; --open-bg: #fdf6e3;
+  --bye: #0b6bcb; --bye-bg: #e6f0fb;
+}
+* { box-sizing: border-box; }
+body {
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: var(--ink); margin: 0; padding: 2.5rem 1.5rem 4rem;
+  max-width: 1100px; margin-inline: auto; background: #fff;
+}
+h1 { font-size: 1.75rem; margin: 0 0 .3rem; letter-spacing: -.02em; }
+h2 {
+  font-size: 1.3rem; letter-spacing: -.01em; font-weight: 700;
+  color: var(--ink); margin: 2.75rem 0 .8rem;
+  border-bottom: 1px solid var(--line); padding-bottom: .4rem;
+}
+.counts { color: var(--dim); font-size: .9rem; margin: 0 0 .5rem; }
+.counts b { color: var(--ink); }
+.counts .c-good { color: var(--good); }
+.counts .c-bad { color: var(--bad); }
+.counts .c-open { color: var(--open); }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: .4rem .55rem; border-bottom: 1px solid var(--line); }
+th { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); font-weight: 600; }
+td.num, th.num { text-align: right; }
+tr.cut td { border-bottom: 2px solid var(--ink); }
+.cutnote { font-size: .72rem; color: var(--dim); padding-top: .5rem; }
+.mono {
+  display: inline-block; min-width: 3.4rem; padding: .1rem .3rem; margin-right: .5rem;
+  border-radius: 4px; color: #fff; font-size: .68rem; font-weight: 700;
+  letter-spacing: .04em; text-align: center; vertical-align: .05em;
+}
+/* The colour carries the verdict on its own. Only the standings table adds the
+   chip, because a name set in a small pill reads as less important than the
+   sentence beside it -- which is backwards, since the name is the subject. */
+.bye { color: var(--bye); }
+.clinched { color: var(--good); }
+.eliminated { color: var(--bad); }
+.alive { color: var(--open); }
+.pill {
+  display: inline-block; padding: .05rem .45rem; border-radius: 999px;
+  font-size: .75rem; font-weight: 600;
+}
+.pill.bye { background: var(--bye-bg); }
+.pill.clinched { background: var(--good-bg); }
+.pill.eliminated { background: var(--bad-bg); }
+.pill.alive { background: var(--open-bg); }
+.team { padding: 1rem 0 .25rem; border-top: 1px solid var(--line); }
+.team:first-of-type { border-top: none; }
+.team h3 { font-size: 1.05rem; margin: 0 0 .35rem; font-weight: 600; }
+.alts { margin: 0; padding-left: 1.1rem; }
+.alts li { margin: .15rem 0; }
+.alts li + li { list-style: none; margin-left: -1.1rem; }
+.alts li + li::before { content: "or "; color: var(--dim); font-style: italic; }
+.note { color: var(--dim); font-size: .85rem; margin: .35rem 0 0; }
+.empty { color: var(--dim); }
+.grid td, .grid th { padding: .3rem .4rem; font-size: .82rem; text-align: center; }
+.grid td.name, .grid th.name { text-align: left; white-space: nowrap; font-size: .85rem; }
+.grid td.total { font-weight: 700; border-left: 1px solid var(--line); }
+.w-hi { background: var(--good-bg); }
+.w-lo { background: var(--bad-bg); }
+.self { outline: 2px solid var(--ink); outline-offset: -2px; font-weight: 700; }
+.better { background: var(--good-bg); color: var(--good); }
+.worse { background: var(--bad-bg); color: var(--bad); }
+.lede { color: var(--dim); font-size: .88rem; margin: 0 0 .75rem; max-width: 68ch; }
+footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
+</style>
+</head>
+<body>
+<h1>Regular Season Complete  ·  Playoffs Begin Week 15</h1>
+<p class="counts">
+  Playoff spots <b>5</b>
+  &middot; <span class="c-good">Clinched <b>5</b></span>
+  &middot; Up for grabs <b>0</b>
+  &middot; <span class="c-open">Still alive <b>0</b></span>
+  &middot; <span class="c-bad">Eliminated <b>5</b></span>
+</p>
+<h2>Standings</h2>
+<table>
+<thead><tr><th class="num">#</th><th>Team</th><th class="num">Record</th>
+<th class="num">Points for</th><th>Status</th></tr></thead>
+<tbody><tr><td class="num">1</td><td><span class="mono" style="background:hsl(241 52% 38%)">BUTT</span>Ben&#x27;s Underrated Tennis Team</td><td class="num">9-5</td><td class="num">1790.1</td><td><span class="pill bye">clinched bye</span></td></tr><tr><td class="num">2</td><td><span class="mono" style="background:hsl(15 52% 38%)">KOBR</span>Villoni Boutique #2 Fan</td><td class="num">8-6</td><td class="num">1816.9</td><td><span class="pill bye">clinched bye</span></td></tr><tr><td class="num">3</td><td><span class="mono" style="background:hsl(67 52% 38%)">KURE</span>A courageous team</td><td class="num">9-5</td><td class="num">1628.3</td><td><span class="pill bye">clinched bye</span></td></tr><tr><td class="num">4</td><td><span class="mono" style="background:hsl(165 52% 38%)">JFK</span>John Fortnite Kennedy</td><td class="num">8-6</td><td class="num">1919.6</td><td><span class="pill clinched">clinched</span></td></tr><tr class="cut"><td class="num">5</td><td><span class="mono" style="background:hsl(303 52% 38%)">SCHU</span>&quot;I can&#x27;t build&quot;</td><td class="num">7-7</td><td class="num">1761.0</td><td><span class="pill clinched">clinched</span></td></tr><tr><td class="num">6</td><td><span class="mono" style="background:hsl(300 52% 38%)">OVEN</span>Weezer Africa</td><td class="num">7-7</td><td class="num">1704.0</td><td><span class="pill eliminated">eliminated</span></td></tr><tr><td class="num">7</td><td><span class="mono" style="background:hsl(207 52% 38%)">NP</span>Njigba&#x27;s In Paris</td><td class="num">7-7</td><td class="num">1624.8</td><td><span class="pill eliminated">eliminated</span></td></tr><tr><td class="num">8</td><td><span class="mono" style="background:hsl(274 52% 38%)">MGPY</span>Momma Gus</td><td class="num">7-7</td><td class="num">1576.3</td><td><span class="pill eliminated">eliminated</span></td></tr><tr><td class="num">9</td><td><span class="mono" style="background:hsl(116 52% 38%)">JAH</span>La Puerta</td><td class="num">5-9</td><td class="num">1585.4</td><td><span class="pill eliminated">eliminated</span></td></tr><tr><td class="num">10</td><td><span class="mono" style="background:hsl(193 52% 38%)">VERT</span>Caitlyn clarks balls</td><td class="num">3-11</td><td class="num">1588.1</td><td><span class="pill eliminated">eliminated</span></td></tr></tbody>
+</table>
+<p class="cutnote">The rule marks the playoff cut line: 5 spots.</p>
+<h2>Next Week</h2>
+<p class="empty">No games left to play.</p>
+<h2>Clinch Scenarios</h2>
+<div class="team"><h3><span class="clinched">Ben&#x27;s Underrated Tennis Team</span> &mdash; Clinched playoff spot</h3></div>
+<div class="team"><h3><span class="clinched">Villoni Boutique #2 Fan</span> &mdash; Clinched playoff spot</h3></div>
+<div class="team"><h3><span class="clinched">A courageous team</span> &mdash; Clinched playoff spot</h3></div>
+<div class="team"><h3><span class="clinched">John Fortnite Kennedy</span> &mdash; Clinched playoff spot</h3></div>
+<div class="team"><h3><span class="clinched">&quot;I can&#x27;t build&quot;</span> &mdash; Clinched playoff spot</h3></div>
+<h2>Elimination Scenarios</h2>
+<div class="team"><h3><span class="eliminated">Weezer Africa</span> &mdash; Eliminated from playoffs</h3></div>
+<div class="team"><h3><span class="eliminated">Njigba&#x27;s In Paris</span> &mdash; Eliminated from playoffs</h3></div>
+<div class="team"><h3><span class="eliminated">Momma Gus</span> &mdash; Eliminated from playoffs</h3></div>
+<div class="team"><h3><span class="eliminated">La Puerta</span> &mdash; Eliminated from playoffs</h3></div>
+<div class="team"><h3><span class="eliminated">Caitlyn clarks balls</span> &mdash; Eliminated from playoffs</h3></div>
+<h2>All-Play Record</h2>
+<p class="lede">Each week, every team is scored against <em>every</em> other team rather than
+just the one the schedule gave it. The number in each week is how many of the other
+9 teams it out-scored. A team well above its real record was beating the
+league and losing anyway.</p>
+<table class="grid">
+<thead><tr><th class="name">Team</th><th class="num">1</th><th class="num">2</th><th class="num">3</th><th class="num">4</th><th class="num">5</th><th class="num">6</th><th class="num">7</th><th class="num">8</th><th class="num">9</th><th class="num">10</th><th class="num">11</th><th class="num">12</th><th class="num">13</th><th class="num">14</th>
+<th class="num total">All-play</th><th class="num">Pct</th></tr></thead>
+<tbody><tr><td class="name">John Fortnite Kennedy</td><td class="num w-hi">9</td><td class="num w-lo">1</td><td class="num w-hi">9</td><td class="num">4</td><td class="num">2</td><td class="num">4</td><td class="num w-hi">9</td><td class="num">7</td><td class="num w-hi">8</td><td class="num w-hi">8</td><td class="num w-hi">8</td><td class="num">2</td><td class="num w-hi">9</td><td class="num">7</td><td class="num total">87-39</td><td class="num">0.690</td></tr><tr><td class="name">Villoni Boutique #2 Fan</td><td class="num">2</td><td class="num w-hi">8</td><td class="num">2</td><td class="num">6</td><td class="num w-hi">9</td><td class="num w-lo">1</td><td class="num">7</td><td class="num">4</td><td class="num w-hi">9</td><td class="num">7</td><td class="num w-hi">9</td><td class="num w-lo">1</td><td class="num">4</td><td class="num">5</td><td class="num total">74-52</td><td class="num">0.587</td></tr><tr><td class="name">Ben&#x27;s Underrated Tennis Team</td><td class="num">6</td><td class="num">6</td><td class="num w-lo">1</td><td class="num w-hi">8</td><td class="num w-lo">1</td><td class="num">7</td><td class="num">6</td><td class="num">6</td><td class="num">7</td><td class="num">3</td><td class="num">5</td><td class="num">4</td><td class="num">5</td><td class="num w-hi">8</td><td class="num total">73-53</td><td class="num">0.579</td></tr><tr><td class="name">&quot;I can&#x27;t build&quot;</td><td class="num">3</td><td class="num">4</td><td class="num">6</td><td class="num">2</td><td class="num w-hi">8</td><td class="num">2</td><td class="num">2</td><td class="num w-hi">8</td><td class="num">4</td><td class="num w-hi">9</td><td class="num">2</td><td class="num">3</td><td class="num w-hi">8</td><td class="num w-hi">9</td><td class="num total">70-56</td><td class="num">0.556</td></tr><tr><td class="name">Weezer Africa</td><td class="num">4</td><td class="num">7</td><td class="num">4</td><td class="num w-lo">0</td><td class="num">5</td><td class="num w-hi">8</td><td class="num w-hi">8</td><td class="num">5</td><td class="num">2</td><td class="num">6</td><td class="num w-lo">1</td><td class="num">6</td><td class="num">3</td><td class="num">4</td><td class="num total">63-63</td><td class="num">0.500</td></tr><tr><td class="name">Momma Gus</td><td class="num w-hi">8</td><td class="num">3</td><td class="num w-hi">8</td><td class="num">5</td><td class="num">7</td><td class="num">5</td><td class="num w-lo">0</td><td class="num w-lo">1</td><td class="num">3</td><td class="num w-lo">1</td><td class="num w-lo">0</td><td class="num w-hi">8</td><td class="num w-lo">1</td><td class="num">6</td><td class="num total">56-70</td><td class="num">0.444</td></tr><tr><td class="name">A courageous team</td><td class="num">7</td><td class="num">5</td><td class="num">5</td><td class="num w-lo">1</td><td class="num w-lo">0</td><td class="num w-lo">0</td><td class="num">5</td><td class="num">3</td><td class="num">5</td><td class="num">5</td><td class="num">4</td><td class="num">5</td><td class="num">7</td><td class="num">3</td><td class="num total">55-71</td><td class="num">0.437</td></tr><tr><td class="name">Njigba&#x27;s In Paris</td><td class="num">5</td><td class="num w-hi">9</td><td class="num">7</td><td class="num">7</td><td class="num">3</td><td class="num w-hi">9</td><td class="num w-lo">1</td><td class="num">2</td><td class="num">6</td><td class="num w-lo">0</td><td class="num">6</td><td class="num w-lo">0</td><td class="num w-lo">0</td><td class="num w-lo">0</td><td class="num total">55-71</td><td class="num">0.437</td></tr><tr><td class="name">La Puerta</td><td class="num w-lo">0</td><td class="num w-lo">0</td><td class="num w-lo">0</td><td class="num w-hi">9</td><td class="num">4</td><td class="num">6</td><td class="num">3</td><td class="num w-hi">9</td><td class="num w-lo">0</td><td class="num">4</td><td class="num">7</td><td class="num">7</td><td class="num">2</td><td class="num">2</td><td class="num total">53-73</td><td class="num">0.421</td></tr><tr><td class="name">Caitlyn clarks balls</td><td class="num w-lo">1</td><td class="num">2</td><td class="num">3</td><td class="num">3</td><td class="num">6</td><td class="num">3</td><td class="num">4</td><td class="num w-lo">0</td><td class="num w-lo">1</td><td class="num">2</td><td class="num">3</td><td class="num w-hi">9</td><td class="num">6</td><td class="num w-lo">1</td><td class="num total">44-82</td><td class="num">0.349</td></tr></tbody>
+</table>
+<h2>Schedule Luck</h2>
+<p class="lede">Every team's record had it played every other team's schedule. Read across a
+row: the outlined cell is that team's real record, green is a schedule it would have
+preferred, red one it would not. Identical scores, different opponents. Columns are
+numbered as the rows are, so column 3 is the schedule belonging to row 3.</p>
+<table class="grid">
+<thead><tr><th class="name">Team &rsaquo; playing schedule of</th><th class="num">1</th><th class="num">2</th><th class="num">3</th><th class="num">4</th><th class="num">5</th><th class="num">6</th><th class="num">7</th><th class="num">8</th><th class="num">9</th><th class="num">10</th></tr></thead>
+<tbody><tr><td class="name">1. A courageous team</td><td class="num self">9-5</td><td class="num worse">6-8</td><td class="num worse">4-10</td><td class="num worse">6-8</td><td class="num worse">7-7</td><td class="num worse">6-8</td><td class="num worse">8-6</td><td class="num">9-5</td><td class="num worse">4-10</td><td class="num worse">5-9</td></tr><tr><td class="name">2. Ben&#x27;s Underrated Tennis Team</td><td class="num">9-5</td><td class="num self">9-5</td><td class="num worse">5-9</td><td class="num better">10-4</td><td class="num worse">8-6</td><td class="num">9-5</td><td class="num better">10-4</td><td class="num">9-5</td><td class="num worse">7-7</td><td class="num worse">6-8</td></tr><tr><td class="name">3. John Fortnite Kennedy</td><td class="num better">9-5</td><td class="num better">10-4</td><td class="num self">8-6</td><td class="num">8-6</td><td class="num better">9-5</td><td class="num better">9-5</td><td class="num better">9-5</td><td class="num better">13-1</td><td class="num better">11-3</td><td class="num better">9-5</td></tr><tr><td class="name">4. Villoni Boutique #2 Fan</td><td class="num better">10-4</td><td class="num">8-6</td><td class="num">8-6</td><td class="num self">8-6</td><td class="num">8-6</td><td class="num worse">7-7</td><td class="num">8-6</td><td class="num">8-6</td><td class="num">8-6</td><td class="num better">9-5</td></tr><tr><td class="name">5. &quot;I can&#x27;t build&quot;</td><td class="num better">8-6</td><td class="num better">11-3</td><td class="num worse">5-9</td><td class="num better">8-6</td><td class="num self">7-7</td><td class="num worse">6-8</td><td class="num better">10-4</td><td class="num better">11-3</td><td class="num worse">6-8</td><td class="num worse">5-9</td></tr><tr><td class="name">6. Momma Gus</td><td class="num worse">4-10</td><td class="num worse">6-8</td><td class="num better">8-6</td><td class="num better">8-6</td><td class="num worse">6-8</td><td class="num self">7-7</td><td class="num">7-7</td><td class="num worse">6-8</td><td class="num worse">6-8</td><td class="num worse">5-9</td></tr><tr><td class="name">7. Njigba&#x27;s In Paris</td><td class="num worse">6-8</td><td class="num worse">5-9</td><td class="num">7-7</td><td class="num better">8-6</td><td class="num">7-7</td><td class="num worse">4-10</td><td class="num self">7-7</td><td class="num">7-7</td><td class="num">7-7</td><td class="num worse">4-10</td></tr><tr><td class="name">8. Weezer Africa</td><td class="num worse">6-8</td><td class="num">7-7</td><td class="num worse">6-8</td><td class="num better">9-5</td><td class="num worse">6-8</td><td class="num worse">6-8</td><td class="num better">9-5</td><td class="num self">7-7</td><td class="num">7-7</td><td class="num">7-7</td></tr><tr><td class="name">9. La Puerta</td><td class="num better">6-8</td><td class="num better">7-7</td><td class="num better">6-8</td><td class="num">5-9</td><td class="num worse">4-10</td><td class="num better">6-8</td><td class="num better">7-7</td><td class="num better">6-8</td><td class="num self">5-9</td><td class="num better">6-8</td></tr><tr><td class="name">10. Caitlyn clarks balls</td><td class="num better">5-9</td><td class="num better">5-9</td><td class="num better">4-10</td><td class="num better">5-9</td><td class="num better">4-10</td><td class="num better">4-10</td><td class="num better">7-7</td><td class="num better">5-9</td><td class="num better">5-9</td><td class="num self">3-11</td></tr></tbody>
+</table>
+<h2>What The Draw Was Worth</h2>
+<table>
+<thead><tr><th>Team</th><th class="num">Real</th><th class="num">Best</th>
+<th>with schedule of</th><th class="num">Worst</th><th>with schedule of</th></tr></thead>
+<tbody><tr><td>A courageous team</td><td class="num">9-5</td><td class="num better">9-5</td><td>A courageous team</td><td class="num worse">4-10</td><td>La Puerta</td></tr><tr><td>Ben&#x27;s Underrated Tennis Team</td><td class="num">9-5</td><td class="num better">10-4</td><td>Njigba&#x27;s In Paris</td><td class="num worse">5-9</td><td>John Fortnite Kennedy</td></tr><tr><td>John Fortnite Kennedy</td><td class="num">8-6</td><td class="num better">13-1</td><td>Weezer Africa</td><td class="num worse">8-6</td><td>Villoni Boutique #2 Fan</td></tr><tr><td>Villoni Boutique #2 Fan</td><td class="num">8-6</td><td class="num better">10-4</td><td>A courageous team</td><td class="num worse">7-7</td><td>Momma Gus</td></tr><tr><td>&quot;I can&#x27;t build&quot;</td><td class="num">7-7</td><td class="num better">11-3</td><td>Ben&#x27;s Underrated Tennis Team</td><td class="num worse">5-9</td><td>John Fortnite Kennedy</td></tr><tr><td>Momma Gus</td><td class="num">7-7</td><td class="num better">8-6</td><td>John Fortnite Kennedy</td><td class="num worse">4-10</td><td>A courageous team</td></tr><tr><td>Njigba&#x27;s In Paris</td><td class="num">7-7</td><td class="num better">8-6</td><td>Villoni Boutique #2 Fan</td><td class="num worse">4-10</td><td>Momma Gus</td></tr><tr><td>Weezer Africa</td><td class="num">7-7</td><td class="num better">9-5</td><td>Njigba&#x27;s In Paris</td><td class="num worse">6-8</td><td>Momma Gus</td></tr><tr><td>La Puerta</td><td class="num">5-9</td><td class="num better">7-7</td><td>Ben&#x27;s Underrated Tennis Team</td><td class="num worse">4-10</td><td>&quot;I can&#x27;t build&quot;</td></tr><tr><td>Caitlyn clarks balls</td><td class="num">3-11</td><td class="num better">7-7</td><td>Njigba&#x27;s In Paris</td><td class="num worse">3-11</td><td>Caitlyn clarks balls</td></tr></tbody>
+</table>
+<footer>Generated from results through week 14 of a
+14-week regular season. Clinched and eliminated are exact over
+every remaining schedule; a verdict resting on a points gap the scoring could still
+close is reported as alive.</footer>
+</body>
+</html>

@@ -109,7 +109,7 @@ fi
 case "$MODE" in
   --irl)
     if ! [[ "$ARG" =~ ^[0-9]+$ ]]; then
-      echo "Error: week_number must be an integer" >&2
+      echo "Error: week_number must be a whole number of weeks already played, got '$ARG'" >&2
       exit 1
     fi
     STAGE1=(
@@ -129,19 +129,31 @@ case "$MODE" in
     ;;
 esac
 
-# --dump saves stage 1's payload on the way past, so one live run produces both
-# the report and a fixture that replays it offline forever. tee rather than a
-# second download: two fetches could straddle a scoring update and disagree.
+# Stage 1 runs on its own, before anything is piped anywhere.
+#
+# In a single pipeline every stage starts at once, so when stage 1 rejected its
+# input -- an out-of-range week, say -- it printed one clear message and then four
+# more stages died on empty stdin, burying it under JSONDecodeError tracebacks.
+# Running it first means a bad request produces exactly the sentence stage 1 wrote.
+PAYLOAD="$(mktemp)"
+trap 'rm -f "$PAYLOAD"' EXIT
+
+if ! "${STAGE1[@]}" > "$PAYLOAD"; then
+  exit 1
+fi
+if [ ! -s "$PAYLOAD" ]; then
+  echo "Error: no league data was produced" >&2
+  exit 1
+fi
+
+# --dump keeps that payload, so one live run yields both the report and a fixture
+# that replays it offline forever.
 if [ -n "$DUMP_OUT" ]; then
-  CAPTURE=(tee "$DUMP_OUT")
-else
-  CAPTURE=(cat)
+  cp "$PAYLOAD" "$DUMP_OUT"
 fi
 
 # Run pipeline
-"${STAGE1[@]}" \
-  | "${CAPTURE[@]}" \
-  | "$PY" scenario_engine/refine_current_week.py \
+"$PY" scenario_engine/refine_current_week.py < "$PAYLOAD" \
   | "$PY" scenario_engine/generate_perms.py \
   | "$PY" scenario_engine/refine_hypothetical.py \
   | "${REPORT[@]}" ${DISPLAY_FLAGS[@]+"${DISPLAY_FLAGS[@]}"}

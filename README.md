@@ -186,8 +186,13 @@ the same question as clinching, asked of fewer seats:
    3  Villoni Boutique #2 Fan       9-5      1817.2  clinched
 ```
 
-A bye implies a place, so those teams are also counted in `Clinched` in the summary
-line. The four statuses are `bye`, `clinched`, `alive`, `eliminated`.
+And **`clinched #1 seed`** for a team certain to finish top of the table, which is
+reported in every league, byes or not.
+
+Each level implies the ones below it — the #1 seed is a bye is a place — so only the
+strongest true claim is shown, and all of them are counted in `Clinched` in the
+summary line. The five statuses are `clinched #1 seed`, `clinched bye`, `clinched`,
+`alive`, `eliminated`.
 
 ### 2. Clinched, but leans on the tiebreaker
 
