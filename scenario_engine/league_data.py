@@ -239,6 +239,14 @@ def build_payload(league, current_week):
             }
             for team in league.teams
         ],
+        # ESPN's own short code per team, for the report to label a row with.
+        # Keyed by the unique name because that is what the later stages carry;
+        # only teams that actually have one appear.
+        "abbreviations": {
+            names[team.team_id]: team.team_abbrev
+            for team in league.teams
+            if getattr(team, "team_abbrev", None)
+        },
     }
 
 

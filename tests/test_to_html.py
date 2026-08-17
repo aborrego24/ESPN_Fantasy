@@ -110,7 +110,20 @@ def weekly(names, weeks=2):
     ]
 
 
-def payload(standings, scenarios=None, matchups=None, weekly_scores=None, **league):
+def payload(
+    standings,
+    scenarios=None,
+    matchups=None,
+    weekly_scores=None,
+    abbreviations=None,
+    **league,
+):
+    """Build a stage-4 payload.
+
+    Anything not named above lands in league_data, so a misspelled argument
+    becomes a league setting rather than an error -- keep the signature in step
+    with the payload when a new key is added.
+    """
     settings = {
         "playoff_spots": 2,
         "num_weeks": 4,
@@ -124,6 +137,7 @@ def payload(standings, scenarios=None, matchups=None, weekly_scores=None, **leag
             "standings": standings,
             "next_week_matchups": matchups if matchups is not None else [],
             "weekly_scores": weekly_scores or [],
+            "abbreviations": abbreviations or {},
         },
         "scenarios": scenarios or [],
     }
@@ -440,3 +454,76 @@ def test_the_real_pipeline_produces_a_wellformed_page(name):
     document = to_html.render(json.loads(data))
     assert_wellformed(document)
     assert document.startswith("<!DOCTYPE html>")
+
+
+# --- team monograms -----------------------------------------------------------
+
+
+def test_the_espn_abbreviation_is_used_when_there_is_one():
+    assert to_html.monogram("Momma Gus", {"Momma Gus": "MGPY"}) == "MGPY"
+    assert to_html.monogram("Klorgon", {"Klorgon": "tcgp"}) == "TCGP"
+
+
+def test_initials_stand_in_when_no_abbreviation_was_recorded():
+    """Payloads saved before stage 1 carried abbreviations still get a label."""
+    assert to_html.monogram("Momma Gus", {}) == "MG"
+    assert to_html.monogram("I can't let you get close", None) == "ICLY"
+
+
+def test_a_name_with_nothing_to_take_initials_from_still_yields_something():
+    assert to_html.monogram("!!!", {}) == "!!"
+    assert to_html.monogram("#2", {}) == "#2"
+
+
+def test_a_monogram_colour_is_stable_across_runs():
+    """hash() is salted per process, so a team would change colour every run."""
+    first = to_html.monogram_colour("Momma Gus")
+
+    assert first == to_html.monogram_colour("Momma Gus")
+    assert first.startswith("hsl(")
+    assert first != to_html.monogram_colour("Klorgon")
+
+
+def test_every_standings_row_and_matchup_side_carries_a_chip():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            matchups=[
+                {"team1": "Alpha", "team2": "Bravo"},
+                {"team1": "Charlie", "team2": "Delta"},
+            ],
+            abbreviations={n: n[:3].upper() for n in names},
+        )
+    )
+    standings = document.split("<h2>Standings</h2>")[1].split("</table>")[0]
+    matchups = document.split("Matchups</h2>")[1].split("</table>")[0]
+
+    assert standings.count('class="mono"') == 4
+    assert matchups.count('class="mono"') == 4
+    # the supplied abbreviations must actually be the ones shown, not initials
+    for name in names:
+        assert f">{name[:3].upper()}<" in standings
+    assert_wellformed(document)
+
+
+def test_a_chip_does_not_reach_out_to_the_network():
+    """The whole point of not using ESPN's logo URLs: 6 of 10 need auth."""
+    document = to_html.render(BASIC)
+
+    assert "<img" not in document
+    for pattern in ("http://", "https://", "src=", "@import"):
+        assert pattern not in document
+
+
+def test_a_punctuated_abbreviation_is_escaped():
+    document = to_html.render(
+        payload(
+            [team("Alpha", 1, 0, 10.0, "alive")],
+            abbreviations={"Alpha": "A&B<"},
+        )
+    )
+
+    assert "A&amp;B" in document
+    assert "A&B<" not in document
+    assert_wellformed(document)

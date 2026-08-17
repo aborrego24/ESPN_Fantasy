@@ -122,6 +122,7 @@ def test_payload_has_the_shape_stage_two_expects():
         "teams",
         "next_week_matchups",
         "weekly_scores",
+        "abbreviations",
     }
     assert payload["league_settings"] == {
         "num_teams": 4,

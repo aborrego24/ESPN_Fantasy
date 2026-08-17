@@ -14,6 +14,7 @@ mail, or keep as a record of where a season stood.
 """
 
 import argparse
+import hashlib
 import html
 import json
 import sys
@@ -36,6 +37,39 @@ def title_case(text):
     matters.
     """
     return " ".join(word[:1].upper() + word[1:] for word in text.split(" "))
+
+
+def monogram(name, abbreviations):
+    """The short label to sit beside a team, e.g. 'OVEN'.
+
+    ESPN's own abbreviation where there is one, because a reader recognises it.
+    Otherwise the initials of the first few words, so a payload saved before
+    stage 1 recorded abbreviations still gets a label rather than a gap.
+    """
+    abbrev = (abbreviations or {}).get(name)
+    if abbrev:
+        return abbrev[:5].upper()
+    initials = "".join(word[0] for word in name.split() if word[:1].isalnum())
+    return (initials[:4] or name[:2]).upper()
+
+
+def monogram_colour(name):
+    """A stable colour per team, derived from the name.
+
+    md5 rather than hash(): the built-in is salted per process, so the same team
+    would change colour between runs and two reports of one week would not look
+    like the same league. Lightness and saturation are fixed so white text stays
+    legible whatever the hue.
+    """
+    hue = int(hashlib.md5(name.encode("utf-8")).hexdigest()[:8], 16) % 360
+    return f"hsl({hue} 52% 38%)"
+
+
+def monogram_html(name, abbreviations):
+    return (
+        f'<span class="mono" style="background:{monogram_colour(name)}">'
+        f"{esc(monogram(name, abbreviations))}</span>"
+    )
 
 
 def record_text(tally):
@@ -73,6 +107,11 @@ th { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color:
 td.num, th.num { text-align: right; }
 tr.cut td { border-bottom: 2px solid var(--ink); }
 .cutnote { font-size: .72rem; color: var(--dim); padding-top: .5rem; }
+.mono {
+  display: inline-block; min-width: 3.4rem; padding: .1rem .3rem; margin-right: .5rem;
+  border-radius: 4px; color: #fff; font-size: .68rem; font-weight: 700;
+  letter-spacing: .04em; text-align: center; vertical-align: .05em;
+}
 /* The colour carries the verdict on its own. Only the standings table adds the
    chip, because a name set in a small pill reads as less important than the
    sentence beside it -- which is backwards, since the name is the subject. */
@@ -120,7 +159,7 @@ def render_header(standings, league):
 </p>"""
 
 
-def render_standings(standings, league):
+def render_standings(standings, league, abbreviations=None):
     spots = league["playoff_spots"]
     rows = []
     for position, team in enumerate(standings, 1):
@@ -129,7 +168,8 @@ def render_standings(standings, league):
         cut = ' class="cut"' if position == spots else ""
         rows.append(
             f"<tr{cut}><td class=\"num\">{position}</td>"
-            f"<td>{esc(team['team_name'])}</td>"
+            f"<td>{monogram_html(team['team_name'], abbreviations)}"
+            f"{esc(team['team_name'])}</td>"
             f"<td class=\"num\">{team['wins']}-{team['losses']}</td>"
             f"<td class=\"num\">{team['points_for']:.1f}</td>"
             f'<td><span class="pill {verdict}">{esc(verdict)}</span></td></tr>'
@@ -143,12 +183,13 @@ def render_standings(standings, league):
 <p class="cutnote">The rule marks the playoff cut line: {spots} spots.</p>"""
 
 
-def render_matchups(matchups, league):
+def render_matchups(matchups, league, abbreviations=None):
     if not matchups:
         return '<h2>Next Week</h2>\n<p class="empty">No games left to play.</p>'
     rows = "".join(
-        f"<tr><td>{esc(m['team1'])}</td><td class=\"empty\">vs</td>"
-        f"<td>{esc(m['team2'])}</td></tr>"
+        f"<tr><td>{monogram_html(m['team1'], abbreviations)}{esc(m['team1'])}</td>"
+        f'<td class="empty">vs</td>'
+        f"<td>{monogram_html(m['team2'], abbreviations)}{esc(m['team2'])}</td></tr>"
         for m in matchups
     )
     return (
@@ -330,15 +371,18 @@ def render(payload, show=None):
     league = base["league_data"]
     scenarios = payload["scenarios"]
     weekly_scores = base.get("weekly_scores") or []
+    abbreviations = base.get("abbreviations") or {}
     thresholds = margins.load_thresholds()
 
     parts = []
     if "header" in show:
         parts.append(render_header(standings, league))
     if "standings" in show:
-        parts.append(render_standings(standings, league))
+        parts.append(render_standings(standings, league, abbreviations))
     if "matchups" in show:
-        parts.append(render_matchups(base["next_week_matchups"], league))
+        parts.append(
+            render_matchups(base["next_week_matchups"], league, abbreviations)
+        )
     if "scenarios" in show:
         parts.append(
             render_scenarios(standings, scenarios, league, thresholds, "clinch")
