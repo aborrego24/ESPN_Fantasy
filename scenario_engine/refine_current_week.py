@@ -140,6 +140,7 @@ if __name__ == "__main__":
         # Passed straight through for the season-review tables in stage 5. Absent
         # from older saved payloads, so it stays optional the whole way down.
         "weekly_scores": league_data.get("weekly_scores", []),
+        "abbreviations": league_data.get("abbreviations", {}),
     }
     print(json.dumps(combined, indent=2))
 
