@@ -291,7 +291,7 @@ ESPN_LEAGUE_ID=123456789 python3 tools/derive_score_thresholds.py 2024 2025
 | **Low** | Duplicate team names get a tag | ESPN allows two teams to share a name. They're told apart by abbreviation — `Ringers (OVEN)` / `Ringers (SCHU)` — so the label differs slightly from what ESPN shows |
 | **Medium** | Future points are frozen | Tiebreaker maths assumes current point totals hold. The output always says when a verdict depends on this |
 | **Low** | Conditions cover next week only | Verdicts use the whole remaining season, but the printed conditions describe next week — "you need someone to lose in five weeks" isn't actionable |
-| **Low** | No bye status in a divisional league | The bracket order isn't published, and a divisional season seeds division winners first, so the tool declines to claim a bye rather than guess. Playoff verdicts are unaffected |
+| **High** | Divisional seeding isn't modelled | Seeding is treated as record-then-points. A league with divisions seeds **division winners first**, so the seed *order* is wrong there, and in principle the playoff *field* can be too — a division winner with a poor record may take a place from a better team. Verified against one two-division season, where both division winners were top-5 on record anyway, so the field came out right. **Bye status is withheld entirely in a divisional league** rather than guessed |
 | **Low** | Future ties are not simulated | Past ties are read and reported correctly; possible *future* results are only ever win or loss. A tie is rare enough that enumerating it costs more than it explains |
 
 ### Planned
