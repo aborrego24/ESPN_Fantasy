@@ -16,18 +16,32 @@ WIDTH = 78
 
 VERDICT_COLOUR = {"bye": CYAN, "clinched": GREEN, "eliminated": RED, "alive": YELLOW}
 
+# The key names the level; the label is what a reader sees. Separate because the
+# key also becomes an HTML class, and "clinched bye" is two words.
+STATUS_LABEL = {
+    "bye": "clinched bye",
+    "clinched": "clinched",
+    "alive": "alive",
+    "eliminated": "eliminated",
+}
+
 
 def display_status(team):
-    """The one word for where a team stands, best first.
+    """Which of the four levels a team is at, best first.
 
-    Four levels, and a bye outranks a plain place because it is strictly more:
-    nobody holds a bye without also holding a seat. Kept separate from `verdict`,
-    which stays a three-way playoff answer so that code asking "did they clinch a
-    place" still counts the teams who did.
+    A bye outranks a plain place because it is strictly more: nobody holds a bye
+    without also holding a seat. Kept separate from `verdict`, which stays a
+    three-way playoff answer so that code asking "did they clinch a place" still
+    counts the teams who did.
     """
     if team.get("bye") == "clinched":
         return "bye"
     return team["verdict"]
+
+
+def status_label(team):
+    """How that level reads."""
+    return STATUS_LABEL[display_status(team)]
 
 
 def rule(title=""):
@@ -187,12 +201,11 @@ def print_standings(standings, league):
         if position == spots + 1:
             print(f"{DIM}{rule('playoff cut line')}{RESET}")
         record = f"{team['wins']}-{team['losses']}"
-        status = display_status(team)
-        colour = VERDICT_COLOUR.get(status, "")
+        colour = VERDICT_COLOUR.get(display_status(team), "")
         print(
             f"  {position:2d}  {team['team_name']:<{width}}  "
             f"{record:>6}  {team['points_for']:>10.1f}  "
-            f"{colour}{status}{RESET}"
+            f"{colour}{status_label(team)}{RESET}"
         )
 
 

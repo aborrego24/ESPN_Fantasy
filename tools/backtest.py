@@ -117,10 +117,31 @@ def check_season(year):
     print(f"\n{'=' * 78}")
     print(f"{year}  --  {len(names)} teams, {weeks} weeks, {spots} playoff spots")
     print(f"{'=' * 78}")
-    print(f"ESPN's actual playoff field ({len(made_playoffs)}):")
-    for t in sorted(league.teams, key=lambda t: t.final_standing):
-        if t.team_name in made_playoffs:
-            print(f"   #{t.final_standing} {t.team_name}  ({t.wins}-{t.losses}, PF {t.points_for:.1f})")
+    # Seeding going INTO the playoffs, which is the order the engine models.
+    # final_standing is the post-playoff finish and is shown separately, because
+    # numbering the field by it implies a seeding it is not: a consolation winner
+    # can outrank a better regular-season team.
+    divisional = len(getattr(league.settings, "division_map", None) or {1: None}) > 1
+    print(
+        f"ESPN's actual playoff field ({len(made_playoffs)}), ordered by the "
+        f"engine's seeding model:"
+    )
+    seeded = [
+        t
+        for t in sorted(league.teams, key=lambda t: (-t.wins, t.losses, -t.points_for))
+        if t.team_name in made_playoffs
+    ]
+    for seed, t in enumerate(seeded, 1):
+        print(
+            f"   #{seed} by record/points  {t.team_name}  ({t.wins}-{t.losses}, "
+            f"PF {t.points_for:.1f})  -> finished #{t.final_standing}"
+        )
+    if divisional:
+        print(
+            "       note: this league has divisions, and ESPN seeds division "
+            "winners first,\n             so the order above is NOT the real "
+            "bracket order -- only the set is."
+        )
 
     failures = []
     points_shifts = []

@@ -167,6 +167,7 @@ def render_standings(standings, league, abbreviations=None):
     rows = []
     for position, team in enumerate(standings, 1):
         status = pretty_print.display_status(team)
+        label = pretty_print.status_label(team)
         # The cut line is drawn under the last team holding a seat
         cut = ' class="cut"' if position == spots else ""
         rows.append(
@@ -175,7 +176,7 @@ def render_standings(standings, league, abbreviations=None):
             f"{esc(team['team_name'])}</td>"
             f"<td class=\"num\">{team['wins']}-{team['losses']}</td>"
             f"<td class=\"num\">{team['points_for']:.1f}</td>"
-            f'<td><span class="pill {status}">{esc(status)}</span></td></tr>'
+            f'<td><span class="pill {status}">{esc(label)}</span></td></tr>'
         )
     return f"""<h2>Standings</h2>
 <table>

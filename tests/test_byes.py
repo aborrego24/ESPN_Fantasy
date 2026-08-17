@@ -240,7 +240,8 @@ def test_the_html_standings_show_the_bye_status():
         }
     )
 
-    assert '<span class="pill bye">bye</span>' in document
+    # the class names the level; the text is what a reader sees
+    assert '<span class="pill bye">clinched bye</span>' in document
     assert ".bye { color:" in document
 
 
@@ -257,3 +258,18 @@ def test_stage_two_passes_the_bye_count_through(load_fixture):
     )
 
     assert all(t["bye"] is None for t in decided_standings)
+
+
+@pytest.mark.parametrize(
+    "team,expected",
+    [
+        ({"verdict": "clinched", "bye": "clinched"}, "clinched bye"),
+        ({"verdict": "clinched", "bye": "eliminated"}, "clinched"),
+        ({"verdict": "alive", "bye": "alive"}, "alive"),
+        ({"verdict": "eliminated", "bye": "eliminated"}, "eliminated"),
+    ],
+)
+def test_the_label_reads_clinched_bye_not_bye(team, expected):
+    """The level's key and its label are separate: the key is also a CSS class."""
+    assert pretty_print.status_label(team) == expected
+    assert pretty_print.display_status(team) in pretty_print.STATUS_LABEL
