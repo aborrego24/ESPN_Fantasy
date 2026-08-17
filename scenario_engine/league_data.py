@@ -35,6 +35,20 @@ def played_weeks(league):
     return min(counts) if counts else 0
 
 
+def opponent_in_week(team, index):
+    """The team this team played in week `index`, or None if it played nobody.
+
+    Guarded rather than indexed directly. An odd-sized league leaves a week with
+    no game, and the team's schedule is then shorter than the season, so
+    `team.schedule[index]` raises IndexError -- which took stage 1 down entirely
+    before it could report anything.
+    """
+    opponent = team.schedule[index] if index < len(team.schedule) else None
+    if getattr(opponent, "team_name", None) == team.team_name:
+        return None
+    return opponent
+
+
 def record_through_week(team, weeks):
     """Recompute a team's record and points from its first `weeks` matchups.
 
@@ -52,8 +66,13 @@ def record_through_week(team, weeks):
     points = 0.0
     for index in range(weeks):
         own = team.scores[index]
-        against = team.schedule[index].scores[index]
         points += own
+        opponent = opponent_in_week(team, index)
+        if opponent is None:
+            # A bye scores points but settles nothing, so it counts toward the
+            # seeding tiebreaker without becoming a win, a loss or a tie.
+            continue
+        against = opponent.scores[index]
         if own > against:
             wins += 1
         elif own < against:
@@ -61,6 +80,29 @@ def record_through_week(team, weeks):
         else:
             ties += 1
     return wins, losses, ties, round(points, 2)
+
+
+def weekly_history(team, weeks):
+    """Per-week score and opponent for the first `weeks` matchups.
+
+    Reference data for the season-review tables, which need to compare any two
+    teams' scores in the same week -- something the aggregate points_for cannot
+    answer. It takes no part in any verdict.
+
+    A bye is reported as an opponent of None, so that a week with no game is not
+    inherited as one when another team takes over this schedule.
+    """
+    history = []
+    for index in range(weeks):
+        opponent = opponent_in_week(team, index)
+        history.append(
+            {
+                "week": index + 1,
+                "points": team.scores[index],
+                "opponent": getattr(opponent, "team_name", None),
+            }
+        )
+    return history
 
 
 def build_payload(league, current_week):
@@ -118,6 +160,14 @@ def build_payload(league, current_week):
         },
         "teams": teams,
         "next_week_matchups": next_week_matchups,
+        # Kept top-level rather than on each team: the later stages rebuild the
+        # team dicts from a fixed field list, and stage 4 deep-copies the
+        # standings once per permutation, so per-team history would be both
+        # dropped and copied thousands of times.
+        "weekly_scores": [
+            {"name": team.team_name, "weeks": weekly_history(team, current_week)}
+            for team in league.teams
+        ],
     }
 
 
