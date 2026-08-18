@@ -268,6 +268,42 @@ def test_no_remaining_matchups_leaves_the_forward_half_empty():
         assert row["opp_ppg"] == pytest.approx(row["sos_played"])
 
 
+# --- preseason (projection-based) SOS -----------------------------------------
+
+
+def test_preseason_sos_ranks_by_projected_opponent_scoring():
+    """No games yet, so SOS is purely how strong the opponents project to be.
+
+    A plays Strong (150), B plays Weak (50); the two foes each play a 100-team.
+    Opponent means are A 150, B 50, foes 100, so the league-average schedule is
+    100 and the ratios are A 1.5, B 0.5, foes 1.0. A is hardest, B easiest.
+    """
+    projected = {"A": 100.0, "B": 100.0, "Strong": 150.0, "Weak": 50.0}
+    matchups = [[{"team1": "A", "team2": "Strong"}, {"team1": "B", "team2": "Weak"}]]
+
+    rows = strength.preseason_strength(projected, matchups)
+    sos = {r["name"]: r["sos"] for r in rows}
+
+    assert rows[0]["name"] == "A" and rows[-1]["name"] == "B"
+    assert sos["A"] == pytest.approx(1.5)
+    assert sos["B"] == pytest.approx(0.5)
+    assert sos["Strong"] == pytest.approx(1.0)
+
+
+def test_preseason_sos_carries_the_per_week_schedule():
+    projected = {"A": 100.0, "B": 100.0, "Strong": 150.0, "Weak": 50.0}
+    matchups = [[{"team1": "A", "team2": "Strong"}, {"team1": "B", "team2": "Weak"}]]
+
+    a = next(r for r in strength.preseason_strength(projected, matchups) if r["name"] == "A")
+    assert a["schedule"] == [{"week_offset": 0, "opponent": "Strong", "value": 150.0}]
+
+
+def test_preseason_sos_needs_both_projections_and_a_schedule():
+    assert strength.preseason_strength({}, [[{"team1": "A", "team2": "B"}]]) == []
+    assert strength.preseason_strength({"A": 100.0}, []) == []
+    assert strength.preseason_strength({}, []) == []
+
+
 # --- degenerate input ----------------------------------------------------------
 
 

@@ -124,6 +124,7 @@ def test_payload_has_the_shape_stage_two_expects():
         "weekly_scores",
         "abbreviations",
         "divisions",
+        "projected_ppg",
     }
     assert payload["league_settings"] == {
         "num_teams": 4,
@@ -422,3 +423,67 @@ def test_played_weeks_counts_only_scored_weeks():
         team.scores[2] = 0
         team.scores[3] = 0
     assert league_data.played_weeks(league) == 2
+
+
+# --- projected PPG (preseason) --------------------------------------------------
+
+
+class FakePlayer:
+    def __init__(self, name, eligible_slots, projected_avg_points):
+        self.name = name
+        self.eligibleSlots = eligible_slots
+        self.projected_avg_points = projected_avg_points
+
+
+class FakeRosterTeam:
+    _next_id = 1
+
+    def __init__(self, name, roster):
+        self.team_name = name
+        self.roster = roster
+        self.team_id = FakeRosterTeam._next_id
+        FakeRosterTeam._next_id += 1
+
+
+class FakeProjLeague:
+    """Minimal league exposing the raw settings and rosters projected_ppg needs."""
+
+    def __init__(self, teams, slot_counts):
+        self.teams = teams
+
+        class _Request:
+            def get_league(self):
+                return {"settings": {"rosterSettings": {"lineupSlotCounts": slot_counts}}}
+
+        self.espn_request = _Request()
+
+
+def test_projected_ppg_is_empty_when_the_league_cannot_supply_it():
+    """The ordinary fake has no rosters or raw settings, so it degrades to {} --
+    and the payload still carries the key."""
+    payload = league_data.build_payload(four_team_league(), current_week=2)
+
+    assert payload["projected_ppg"] == {}
+
+
+def test_projected_ppg_sums_the_best_legal_starting_lineup():
+    """Two QBs but one QB slot: only the better starts; the spare QB is benched."""
+    team = FakeRosterTeam(
+        "A",
+        [
+            FakePlayer("QB1", ["QB"], 20.0),
+            FakePlayer("QB2", ["QB"], 15.0),
+            FakePlayer("RB1", ["RB", "RB/WR/TE"], 18.0),
+        ],
+    )
+    # slot ids: 0=QB x1, 2=RB x1, 20=BE x3 (bench never scores)
+    league = FakeProjLeague([team], {"0": 1, "2": 1, "20": 3})
+    names = {team.team_id: "A"}
+
+    assert league_data.projected_ppg(league, names) == {"A": 38.0}
+
+
+def test_starting_slots_drops_bench_and_ir():
+    league = FakeProjLeague([], {"0": 1, "2": 2, "20": 5, "21": 1})
+
+    assert league_data.starting_slots(league) == {"QB": 1, "RB": 2}

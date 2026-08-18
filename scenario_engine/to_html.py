@@ -502,31 +502,37 @@ def _sor_cell(value):
     return f'<td class="num sos-sor {css}">{sign}{abs(value):.3f}</td>'
 
 
-def _to_come_cell(row, current_week, abbreviations):
-    """The remaining-schedule number, hovering to a week-by-week breakdown.
+def _schedule_tooltip(display, breakdown, current_week, abbreviations):
+    """A number that hovers to a Week/Opp/PPG grid of the games behind it.
 
-    A CSS-only tooltip lists each upcoming game as "week OPP : PPG", so the single
-    averaged number can be traced to the opponents behind it. No script: it works
-    in a mailed or printed page the same as on screen (as a stacked list there).
+    A CSS-only tooltip (no script), so a mailed or printed page shows the same
+    breakdown as a stacked list. Shared by the in-season "to come" number and the
+    preseason projected schedule.
     """
-    if row["sos_remaining"] is None:
-        return '<td class="num">&mdash;</td>'
     cells = [
         '<span class="tiphead">Week</span>'
         '<span class="tiphead">Opp</span>'
         '<span class="tiphead">PPG</span>'
     ]
-    for d in row["remaining"]:
+    for d in breakdown:
         cells.append(
             f'<span>{current_week + 1 + d["week_offset"]}</span>'
             f'<span>{esc(monogram(d["opponent"], abbreviations))}</span>'
             f'<span>{_ppg(d["value"])}</span>'
         )
     return (
-        '<td class="num"><span class="tip" tabindex="0">'
-        f'{_ppg(row["sos_remaining"])}<span class="tipbox">{"".join(cells)}</span>'
-        "</span></td>"
+        f'<span class="tip" tabindex="0">{display}'
+        f'<span class="tipbox">{"".join(cells)}</span></span>'
     )
+
+
+def _to_come_cell(row, current_week, abbreviations):
+    if row["sos_remaining"] is None:
+        return '<td class="num">&mdash;</td>'
+    tip = _schedule_tooltip(
+        _ppg(row["sos_remaining"]), row["remaining"], current_week, abbreviations
+    )
+    return f'<td class="num">{tip}</td>'
 
 
 def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None, current_week=0):
@@ -587,6 +593,46 @@ to re-rank; with no browser the table shows a 50/50 blend against an average tea
 <script>{STRENGTH_JS}</script>"""
 
 
+def render_preseason_strength(projected_ppg, matchups, abbreviations=None):
+    """SOS before a game is played, from projected opponent scoring.
+
+    No record component and no SOR yet, so this is a plainer, static table than
+    the in-season one -- and it is flagged low-confidence, because it rests
+    entirely on projections that barely predict.
+    """
+    rows = strength.preseason_strength(projected_ppg, matchups)
+    if not rows:
+        return ""
+
+    body = []
+    for position, row in enumerate(rows, 1):
+        sos = "&mdash;" if row["sos"] is None else f"{round(row['sos'] * 100)}"
+        cell = (
+            '<td class="num">&mdash;</td>'
+            if row["opp_ppg"] is None
+            else f'<td class="num">{_schedule_tooltip(_ppg(row["opp_ppg"]), row["schedule"], 0, abbreviations)}</td>'
+        )
+        body.append(
+            f'<tr><td class="num">{position}</td>'
+            f'<td class="name">{monogram_html(row["name"], abbreviations)}'
+            f'{esc(row["name"])}</td>'
+            f'<td class="num total">{sos}</td>{cell}</tr>'
+        )
+
+    return f"""<h2>Strength of Schedule &mdash; Preseason</h2>
+<p class="lede"><strong>Before any game is played</strong>, this ranks schedules by how strong each
+team's opponents <em>project</em> to score over the season &mdash; 100 is an average schedule,
+above it tougher. &#9888; It rests entirely on ESPN's preseason projections, which are a
+<strong>weak predictor</strong> (measured correlation with real scoring about 0.07, because a
+draft equalises rosters), so read it as a rough hint, not a verdict. Hover a number for the
+week-by-week opponents.</p>
+<table class="grid">
+<thead><tr><th class="num">#</th><th class="name">Team</th>
+<th class="num total">SOS</th><th class="num">Proj&nbsp;opp&nbsp;PPG</th></tr></thead>
+<tbody>{''.join(body)}</tbody>
+</table>"""
+
+
 def render(payload, show=None):
     """The whole document. `show` names the sections to include."""
     show = show or {"header", "standings", "matchups", "scenarios", "stats"}
@@ -612,7 +658,10 @@ def render(payload, show=None):
             render_scenarios(standings, scenarios, league, thresholds, "clinch")
         )
         parts.append(render_scenarios(standings, scenarios, league, thresholds, "elim"))
-    if "stats" in show and weekly_scores:
+    # A preseason payload carries a weekly_scores entry per team but with no weeks
+    # in it, which is still truthy -- so the in-season tables key off real history.
+    has_history = any(entry.get("weeks") for entry in weekly_scores)
+    if "stats" in show and has_history:
         parts.append(
             render_strength(
                 weekly_scores,
@@ -623,6 +672,13 @@ def render(payload, show=None):
         )
         parts.append(render_all_play(weekly_scores))
         parts.append(render_schedule_luck(weekly_scores, abbreviations))
+    elif "stats" in show and base.get("projected_ppg") and base.get("remaining_matchups"):
+        # No games yet, but projections and a full schedule -> a preseason SOS.
+        parts.append(
+            render_preseason_strength(
+                base["projected_ppg"], base["remaining_matchups"], abbreviations
+            )
+        )
 
     played = league["current_week"]
     return f"""<!DOCTYPE html>

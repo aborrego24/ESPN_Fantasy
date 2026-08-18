@@ -4,6 +4,8 @@ import os
 import sys
 from collections import Counter
 
+import projections
+
 # Known-good leagues, kept as defaults because they are the ones actually used
 # and their data is a known quantity. Override with --league-id / --year, or
 # ESPN_LEAGUE_ID / ESPN_YEAR.
@@ -126,6 +128,65 @@ def divisions_of(league, names):
     """
     ids = {names[t.team_id]: getattr(t, "division_id", 0) for t in league.teams}
     return ids if len(set(ids.values())) > 1 else None
+
+
+def starting_slots(league):
+    """{slot_name: count} for the scoring slots, or {} if unavailable.
+
+    Read from the raw settings by slot id and named through the library's
+    POSITION_MAP -- the same names ESPN puts in a player's eligibleSlots, so a
+    lineup can be solved against them. Bench and IR never score. Guarded: a
+    league object without this (a test double) yields {}, and the projection is
+    then simply skipped.
+    """
+    try:
+        counts = league.espn_request.get_league()["settings"]["rosterSettings"][
+            "lineupSlotCounts"
+        ]
+    except Exception:
+        return {}
+    from espn_api.football.constant import POSITION_MAP
+
+    slots = {}
+    for slot_id, count in counts.items():
+        name = POSITION_MAP.get(int(slot_id))
+        if count and name and name not in ("BE", "IR"):
+            slots[name] = slots.get(name, 0) + count
+    return slots
+
+
+def projected_ppg(league, names):
+    """{team_name: projected optimal-lineup PPG}, or {} if it cannot be computed.
+
+    A team's projected scoring is the best legal starting lineup its roster
+    allows, summed from ESPN's preseason player projections -- not a sum of the
+    whole roster, since two quarterbacks with one QB slot start only the better
+    one. Run in the preseason, before any waiver move, the current roster *is* the
+    drafted roster, which is the point.
+
+    ⚠️ Only meant for the preseason view, and low-confidence even there: a snake
+    draft equalises rosters, so this barely predicts actual scoring (measured
+    r about 0.07 -- see tools/validate_projections.py). Guarded so a projection
+    failure never takes down the rest of the payload.
+    """
+    slots = starting_slots(league)
+    if not slots:
+        return {}
+    try:
+        result = {}
+        for team in league.teams:
+            players = [
+                projections.Player(
+                    player.name, player.eligibleSlots, player.projected_avg_points or 0.0
+                )
+                for player in team.roster
+            ]
+            result[names[team.team_id]] = round(
+                projections.projected_points(players, list(slots.items())), 2
+            )
+        return result
+    except Exception:
+        return {}
 
 
 def opponent_in_week(team, index):
@@ -278,6 +339,10 @@ def build_payload(league, current_week):
         # One division id per team when the league has more than one division,
         # because that changes the seeding order and so every verdict.
         "divisions": divisions_of(league, names),
+        # Projected optimal-lineup PPG per team, for the preseason SOS view. Empty
+        # unless a live league can supply rosters and projections; low-confidence
+        # by nature (see projected_ppg).
+        "projected_ppg": projected_ppg(league, names),
         # ESPN's own short code per team, for the report to label a row with.
         # Keyed by the unique name because that is what the later stages carry;
         # only teams that actually have one appear.
