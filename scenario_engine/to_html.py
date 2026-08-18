@@ -165,7 +165,7 @@ details.race table { margin-top: .5rem; }
 .alive { color: var(--open); }
 .pill {
   display: inline-block; padding: .05rem .45rem; border-radius: 999px;
-  font-size: .75rem; font-weight: 600;
+  font-size: .75rem; font-weight: 600; white-space: nowrap;
 }
 .pill.top_seed { background: var(--top-bg); }
 .pill.bye { background: var(--bye-bg); }
@@ -490,29 +490,24 @@ def render_seed_race(standings, abbreviations=None, logo_class=None):
     answer the standings badge gives -- gathered here as its own race. Teams
     eliminated from the #1 seed are left out; that is the point of a race.
     """
-    contenders = [t for t in standings if t.get("top_seed") in ("clinched", "alive")]
+    # Only a race while it is undecided: once a team has clinched the #1 seed
+    # (or nobody can still take it) there is nothing to show.
+    if any(t.get("top_seed") == "clinched" for t in standings):
+        return ""
+    contenders = [t for t in standings if t.get("top_seed") == "alive"]
     if not contenders:
         return ""
-    clinched = next((t for t in contenders if t.get("top_seed") == "clinched"), None)
-    lede = (
-        f"{esc(clinched['team_name'])} has locked up the #1 seed."
-        if clinched
-        else f"{len(contenders)} teams are still in it; everyone else is out of the race."
-    )
     rows = "".join(
         f"<tr><td>{team_mark(t['team_name'], abbreviations, logo_class)}"
         f"{esc(t['team_name'])}</td>"
         f'<td class="num">{t["wins"]}-{t["losses"]}</td>'
-        f'<td class="num">{t["points_for"]:.1f}</td>'
-        f'<td><span class="pill {"top_seed" if t.get("top_seed") == "clinched" else "alive"}">'
-        f'{"clinched" if t.get("top_seed") == "clinched" else "in the hunt"}</span></td></tr>'
+        f'<td class="num">{t["points_for"]:.1f}</td></tr>'
         for t in contenders
     )
     return (
-        '<details class="race" open><summary>Race: #1 Seed</summary>'
-        f'<p class="note">{lede}</p>'
+        '<details class="race" open><summary>Overall #1 Seed</summary>'
         '<table><thead><tr><th>Team</th><th class="num">Record</th>'
-        '<th class="num">Points for</th><th>Status</th></tr></thead>'
+        '<th class="num">Points for</th></tr></thead>'
         f"<tbody>{rows}</tbody></table></details>"
     )
 
