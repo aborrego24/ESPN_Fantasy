@@ -230,6 +230,12 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 /* Sits below a logo on the chart background, so it needs the dark ink fill the
    on-circle label (white on colour) must not use. */
 .cpt-lbl { fill: var(--ink); font-size: 9px; font-weight: 700; }
+/* Corner labels naming what each quadrant means for the chosen axes. A white
+   stroke drawn under the fill keeps them legible over gridlines and dots. */
+.cquad {
+  fill: var(--dim); font-size: 11px; font-weight: 700;
+  paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round;
+}
 footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 """
 
@@ -287,6 +293,24 @@ STRENGTH_JS = """
   // scale -- SOS is pinned 15..85 around 50, SOR 0.3..-0.3 around 0. The rest
   // auto-scale to their data, since they do not move with the controls.
   function fixedDomain(k) { return k === 'sos' ? [15, 85] : (k === 'sor' ? [-0.3, 0.3] : null); }
+
+  // What a low / high value of each metric means, in plain words. A quadrant
+  // label joins the phrase for its X direction with the one for its Y direction,
+  // so "wins + tough schedule" names the top-right when those are the axes.
+  var PHRASE = {
+    sos: ['easy schedule', 'tough schedule'],
+    sor: ['underachieving', 'overachieving'],
+    wins: ['loses a lot', 'wins a lot'],
+    ppg: ['scores little', 'scores a lot'],
+    oppppg: ['weak opponents', 'strong opponents'],
+    pf: ['low total points', 'high total points']
+  };
+  function quadLabel(xk, yk, xHigh, yHigh) {
+    var xp = PHRASE[xk] ? PHRASE[xk][xHigh ? 1 : 0] : '';
+    var yp = PHRASE[yk] ? PHRASE[yk][yHigh ? 1 : 0] : '';
+    if (xk === yk) return xp;          // same metric on both axes -> one phrase
+    return (xp && yp) ? xp + ' \\u00b7 ' + yp : (xp || yp);
+  }
 
   // The value of any metric for a team. SOS is recomputed from the blend so it
   // tracks the slider; the rest are read straight off the row -- one source of
@@ -373,6 +397,16 @@ STRENGTH_JS = """
         e.push('<text x="' + cx + '" y="' + (cy + 3) + '" class="cpt" text-anchor="middle">' + p.abbr + '</text>');
       }
     });
+    // Name each corner by what the chosen axes mean there -- top is high Y, right
+    // is high X -- so the reading changes with the selects.
+    function corner(x, y, anchor, xHigh, yHigh) {
+      var t = quadLabel(xk, yk, xHigh, yHigh);
+      if (t) e.push('<text x="' + x + '" y="' + y + '" class="cquad" text-anchor="' + anchor + '">' + t + '</text>');
+    }
+    corner(mL + 6, mT + 14, 'start', false, true);       // top-left:  low X, high Y
+    corner(W - mR - 6, mT + 14, 'end', true, true);       // top-right: high X, high Y
+    corner(mL + 6, H - mB - 8, 'start', false, false);    // bottom-left:  low X, low Y
+    corner(W - mR - 6, H - mB - 8, 'end', true, false);   // bottom-right: high X, low Y
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.innerHTML = e.join('');
   }
