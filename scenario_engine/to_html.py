@@ -172,6 +172,20 @@ footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 """
 
 
+# SOS comes out of the engine as a ratio to the average schedule (1.0 = average).
+# For display it is recentred on 50 and the spread widened, so the league opens
+# into a legible gap instead of everyone crowding one number: 50 is an average
+# schedule, and the gain sets how far a tougher or easier one moves from it. The
+# same two constants drive the interactive script, injected into it below so the
+# static and live numbers cannot disagree.
+SOS_CENTER = 50
+SOS_GAIN = 400
+
+
+def _sos_display(ratio):
+    return None if ratio is None else round(SOS_CENTER + (ratio - 1.0) * SOS_GAIN)
+
+
 # Progressive enhancement for the strength table: the slider re-blends SOS and the
 # select swaps the SOR benchmark, both from data already on each row, so the page
 # needs no server round-trip and no assets. With scripting off, the static table
@@ -195,7 +209,7 @@ STRENGTH_JS = """
       var sos = (pi === null || ri === null) ? null : w * pi + (1 - w) * ri;
       tr._s = (sos === null) ? -1 : sos;
       var sv = tr.querySelector('.sos-val');
-      if (sv) sv.textContent = (sos === null) ? '\\u2014' : Math.round(sos * 100);
+      if (sv) sv.textContent = (sos === null) ? '\\u2014' : Math.round(SOS_CENTER + (sos - 1) * SOS_GAIN);
       var v = num(tr.getAttribute(elite ? 'data-sor-elite' : 'data-sor-avg'));
       var sc = tr.querySelector('.sos-sor');
       if (sc) {
@@ -543,7 +557,8 @@ def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None, 
 
     body = []
     for position, row in enumerate(rows, 1):
-        sos = "&mdash;" if row["sos"] is None else f"{round(row['sos'] * 100)}"
+        display = _sos_display(row["sos"])
+        sos = "&mdash;" if display is None else f"{display}"
         ahead = (
             _to_come_cell(row, current_week, abbreviations) if any_remaining else ""
         )
@@ -567,7 +582,7 @@ def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None, 
     ahead_head = '<th class="num">To&nbsp;come</th>' if any_remaining else ""
     return f"""<h2>Strength of Schedule &amp; Record</h2>
 <p class="lede"><strong>SOS</strong> rates how hard a team's opponents are against the league
-average: <strong>100 is an average schedule</strong>, above it tougher and below it easier,
+average: <strong>50 is an average schedule</strong>, above it tougher and below it easier,
 blending how much those opponents score with how often they win{" (and the 'to&nbsp;come' column is how hard the schedule still ahead is)" if any_remaining else ""}.
 <strong>SOR</strong> is strength of record: how a team's own win rate compares with what a
 benchmark team would manage against the same schedule &mdash; green means it has done better
@@ -590,7 +605,7 @@ to re-rank; with no browser the table shows a 50/50 blend against an average tea
 {ahead_head}<th class="num">SOR</th></tr></thead>
 <tbody id="sos-body">{''.join(body)}</tbody>
 </table>
-<script>{STRENGTH_JS}</script>"""
+<script>var SOS_CENTER={SOS_CENTER},SOS_GAIN={SOS_GAIN};{STRENGTH_JS}</script>"""
 
 
 def render_preseason_strength(projected_ppg, matchups, abbreviations=None):
@@ -606,7 +621,8 @@ def render_preseason_strength(projected_ppg, matchups, abbreviations=None):
 
     body = []
     for position, row in enumerate(rows, 1):
-        sos = "&mdash;" if row["sos"] is None else f"{round(row['sos'] * 100)}"
+        display = _sos_display(row["sos"])
+        sos = "&mdash;" if display is None else f"{display}"
         cell = (
             '<td class="num">&mdash;</td>'
             if row["opp_ppg"] is None
@@ -621,7 +637,7 @@ def render_preseason_strength(projected_ppg, matchups, abbreviations=None):
 
     return f"""<h2>Strength of Schedule &mdash; Preseason</h2>
 <p class="lede"><strong>Before any game is played</strong>, this ranks schedules by how strong each
-team's opponents <em>project</em> to score over the season &mdash; 100 is an average schedule,
+team's opponents <em>project</em> to score over the season &mdash; 50 is an average schedule,
 above it tougher. &#9888; It rests entirely on ESPN's preseason projections, which are a
 <strong>weak predictor</strong> (measured correlation with real scoring about 0.07, because a
 draft equalises rosters), so read it as a rough hint, not a verdict. Hover a number for the
