@@ -709,6 +709,21 @@ def test_the_chart_view_and_axis_pickers_are_present():
     assert_wellformed(doc)
 
 
+def test_the_chart_and_its_axis_pickers_stay_hidden_in_table_view():
+    """Regression: the pickers live in #sos-chart-view, whose display:grid
+    overrode the `hidden` attribute, leaking the X/Y selects into table view."""
+    doc = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in ("Alpha", "Bravo", "Charlie")],
+            weekly_scores=weekly(["Alpha", "Bravo", "Charlie"]),
+        )
+    )
+
+    assert '<div id="sos-chart-view" hidden>' in doc, "chart view starts hidden"
+    # ...and the CSS must not let display:grid win over that hidden attribute
+    assert "#sos-chart-view[hidden]" in doc
+
+
 def test_rows_carry_the_fixed_metrics_the_chart_plots():
     """Wins, PPG, Points For and Opp PPG ride on each row for the chart's axes."""
     names = ["Alpha", "Bravo", "Charlie", "Delta"]

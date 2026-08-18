@@ -214,6 +214,10 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto;
   align-items: center; gap: .35rem .5rem; margin-top: .5rem;
 }
+/* display:grid above overrides the `hidden` attribute's display:none, which
+   would leak the axis pickers into the table view -- the id+attribute selector
+   outranks it and hides the chart until it is chosen. */
+#sos-chart-view[hidden] { display: none; }
 .chart-y { grid-column: 1; grid-row: 1; }
 #sos-chart { grid-column: 2; grid-row: 1; width: 100%; height: auto; font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .chart-x { grid-column: 2; grid-row: 2; text-align: center; }
