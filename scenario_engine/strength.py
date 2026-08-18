@@ -185,23 +185,40 @@ def strength_table(weekly_scores, remaining_matchups=None, blend=0.5, benchmark=
             return None
         return blend * p + (1 - blend) * r
 
-    reference = _benchmark_scores(points, ppg, benchmark)
+    # Both benchmarks are computed for every row, not just the selected one, so
+    # the interactive page can swap between them in the browser without a second
+    # server pass. `benchmark`/`sor` stay the caller's choice for the static
+    # render and for callers that want a single answer.
+    references = {
+        "average": _benchmark_scores(points, ppg, "average"),
+        "elite": _benchmark_scores(points, ppg, "elite"),
+    }
+
+    def sor_against(name, reference):
+        expected = _benchmark_win_pct(games[name], reference)
+        return None if expected is None else _win_pct(games[name]) - expected
 
     rows = []
     for name in points:
         actual = _win_pct(games[name])
-        expected = _benchmark_win_pct(games[name], reference)
+        expected = _benchmark_win_pct(games[name], references[benchmark])
         rows.append(
             {
                 "name": name,
                 "opp_ppg": opp_ppg[name],
                 "opp_win_pct": opp_wp[name],
+                # The two normalised components, so a blend can be recomputed
+                # without re-normalising -- the min-max stays single-sourced here.
+                "points_norm": pts_norm[name],
+                "record_norm": rec_norm[name],
                 "sos_played": sos_played[name],
                 "sos_remaining": sos_remaining[name],
                 "sos": index(name),
                 "actual_win_pct": actual,
                 "benchmark_win_pct": expected,
                 "sor": None if expected is None else actual - expected,
+                "sor_average": sor_against(name, references["average"]),
+                "sor_elite": sor_against(name, references["elite"]),
             }
         )
     rows.sort(key=lambda row: (-(row["sos"] or 0.0), row["name"]))

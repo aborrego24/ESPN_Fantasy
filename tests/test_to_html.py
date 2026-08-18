@@ -573,8 +573,9 @@ def test_sor_is_coloured_by_its_sign():
     ).split("Strength of Schedule")[1].split("</table>")[0]
 
     # every SOR cell carries exactly one direction class, matching its sign
-    for cell in re.findall(r'<td class="num (better|worse)">([^<]*)</td>', section):
-        css, text = cell
+    cells = re.findall(r'<td class="num sos-sor (better|worse)">([^<]*)</td>', section)
+    assert cells, "no coloured SOR cells found"
+    for css, text in cells:
         assert (css == "better") == text.startswith("+")
 
 
@@ -592,6 +593,51 @@ def test_the_to_come_column_appears_only_when_games_remain():
         [{"team1": "Alpha", "team2": "Bravo"}, {"team1": "Charlie", "team2": "Delta"}]
     ]
     assert "To&nbsp;come" in to_html.render(with_games)
+
+
+def test_the_slider_and_benchmark_controls_are_present():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+        )
+    )
+
+    assert 'id="sos-blend"' in document, "no weighting slider"
+    assert 'id="sos-bench"' in document, "no benchmark toggle"
+    assert "addEventListener" in document, "no enhancing script"
+    assert_wellformed(document)
+
+
+def test_the_embedded_row_data_matches_the_engine():
+    """The slider recomputes SOS in the browser from these attributes, so they
+    must equal what the engine computed, or the interactive view would drift from
+    the static one it was rendered from."""
+    import strength
+
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    history = weekly(names)
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names], weekly_scores=history
+        )
+    )
+    section = document.split("Strength of Schedule")[1].split("</table>")[0]
+    rows = re.findall(
+        r'<tr data-ppn="([^"]*)" data-rcn="([^"]*)" data-sor-avg="([^"]*)"'
+        r' data-sor-elite="([^"]*)">.*?</span>([^<]*)</td>',
+        section,
+    )
+    assert len(rows) == len(names), "one data-bearing row per team"
+
+    engine = {r["name"]: r for r in strength.strength_table(history)}
+    for ppn, rcn, sor_avg, sor_elite, name in rows:
+        row = engine[name]
+        assert float(ppn) == pytest.approx(row["points_norm"], abs=1e-6)
+        assert float(rcn) == pytest.approx(row["record_norm"], abs=1e-6)
+        assert float(sor_avg) == pytest.approx(row["sor_average"], abs=1e-6)
+        assert float(sor_elite) == pytest.approx(row["sor_elite"], abs=1e-6)
 
 
 def test_record_text_reports_ties_only_when_there_are_any():

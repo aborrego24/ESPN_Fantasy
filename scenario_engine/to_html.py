@@ -154,7 +154,58 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .better { background: var(--good-bg); color: var(--good); }
 .worse { background: var(--bad-bg); color: var(--bad); }
 .lede { color: var(--dim); font-size: .88rem; margin: 0 0 .75rem; max-width: 68ch; }
+.controls { display: flex; flex-wrap: wrap; gap: 1.75rem; align-items: center; margin: 0 0 1rem; font-size: .85rem; }
+.controls label { display: flex; align-items: center; gap: .5rem; }
+.controls .dim { color: var(--dim); font-size: .8rem; }
+.controls input[type=range] { vertical-align: middle; }
 footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
+"""
+
+
+# Progressive enhancement for the strength table: the slider re-blends SOS and the
+# select swaps the SOR benchmark, both from data already on each row, so the page
+# needs no server round-trip and no assets. With scripting off, the static table
+# the server rendered (50/50 blend, average benchmark) stands unchanged.
+STRENGTH_JS = """
+(function () {
+  var body = document.getElementById('sos-body');
+  if (!body) return;
+  var blend = document.getElementById('sos-blend');
+  var bench = document.getElementById('sos-bench');
+  var label = document.getElementById('sos-blend-label');
+  var rows = Array.prototype.slice.call(body.getElementsByTagName('tr'));
+  function num(s) { var v = parseFloat(s); return isNaN(v) ? null : v; }
+  function fmtSor(v) { return (v >= 0 ? '+' : '\\u2212') + Math.abs(v).toFixed(3); }
+  function update() {
+    var w = parseInt(blend.value, 10) / 100;
+    var elite = bench.value === 'elite';
+    rows.forEach(function (tr) {
+      var ppn = num(tr.getAttribute('data-ppn'));
+      var rcn = num(tr.getAttribute('data-rcn'));
+      var sos = (ppn === null || rcn === null) ? null : w * ppn + (1 - w) * rcn;
+      tr._s = (sos === null) ? -1 : sos;
+      var sv = tr.querySelector('.sos-val');
+      if (sv) sv.textContent = (sos === null) ? '\\u2014' : Math.round(sos * 100);
+      var v = num(tr.getAttribute(elite ? 'data-sor-elite' : 'data-sor-avg'));
+      var sc = tr.querySelector('.sos-sor');
+      if (sc) {
+        if (v === null) { sc.textContent = '\\u2014'; sc.className = 'num sos-sor'; }
+        else { sc.textContent = fmtSor(v); sc.className = 'num sos-sor ' + (v >= 0 ? 'better' : 'worse'); }
+      }
+    });
+    rows.sort(function (a, b) { return b._s - a._s; });
+    rows.forEach(function (tr, i) {
+      body.appendChild(tr);
+      var rk = tr.querySelector('.sos-rank');
+      if (rk) rk.textContent = i + 1;
+    });
+    if (label) label.textContent =
+      Math.round(w * 100) + '% points / ' + Math.round((1 - w) * 100) + '% record';
+  }
+  blend.addEventListener('input', update);
+  bench.addEventListener('change', update);
+  update();
+})();
 """
 
 
@@ -428,6 +479,19 @@ def _ppg(value):
     return "&mdash;" if value is None else f"{value:.1f}"
 
 
+def _attr(value):
+    """A data-attribute number, or empty when there is nothing to carry."""
+    return "" if value is None else f"{value:.6f}"
+
+
+def _sor_cell(value):
+    if value is None:
+        return '<td class="num sos-sor">&mdash;</td>'
+    sign = "+" if value >= 0 else "−"
+    css = "better" if value >= 0 else "worse"
+    return f'<td class="num sos-sor {css}">{sign}{abs(value):.3f}</td>'
+
+
 def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None):
     rows = strength.strength_table(weekly_scores, remaining_matchups)
     if not rows:
@@ -437,25 +501,24 @@ def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None):
     body = []
     for position, row in enumerate(rows, 1):
         sos = "&mdash;" if row["sos"] is None else f"{round(row['sos'] * 100)}"
-        sor = row["sor"]
-        sor_cell = (
-            '<td class="num">&mdash;</td>'
-            if sor is None
-            else f'<td class="num {"better" if sor >= 0 else "worse"}">'
-            f'{"+" if sor >= 0 else "−"}{abs(sor):.3f}</td>'
-        )
         ahead = (
             f'<td class="num">{_ppg(row["sos_remaining"])}</td>' if any_remaining else ""
         )
+        # The normalised components and both benchmark SORs ride on the row, so
+        # the slider recomputes the blend and the toggle swaps the benchmark in
+        # the browser without another server pass. With no JavaScript the static
+        # cells below stand as they are -- the default 50/50, average-benchmark view.
         body.append(
-            f'<tr><td class="num">{position}</td>'
+            f'<tr data-ppn="{_attr(row["points_norm"])}" data-rcn="{_attr(row["record_norm"])}"'
+            f' data-sor-avg="{_attr(row["sor_average"])}" data-sor-elite="{_attr(row["sor_elite"])}">'
+            f'<td class="num sos-rank">{position}</td>'
             f'<td class="name">{monogram_html(row["name"], abbreviations)}'
             f'{esc(row["name"])}</td>'
-            f'<td class="num total">{sos}</td>'
+            f'<td class="num total sos-val">{sos}</td>'
             f'<td class="num">{_ppg(row["opp_ppg"])}</td>'
             f'<td class="num">{_pct(row["opp_win_pct"])}</td>'
             f"{ahead}"
-            f"{sor_cell}</tr>"
+            f"{_sor_cell(row['sor'])}</tr>"
         )
 
     ahead_head = '<th class="num">To&nbsp;come</th>' if any_remaining else ""
@@ -463,15 +526,28 @@ def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None):
 <p class="lede"><strong>SOS</strong> rates how hard a team's opponents are, 100 the toughest
 slate in the league and 0 the easiest, blending how much those opponents score with how
 often they win{" (and, in the 'to&nbsp;come' column, how hard the schedule still ahead is)" if any_remaining else ""}.
-<strong>SOR</strong> is strength of record: how a team's own win rate compares with what an
-average team would manage against the same schedule &mdash; green means it has done better
-than its schedule would give a neutral team, red worse.</p>
+<strong>SOR</strong> is strength of record: how a team's own win rate compares with what a
+benchmark team would manage against the same schedule &mdash; green means it has done better
+than its schedule would give that team, red worse. Drag the weighting or change the benchmark
+to re-rank; with no browser the table shows a 50/50 blend against an average team.</p>
+<div class="controls">
+  <label>SOS weighting
+    <span class="dim">record</span>
+    <input type="range" id="sos-blend" min="0" max="100" value="50">
+    <span class="dim">points</span>
+    <span id="sos-blend-label" class="dim">50% points / 50% record</span>
+  </label>
+  <label>SOR benchmark
+    <select id="sos-bench"><option value="average">average team</option><option value="elite">elite team</option></select>
+  </label>
+</div>
 <table class="grid">
 <thead><tr><th class="num">#</th><th class="name">Team</th>
 <th class="num total">SOS</th><th class="num">Opp&nbsp;PPG</th><th class="num">Opp&nbsp;Win%</th>
 {ahead_head}<th class="num">SOR</th></tr></thead>
-<tbody>{''.join(body)}</tbody>
-</table>"""
+<tbody id="sos-body">{''.join(body)}</tbody>
+</table>
+<script>{STRENGTH_JS}</script>"""
 
 
 def render(payload, show=None):
