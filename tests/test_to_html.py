@@ -671,17 +671,17 @@ def test_the_embedded_row_data_matches_the_engine():
     )
     section = document.split("Strength of Schedule")[1].split("</table>")[0]
     rows = re.findall(
-        r'<tr data-ppn="([^"]*)" data-rcn="([^"]*)" data-sor-avg="([^"]*)"'
+        r'<tr data-pi="([^"]*)" data-ri="([^"]*)" data-sor-avg="([^"]*)"'
         r' data-sor-elite="([^"]*)">.*?</span>([^<]*)</td>',
         section,
     )
     assert len(rows) == len(names), "one data-bearing row per team"
 
     engine = {r["name"]: r for r in strength.strength_table(history)}
-    for ppn, rcn, sor_avg, sor_elite, name in rows:
+    for pi, ri, sor_avg, sor_elite, name in rows:
         row = engine[name]
-        assert float(ppn) == pytest.approx(row["points_norm"], abs=1e-6)
-        assert float(rcn) == pytest.approx(row["record_norm"], abs=1e-6)
+        assert float(pi) == pytest.approx(row["points_index"], abs=1e-6)
+        assert float(ri) == pytest.approx(row["record_index"], abs=1e-6)
         assert float(sor_avg) == pytest.approx(row["sor_average"], abs=1e-6)
         assert float(sor_elite) == pytest.approx(row["sor_elite"], abs=1e-6)
 

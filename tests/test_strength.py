@@ -134,12 +134,18 @@ def test_the_table_is_sorted_hardest_schedule_first():
     assert indices == sorted(indices, reverse=True)
 
 
-def test_the_hardest_and_easiest_index_are_one_and_zero():
-    """Min-max normalisation pins the extremes."""
-    rows = strength.strength_table(build(), blend=1.0)
+def test_sos_is_absolute_not_a_forced_zero_to_one():
+    """The scale is a ratio to the average schedule, not min-max.
 
-    assert max(r["sos"] for r in rows) == pytest.approx(1.0)
-    assert min(r["sos"] for r in rows) == pytest.approx(0.0)
+    So the league-average schedule sits at 1.0 (shown as 100), and nobody is
+    pinned to 0 or 1 -- a balanced league clusters near the average instead of
+    being stretched to fill the range.
+    """
+    rows = strength.strength_table(build(), blend=1.0)
+    vals = [r["sos"] for r in rows]
+
+    assert sum(vals) / len(vals) == pytest.approx(1.0), "average schedule is 1.0"
+    assert min(vals) > 0.5 and max(vals) < 1.5, "not stretched to the extremes"
 
 
 # --- strength of record --------------------------------------------------------
@@ -205,15 +211,15 @@ def test_the_elite_benchmark_is_harder_to_beat_than_the_average_one():
 # --- ingredients the interactive page recomputes from -------------------------
 
 
-def test_rows_expose_the_normalised_components_that_blend_into_sos():
+def test_rows_expose_the_components_that_blend_into_sos():
     """The page recomputes the blend in the browser, so the parts must be there.
 
-    sos must equal blend*points_norm + (1-blend)*record_norm exactly, or the
+    sos must equal blend*points_index + (1-blend)*record_index exactly, or the
     slider would disagree with the server's own default render.
     """
     for blend in (0.0, 0.25, 0.5, 1.0):
         for row in strength.strength_table(build(), blend=blend):
-            expected = blend * row["points_norm"] + (1 - blend) * row["record_norm"]
+            expected = blend * row["points_index"] + (1 - blend) * row["record_index"]
             assert row["sos"] == pytest.approx(expected)
 
 
