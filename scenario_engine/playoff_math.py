@@ -420,6 +420,67 @@ def bye_verdict(state, team, bye_spots, swing_envelope=None, budget=DEFAULT_NODE
     return seed_verdict(state, team, bye_spots, swing_envelope, budget)
 
 
+UNREACHABLE = -1_000_000  # a phantom's record: it can never contend for a seat
+
+
+def _division_substate(state, team):
+    """A sub-league of just `team`'s division, for the 'wins its division' question.
+
+    Winning a division is finishing top of it, and within one division the order
+    is plain wins-then-points -- so it is a top-1 finish in a league of only the
+    division's members, which `status_of` already answers. Members keep their
+    real records and the games they play against each other; a game a member
+    plays against an OUTSIDE team is kept as a game against a throwaway phantom
+    that can never contend, so the member's win or loss there still counts while
+    nothing couples it to the rest of the division. A game between two outside
+    teams cannot change this division's order, so it is dropped.
+    """
+    div = state.divisions[team]
+    members = [t for t in range(state.num_teams) if state.divisions[t] == div]
+    sub = {m: k for k, m in enumerate(members)}
+    names = [state.names[m] for m in members]
+    wins = [state.wins[m] for m in members]
+    losses = [state.losses[m] for m in members]
+    points = [state.points[m] for m in members]
+
+    games = []
+    for i, j in state.games:
+        i_in, j_in = i in sub, j in sub
+        if i_in and j_in:
+            games.append((sub[i], sub[j]))
+        elif i_in or j_in:
+            member = i if i_in else j
+            phantom = len(names)
+            names.append(f"·outside{phantom}")
+            wins.append(UNREACHABLE)
+            losses.append(0)
+            points.append(float(UNREACHABLE))
+            games.append((sub[member], phantom))
+    return (
+        LeagueState(names, wins, losses, points, games, playoff_spots=1, divisions=None),
+        sub[team],
+    )
+
+
+def division_verdict(state, team, swing_envelope=None, budget=DEFAULT_NODE_BUDGET):
+    """'clinched'/'alive'/'eliminated' for finishing top of your own division.
+
+    Reduced to a top-1 finish in the division sub-league (see _division_substate),
+    so it is the same exact search -- and the same tiebreak honesty, a division
+    lead that rests on a points gap the scoring could close is a lead, not a
+    title -- as every other verdict. None in a league without divisions.
+    """
+    if not state.is_divisional:
+        return None
+    sub, sub_team = _division_substate(state, team)
+    verdict = status_of(sub, sub_team, budget=budget)
+    if verdict == "clinched" and swing_envelope is not None:
+        dependency = clinch_dependency(sub, sub_team, budget=budget)
+        if dependency and dependency[1] <= swing_envelope:
+            return "alive"
+    return verdict
+
+
 def apply_verdicts(
     standings,
     remaining_matchups,
@@ -428,6 +489,7 @@ def apply_verdicts(
     budget=DEFAULT_NODE_BUDGET,
     bye_spots=0,
     divisions=None,
+    with_division_winner=False,
 ):
     """Set each team's status from the exact full-season verdict, in place.
 
@@ -504,6 +566,16 @@ def apply_verdicts(
         # of the table is worth saying whatever the bracket looks like.
         team["top_seed"] = seed_verdict(
             state, index, 1, swing_envelope=swing_envelope, budget=budget
+        )
+
+        # Whether the team has won / can still win its own division -- for the
+        # division-title race. Only the standings shown to the reader need it, so
+        # it is off by default and never paid for per permutation. None without
+        # divisions, or when the caller does not ask.
+        team["division_winner"] = (
+            division_verdict(state, index, swing_envelope=swing_envelope, budget=budget)
+            if with_division_winner
+            else None
         )
 
         # Derived from the verdict, every time, so the readable form cannot

@@ -78,7 +78,7 @@ def text_of(document):
 
 
 def team(name, wins, losses, points, verdict, margins=None, tiebreak=None,
-         top_seed=None, bye=None):
+         top_seed=None, bye=None, division_winner=None):
     return {
         "team_name": name,
         "wins": wins,
@@ -90,6 +90,7 @@ def team(name, wins, losses, points, verdict, margins=None, tiebreak=None,
         "tiebreak": tiebreak,
         "top_seed": top_seed,
         "bye": bye,
+        "division_winner": division_winner,
     }
 
 
@@ -362,35 +363,40 @@ DIVISIONAL = payload(
 )
 
 
-def test_a_divisional_league_gets_one_table_per_division():
+def test_a_divisional_league_gets_a_view_selector_defaulting_to_overall():
     document = to_html.render(DIVISIONAL)
 
-    assert "East Division" in document and "West Division" in document
-    # two grouped tables, not one flat standings table
-    assert document.count('<div class="division">') == 2
-    body = document.split("<h2>Standings</h2>")[1]
-    east = body.split("East Division")[1].split("</div>")[0]
-    assert "East A" in east and "East B" in east and "East C" in east
-    assert "West A" not in east, "divisions do not bleed into each other"
+    # a segmented selector: Overall (active) + one button per division
+    assert 'id="std-seg"' in document
+    assert '<button data-view="overall" class="on">Overall</button>' in document
+    assert ">East Division</button>" in document and ">West Division</button>" in document
+    # rigid, square buttons
+    assert "border-radius: 0" in document
+    # overall is the default view (shown); division views are present but hidden
+    assert '<div class="std-view" data-view="overall">' in document
+    assert '<div class="std-view" data-view="d0" hidden>' in document
+    # the overall view carries every team
+    overall = document.split('data-view="overall">')[1].split("</div>")[0]
+    for name in ("East A", "West A", "East C", "West C"):
+        assert name in overall
     assert_wellformed(document)
 
 
-def test_each_division_table_is_ranked_within_the_division():
-    """The # column restarts at 1 per division and follows that division's record."""
+def test_a_division_view_is_ranked_within_the_division():
+    """Each division view restarts # at 1 and follows that division's record."""
     document = to_html.render(DIVISIONAL)
-    body = document.split("<h2>Standings</h2>")[1]
-    east = body.split("East Division")[1].split("</table>")[0]
+    east = document.split('data-view="d0" hidden>')[1].split("</div>")[0]
 
-    order = re.findall(r'<td class="num">(\d+)</td><td>.*?([A-Za-z].*?)</td>', east)
-    ranks = [n for n, _ in order]
+    assert "East A" in east and "West A" not in east, "one division only"
+    ranks = re.findall(r'<td class="num">(\d+)</td><td>', east)
     assert ranks[:3] == ["1", "2", "3"], "within-division rank starts at 1"
 
 
-def test_a_single_division_league_keeps_one_table_and_the_cut_line():
-    """No divisions -> unchanged behaviour, cut line and all."""
+def test_a_single_division_league_has_no_selector():
+    """No divisions -> one table, no switcher, cut line intact."""
     document = to_html.render(BASIC)
 
-    assert '<div class="divisions">' not in document
+    assert 'id="std-seg"' not in document
     assert "playoff cut line" in document
 
 
@@ -399,14 +405,20 @@ def test_the_division_names_come_through_even_as_json_string_keys():
     data = json.loads(json.dumps(DIVISIONAL))  # ids in division_names become "0"/"1"
     document = to_html.render(data)
 
-    assert "East Division" in document and "West Division" in document
+    assert ">East Division</button>" in document and ">West Division</button>" in document
     assert "Division 0" not in document, "fell back to the id instead of the name"
 
 
-# --- #1-seed race --------------------------------------------------------------
+# --- races folded into the standings selector ---------------------------------
 
 
-def test_the_seed_race_lists_who_is_still_alive_for_the_top_seed():
+def _view(document, view_id):
+    """The inner HTML of one std-view, by its data-view id (not the button)."""
+    marker = f'<div class="std-view" data-view="{view_id}"'
+    return document.split(marker)[1].split("</div>")[0]
+
+
+def test_the_seed_race_is_a_selector_view_of_the_still_alive():
     document = to_html.render(
         payload(
             [
@@ -416,15 +428,17 @@ def test_the_seed_race_lists_who_is_still_alive_for_the_top_seed():
             ]
         )
     )
-    race = document.split("Overall #1 Seed")[1].split("</details>")[0]
 
-    assert "Alpha" in race and "Bravo" in race
-    assert "Charlie" not in race, "a team out of the #1-seed race is left out"
+    assert ">#1 Seed</button>" in document
+    seed = _view(document, "seed")
+    assert "Alpha" in seed and "Bravo" in seed
+    assert "Charlie" not in seed, "a team out of the #1-seed race is left out"
+    # a race view is not a dropdown any more
+    assert "<details" not in document
     assert_wellformed(document)
 
 
-def test_no_seed_race_once_the_top_seed_is_clinched():
-    """A decided #1 seed is not a race, so the whole section is dropped."""
+def test_no_seed_button_once_the_top_seed_is_clinched():
     document = to_html.render(
         payload(
             [
@@ -434,16 +448,54 @@ def test_no_seed_race_once_the_top_seed_is_clinched():
         )
     )
 
-    assert "Overall #1 Seed" not in document
+    assert ">#1 Seed</button>" not in document
 
 
-def test_no_seed_race_section_when_nobody_can_still_take_it():
-    """If every team is eliminated from the #1 seed, drop the section entirely."""
+def test_no_seed_button_when_nobody_can_still_take_it():
     document = to_html.render(
         payload([team("Alpha", 1, 0, 10.0, "alive", top_seed="eliminated")])
     )
 
-    assert "Overall #1 Seed" not in document
+    assert ">#1 Seed</button>" not in document
+    assert 'id="std-seg"' not in document, "no extra views -> no selector at all"
+
+
+def _divisional_race_payload():
+    return payload(
+        [
+            team("East A", 3, 1, 400.0, "clinched", division_winner="alive"),
+            team("East B", 3, 1, 390.0, "alive", division_winner="alive"),
+            team("East C", 0, 4, 300.0, "eliminated", division_winner="eliminated"),
+            team("West A", 4, 0, 420.0, "clinched", division_winner="clinched"),
+            team("West B", 1, 3, 320.0, "alive", division_winner="eliminated"),
+            team("West C", 0, 4, 280.0, "eliminated", division_winner="eliminated"),
+        ],
+        divisions={
+            "East A": 0, "East B": 0, "East C": 0,
+            "West A": 1, "West B": 1, "West C": 1,
+        },
+        division_names={0: "East", 1: "West"},
+        playoff_spots=4,
+    )
+
+
+def test_the_wildcard_is_a_selector_view_of_the_still_alive_non_winners():
+    document = to_html.render(_divisional_race_payload())
+
+    assert ">Wildcard</button>" in document
+    wild = _view(document, "wild")
+    assert "East B" in wild and "West B" in wild
+    assert "West A" not in wild, "a clinched division winner is not a wildcard"
+    assert "East C" not in wild, "an eliminated team is not in the race"
+    assert "wildcard spot" in document
+    assert_wellformed(document)
+
+
+def test_the_race_views_are_absent_in_a_non_divisional_league_without_a_race():
+    document = to_html.render(BASIC)
+
+    assert ">Wildcard</button>" not in document
+    assert 'id="std-seg"' not in document
 
 
 # --- season review tables -----------------------------------------------------

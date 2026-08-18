@@ -144,12 +144,15 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .cutnote { font-size: .72rem; color: var(--dim); padding-top: .5rem; }
 /* Divisional standings: one table per division, side by side where there is
    room, stacking on a narrow screen (and in email clients that ignore flex). */
-.divisions { display: flex; flex-wrap: wrap; gap: 1.25rem 2.5rem; }
-.division { flex: 1 1 340px; min-width: 0; }
-.division h3 { font-size: 1rem; margin: .25rem 0 .5rem; font-weight: 600; }
-details.race { margin: 1.25rem 0 0; }
-details.race > summary { cursor: pointer; font-weight: 700; font-size: 1rem; padding: .2rem 0; }
-details.race table { margin-top: .5rem; }
+/* The standings view switcher: rigid, square segmented buttons on the header. */
+.seg { display: inline-flex; margin-left: 1rem; vertical-align: middle; }
+.seg button {
+  font: inherit; font-size: .8rem; font-weight: 600; line-height: 1.3;
+  padding: .15rem .7rem; border: 1px solid var(--line); background: #fff;
+  color: var(--dim); cursor: pointer; border-radius: 0; margin-left: -1px;
+}
+.seg button:first-child { margin-left: 0; }
+.seg button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 .mono {
   display: inline-block; min-width: 3.4rem; padding: .1rem .3rem; margin-right: .5rem;
   border-radius: 4px; color: #fff; font-size: .68rem; font-weight: 700;
@@ -446,6 +449,27 @@ STRENGTH_JS = """
 """
 
 
+# The standings view switcher: buttons on the section header flip between the
+# overall table and each division's own. All views are in the page; the button
+# just toggles which is shown, so with scripting off the default overall stands.
+STANDINGS_JS = """
+(function () {
+  var seg = document.getElementById('std-seg');
+  if (!seg) return;
+  var views = document.querySelectorAll('.std-view');
+  seg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-view]');
+    if (!b) return;
+    var want = b.getAttribute('data-view');
+    views.forEach(function (el) { el.hidden = el.getAttribute('data-view') !== want; });
+    seg.querySelectorAll('button').forEach(function (x) {
+      if (x === b) x.classList.add('on'); else x.classList.remove('on');
+    });
+  });
+})();
+"""
+
+
 def render_header(standings, league):
     counts = pretty_print.summarise(standings, league)
     return f"""<h1>{esc(title_case(pretty_print.header_title(league)))}</h1>
@@ -488,69 +512,95 @@ def render_standings(
     standings, league, abbreviations=None, logo_class=None,
     divisions=None, division_names=None
 ):
+    """The standings section, with a view selector on the header.
+
+    Overall (the seed-ordered full table) is the default. Extra views become
+    square buttons beside it: one per division, then the #1-seed and wildcard
+    races when those are still live. All views are in the page; the buttons only
+    toggle which shows, so with scripting off the default overall table stands.
+    """
     spots = league["playoff_spots"]
-    if not divisions:
-        table = _standings_table(standings, abbreviations, logo_class, cut_at=spots)
-        return (
-            f"<h2>Standings</h2>\n{table}"
-            f'<p class="cutnote">The rule marks the playoff cut line: {spots} spots.</p>'
-        )
+    overall = _standings_table(standings, abbreviations, logo_class, cut_at=spots)
+    cutnote = (
+        f"{spots} playoff spots league-wide; division winners are seeded first."
+        if divisions
+        else f"The rule marks the playoff cut line: {spots} spots."
+    )
+    overall_view = f'{overall}<p class="cutnote">{cutnote}</p>'
 
-    # Divisional: one table per division. Divisions appear in the order their best
-    # seed does; within a table teams are in their own record order, and the #
-    # column is the within-division rank. Division ids arrive as ints, but JSON
-    # turns the division_names keys into strings, so look both up.
-    names = division_names or {}
-    ordered, seen, groups = [], set(), {}
-    for team in standings:
-        did = divisions.get(team["team_name"])
-        groups.setdefault(did, []).append(team)
-        if did not in seen:
-            seen.add(did)
-            ordered.append(did)
+    # Views beyond the overall table, each a (label, id, inner) that becomes a
+    # button. Division ids arrive as ints; JSON turns division_names keys into
+    # strings, so look both up.
+    extra = []
+    if divisions:
+        names = division_names or {}
+        ordered, seen, groups = [], set(), {}
+        for team in standings:
+            did = divisions.get(team["team_name"])
+            groups.setdefault(did, []).append(team)
+            if did not in seen:
+                seen.add(did)
+                ordered.append(did)
+        for k, did in enumerate(ordered):
+            teams = sorted(groups[did], key=lambda t: (-t["wins"], -t["points_for"]))
+            title = names.get(did) or names.get(str(did)) or f"Division {did}"
+            extra.append(
+                (title, f"d{k}", _standings_table(teams, abbreviations, logo_class))
+            )
 
-    blocks = []
-    for did in ordered:
-        teams = sorted(groups[did], key=lambda t: (-t["wins"], -t["points_for"]))
-        title = names.get(did) or names.get(str(did)) or f"Division {did}"
-        blocks.append(
-            f'<div class="division"><h3>{esc(title)}</h3>'
-            f"{_standings_table(teams, abbreviations, logo_class)}</div>"
-        )
+    # #1-seed race: only while undecided (nobody has clinched it, someone can).
+    if not any(t.get("top_seed") == "clinched" for t in standings):
+        contenders = [t for t in standings if t.get("top_seed") == "alive"]
+        if contenders:
+            extra.append(
+                ("#1 Seed", "seed", _race_table(contenders, abbreviations, logo_class))
+            )
+
+    # Wildcard race: teams still alive for a spot that have not clinched a division.
+    if divisions:
+        contenders = [
+            t
+            for t in standings
+            if t.get("verdict") == "alive" and t.get("division_winner") != "clinched"
+        ]
+        if contenders:
+            n = spots - len(set(divisions.values()))
+            note = (
+                f'<p class="note">{n} wildcard spot{"s" if n != 1 else ""} '
+                "for teams that do not win their division.</p>"
+            )
+            extra.append(
+                ("Wildcard", "wild", note + _race_table(contenders, abbreviations, logo_class))
+            )
+
+    if not extra:
+        return f"<h2>Standings</h2>\n{overall_view}"
+
+    buttons = ['<button data-view="overall" class="on">Overall</button>']
+    views = [f'<div class="std-view" data-view="overall">{overall_view}</div>']
+    for label, view_id, inner in extra:
+        buttons.append(f'<button data-view="{view_id}">{esc(label)}</button>')
+        views.append(f'<div class="std-view" data-view="{view_id}" hidden>{inner}</div>')
     return (
-        f"<h2>Standings</h2>\n"
-        f'<div class="divisions">{"".join(blocks)}</div>'
-        f'<p class="cutnote">{spots} playoff spots league-wide; '
-        f"division winners are seeded first.</p>"
+        f'<h2>Standings <span class="seg" id="std-seg">{"".join(buttons)}</span></h2>\n'
+        f'{"".join(views)}'
+        f"<script>{STANDINGS_JS}</script>"
     )
 
 
-def render_seed_race(standings, abbreviations=None, logo_class=None):
-    """The race for the #1 overall seed, as a collapsible section.
-
-    Reads the exact `top_seed` verdict already on each team, so it is the same
-    answer the standings badge gives -- gathered here as its own race. Teams
-    eliminated from the #1 seed are left out; that is the point of a race.
-    """
-    # Only a race while it is undecided: once a team has clinched the #1 seed
-    # (or nobody can still take it) there is nothing to show.
-    if any(t.get("top_seed") == "clinched" for t in standings):
-        return ""
-    contenders = [t for t in standings if t.get("top_seed") == "alive"]
-    if not contenders:
-        return ""
+def _race_table(teams, abbreviations, logo_class):
+    """A Team/Record/Points table of race contenders (no status, no rank)."""
     rows = "".join(
         f"<tr><td>{team_mark(t['team_name'], abbreviations, logo_class)}"
         f"{esc(t['team_name'])}</td>"
         f'<td class="num">{t["wins"]}-{t["losses"]}</td>'
         f'<td class="num">{t["points_for"]:.1f}</td></tr>'
-        for t in contenders
+        for t in teams
     )
     return (
-        '<details class="race" open><summary>Overall #1 Seed</summary>'
         '<table><thead><tr><th>Team</th><th class="num">Record</th>'
         '<th class="num">Points for</th></tr></thead>'
-        f"<tbody>{rows}</tbody></table></details>"
+        f"<tbody>{rows}</tbody></table>"
     )
 
 
@@ -1001,7 +1051,6 @@ def render(payload, show=None):
                 standings, league, abbreviations, logo_class, divisions, division_names
             )
         )
-        parts.append(render_seed_race(standings, abbreviations, logo_class))
     if "matchups" in show:
         parts.append(
             render_matchups(base["next_week_matchups"], league, abbreviations, logo_class)
