@@ -614,9 +614,9 @@ def test_the_to_come_number_hovers_to_a_week_by_week_breakdown():
     doc = to_html.render(doc_payload)
 
     section = doc.split("Strength of Schedule")[1].split("</table>")[0]
-    lines = set()
-    for box in re.findall(r'</span>([^<]*(?:<br>[^<]*)*)</span></span>', section):
-        lines |= set(box.split("<br>"))
+    # the tooltip data cells are the only class-less spans in the section
+    data = re.findall(r"<span>([^<]*)</span>", section)
+    triples = {tuple(data[i : i + 3]) for i in range(0, len(data), 3)}
 
     engine = strength.strength_table(history, remaining)
     expected = set()
@@ -624,9 +624,9 @@ def test_the_to_come_number_hovers_to_a_week_by_week_breakdown():
         for d in row["remaining"]:
             # current_week 2, offset 0 -> week 3
             expected.add(
-                f'{3 + d["week_offset"]} {to_html.monogram(d["opponent"], {})} : {d["value"]:.1f}'
+                (str(3 + d["week_offset"]), to_html.monogram(d["opponent"], {}), f'{d["value"]:.1f}')
             )
-    assert lines == expected
+    assert triples == expected
 
 
 def test_a_finished_season_has_no_hover_and_no_to_come_cell():

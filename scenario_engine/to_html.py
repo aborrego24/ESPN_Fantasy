@@ -161,12 +161,13 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .tip { position: relative; cursor: help; border-bottom: 1px dotted var(--dim); outline: none; }
 .tipbox {
   display: none; position: absolute; right: 0; top: 1.5rem; z-index: 5;
-  background: var(--ink); color: #fff; padding: .45rem .6rem; border-radius: 6px;
-  font-size: .74rem; font-weight: 400; line-height: 1.55; white-space: nowrap;
-  text-align: right; box-shadow: 0 4px 16px rgba(0, 0, 0, .28);
+  grid-template-columns: auto auto auto; column-gap: .9rem; row-gap: .12rem;
+  background: var(--ink); color: #fff; padding: .5rem .65rem; border-radius: 6px;
+  font-size: .74rem; font-weight: 400; text-align: left; white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .28);
 }
-.tip:hover .tipbox, .tip:focus .tipbox { display: block; }
-.tiphead { display: block; color: #aeb7c2; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .2rem; }
+.tip:hover .tipbox, .tip:focus .tipbox { display: grid; }
+.tiphead { color: #8b95a1; font-size: .64rem; text-transform: uppercase; letter-spacing: .06em; padding-bottom: .1rem; }
 footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 """
 
@@ -510,18 +511,21 @@ def _to_come_cell(row, current_week, abbreviations):
     """
     if row["sos_remaining"] is None:
         return '<td class="num">&mdash;</td>'
-    lines = [
-        f'{current_week + 1 + d["week_offset"]} '
-        f'{esc(monogram(d["opponent"], abbreviations))} : {_ppg(d["value"])}'
-        for d in row["remaining"]
+    cells = [
+        '<span class="tiphead">Week</span>'
+        '<span class="tiphead">Opp</span>'
+        '<span class="tiphead">PPG</span>'
     ]
-    box = (
-        '<span class="tiphead">week &middot; opp &middot; PPG</span>'
-        + "<br>".join(lines)
-    )
+    for d in row["remaining"]:
+        cells.append(
+            f'<span>{current_week + 1 + d["week_offset"]}</span>'
+            f'<span>{esc(monogram(d["opponent"], abbreviations))}</span>'
+            f'<span>{_ppg(d["value"])}</span>'
+        )
     return (
         '<td class="num"><span class="tip" tabindex="0">'
-        f'{_ppg(row["sos_remaining"])}<span class="tipbox">{box}</span></span></td>'
+        f'{_ppg(row["sos_remaining"])}<span class="tipbox">{"".join(cells)}</span>'
+        "</span></td>"
     )
 
 
