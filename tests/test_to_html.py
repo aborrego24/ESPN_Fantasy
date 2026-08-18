@@ -542,6 +542,58 @@ def test_the_diagonal_is_marked_as_the_teams_own_record():
     assert matrix.count('class="num self"') == len(names), "one per row"
 
 
+# --- strength of schedule / record --------------------------------------------
+
+
+def test_strength_section_appears_with_a_weekly_history():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+        )
+    )
+
+    assert "Strength of Schedule" in re.findall(r"<h2>(.*?)</h2>", document).__str__()
+    assert_wellformed(document)
+
+
+def test_strength_section_is_omitted_without_a_weekly_history():
+    assert "Strength of Schedule" not in to_html.render(BASIC)
+
+
+def test_sor_is_coloured_by_its_sign():
+    """A positive strength of record reads green, a negative one red."""
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    section = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+        )
+    ).split("Strength of Schedule")[1].split("</table>")[0]
+
+    # every SOR cell carries exactly one direction class, matching its sign
+    for cell in re.findall(r'<td class="num (better|worse)">([^<]*)</td>', section):
+        css, text = cell
+        assert (css == "better") == text.startswith("+")
+
+
+def test_the_to_come_column_appears_only_when_games_remain():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    finished = payload(
+        [team(n, 1, 1, 100.0, "alive") for n in names], weekly_scores=weekly(names)
+    )
+    assert "To&nbsp;come" not in to_html.render(finished)
+
+    with_games = payload(
+        [team(n, 1, 1, 100.0, "alive") for n in names], weekly_scores=weekly(names)
+    )
+    with_games["base_league_data"]["remaining_matchups"] = [
+        [{"team1": "Alpha", "team2": "Bravo"}, {"team1": "Charlie", "team2": "Delta"}]
+    ]
+    assert "To&nbsp;come" in to_html.render(with_games)
+
+
 def test_record_text_reports_ties_only_when_there_are_any():
     assert to_html.record_text({"wins": 9, "losses": 4, "ties": 0}) == "9-4"
     assert to_html.record_text({"wins": 9, "losses": 4, "ties": 1}) == "9-4-1"
