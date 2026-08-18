@@ -230,6 +230,12 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 /* Sits below a logo on the chart background, so it needs the dark ink fill the
    on-circle label (white on colour) must not use. */
 .cpt-lbl { fill: var(--ink); font-size: 9px; font-weight: 700; }
+/* Corner labels naming what each quadrant means for the chosen axes. A white
+   stroke drawn under the fill keeps them legible over gridlines and dots. */
+.cquad {
+  fill: var(--dim); font-size: 11px; font-weight: 700;
+  paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round;
+}
 footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 """
 
@@ -288,6 +294,24 @@ STRENGTH_JS = """
   // auto-scale to their data, since they do not move with the controls.
   function fixedDomain(k) { return k === 'sos' ? [15, 85] : (k === 'sor' ? [-0.3, 0.3] : null); }
 
+  // What a low / high value of each metric means, in plain words. A quadrant
+  // label joins the phrase for its X direction with the one for its Y direction,
+  // so "wins + tough schedule" names the top-right when those are the axes.
+  var PHRASE = {
+    sos: ['easy schedule', 'tough schedule'],
+    sor: ['underachieving', 'overachieving'],
+    wins: ['loses a lot', 'wins a lot'],
+    ppg: ['scores little', 'scores a lot'],
+    oppppg: ['weak opponents', 'strong opponents'],
+    pf: ['low total points', 'high total points']
+  };
+  function quadLabel(xk, yk, xHigh, yHigh) {
+    var xp = PHRASE[xk] ? PHRASE[xk][xHigh ? 1 : 0] : '';
+    var yp = PHRASE[yk] ? PHRASE[yk][yHigh ? 1 : 0] : '';
+    if (xk === yk) return xp;          // same metric on both axes -> one phrase
+    return (xp && yp) ? xp + ' \\u00b7 ' + yp : (xp || yp);
+  }
+
   // The value of any metric for a team. SOS is recomputed from the blend so it
   // tracks the slider; the rest are read straight off the row -- one source of
   // truth for the number, whether table or chart.
@@ -329,7 +353,13 @@ STRENGTH_JS = """
     var pad = (hi - lo) * 0.1;
     return [lo - pad, hi + pad];
   }
-  function fmtAxis(v) { return Math.abs(v) >= 100 ? String(Math.round(v)) : v.toFixed(1); }
+  // Count metrics (wins) read as whole numbers; the rest keep one decimal.
+  function isCount(k) { return k === 'wins'; }
+  function fmtAxis(v, k) {
+    if (isCount(k)) return String(Math.round(v));
+    return Math.abs(v) >= 100 ? String(Math.round(v)) : v.toFixed(1);
+  }
+  function mean(a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; }
 
   function drawChart() {
     if (!svg) return;
@@ -348,18 +378,20 @@ STRENGTH_JS = """
     function SX(v) { return clamp(mL + (v - xe[0]) / (xe[1] - xe[0]) * (W - mL - mR), mL, W - mR); }
     function SY(v) { return clamp(H - mB - (v - ye[0]) / (ye[1] - ye[0]) * (H - mT - mB), mT, H - mB); }
     var e = [];
-    var xr = refOf(xk);
-    if (xr !== null && xr > xe[0] && xr < xe[1]) e.push('<line x1="' + SX(xr) + '" y1="' + mT + '" x2="' + SX(xr) + '" y2="' + (H - mB) + '" class="cref"/>');
-    var yr = refOf(yk);
-    if (yr !== null && yr > ye[0] && yr < ye[1]) e.push('<line x1="' + mL + '" y1="' + SY(yr) + '" x2="' + (W - mR) + '" y2="' + SY(yr) + '" class="cref"/>');
+    // Both axes get a divider so the quadrants mean something: a fixed line where
+    // one exists (SOS at 50, SOR at 0), otherwise the average of the plotted teams.
+    var xr = refOf(xk); if (xr === null) xr = mean(pts.map(function (p) { return p.x; }));
+    var yr = refOf(yk); if (yr === null) yr = mean(pts.map(function (p) { return p.y; }));
+    if (xr > xe[0] && xr < xe[1]) e.push('<line x1="' + SX(xr) + '" y1="' + mT + '" x2="' + SX(xr) + '" y2="' + (H - mB) + '" class="cref"/>');
+    if (yr > ye[0] && yr < ye[1]) e.push('<line x1="' + mL + '" y1="' + SY(yr) + '" x2="' + (W - mR) + '" y2="' + SY(yr) + '" class="cref"/>');
     e.push('<line x1="' + mL + '" y1="' + (H - mB) + '" x2="' + (W - mR) + '" y2="' + (H - mB) + '" class="cax"/>');
     e.push('<line x1="' + mL + '" y1="' + mT + '" x2="' + mL + '" y2="' + (H - mB) + '" class="cax"/>');
     // Axis tick numbers only -- the metric names live in the HTML selects on each
     // axis, so they are not repeated here.
-    e.push('<text x="' + mL + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="start">' + fmtAxis(xe[0]) + '</text>');
-    e.push('<text x="' + (W - mR) + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="end">' + fmtAxis(xe[1]) + '</text>');
-    e.push('<text x="' + (mL - 8) + '" y="' + (H - mB) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[0]) + '</text>');
-    e.push('<text x="' + (mL - 8) + '" y="' + (mT + 10) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[1]) + '</text>');
+    e.push('<text x="' + mL + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="start">' + fmtAxis(xe[0], xk) + '</text>');
+    e.push('<text x="' + (W - mR) + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="end">' + fmtAxis(xe[1], xk) + '</text>');
+    e.push('<text x="' + (mL - 8) + '" y="' + (H - mB) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[0], yk) + '</text>');
+    e.push('<text x="' + (mL - 8) + '" y="' + (mT + 10) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[1], yk) + '</text>');
     pts.forEach(function (p) {
       var cx = SX(p.x), cy = SY(p.y);
       if (p.logo) {
@@ -373,6 +405,16 @@ STRENGTH_JS = """
         e.push('<text x="' + cx + '" y="' + (cy + 3) + '" class="cpt" text-anchor="middle">' + p.abbr + '</text>');
       }
     });
+    // Name each corner by what the chosen axes mean there -- top is high Y, right
+    // is high X -- so the reading changes with the selects.
+    function corner(x, y, anchor, xHigh, yHigh) {
+      var t = quadLabel(xk, yk, xHigh, yHigh);
+      if (t) e.push('<text x="' + x + '" y="' + y + '" class="cquad" text-anchor="' + anchor + '">' + t + '</text>');
+    }
+    corner(mL + 6, mT + 14, 'start', false, true);       // top-left:  low X, high Y
+    corner(W - mR - 6, mT + 14, 'end', true, true);       // top-right: high X, high Y
+    corner(mL + 6, H - mB - 8, 'start', false, false);    // bottom-left:  low X, low Y
+    corner(W - mR - 6, H - mB - 8, 'end', true, false);   // bottom-right: high X, low Y
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.innerHTML = e.join('');
   }

@@ -724,6 +724,28 @@ def test_the_chart_and_its_axis_pickers_stay_hidden_in_table_view():
     assert "#sos-chart-view[hidden]" in doc
 
 
+def test_the_chart_labels_each_quadrant_from_the_chosen_axes():
+    """The scatter names its corners; the phrases are chosen live in the browser,
+    so what must be present is the phrase table, the joiner and the styling."""
+    doc = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in ("Alpha", "Bravo", "Charlie")],
+            weekly_scores=weekly(["Alpha", "Bravo", "Charlie"]),
+        )
+    )
+
+    assert ".cquad" in doc, "no quadrant-label styling"
+    assert "quadLabel(" in doc, "corners are not labelled"
+    # every chart metric contributes a low/high phrase pair
+    for key, _ in to_html.CHART_METRICS:
+        assert f"{key}:" in doc, f"{key} has no quadrant phrase"
+    for phrase in ("tough schedule", "wins a lot", "overachieving", "strong opponents"):
+        assert phrase in doc
+    # count metrics render whole; both axes get a divider (mean where no fixed one)
+    assert "isCount(" in doc, "wins ticks are not forced to whole numbers"
+    assert "function mean(" in doc, "no average divider for metrics without a fixed one"
+
+
 def test_rows_carry_the_fixed_metrics_the_chart_plots():
     """Wins, PPG, Points For and Opp PPG ride on each row for the chart's axes."""
     names = ["Alpha", "Bravo", "Charlie", "Delta"]
