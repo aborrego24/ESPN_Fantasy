@@ -202,6 +202,30 @@ def test_the_elite_benchmark_is_harder_to_beat_than_the_average_one():
         assert row_of(elite, name)["sor"] <= row_of(average, name)["sor"]
 
 
+# --- ingredients the interactive page recomputes from -------------------------
+
+
+def test_rows_expose_the_normalised_components_that_blend_into_sos():
+    """The page recomputes the blend in the browser, so the parts must be there.
+
+    sos must equal blend*points_norm + (1-blend)*record_norm exactly, or the
+    slider would disagree with the server's own default render.
+    """
+    for blend in (0.0, 0.25, 0.5, 1.0):
+        for row in strength.strength_table(build(), blend=blend):
+            expected = blend * row["points_norm"] + (1 - blend) * row["record_norm"]
+            assert row["sos"] == pytest.approx(expected)
+
+
+def test_rows_carry_both_benchmark_sors():
+    """Both are precomputed so the benchmark toggle needs no second server pass."""
+    rows = strength.strength_table(build(), benchmark="average")
+
+    for row in rows:
+        assert row["sor"] == pytest.approx(row["sor_average"])
+        assert row["sor_elite"] <= row["sor_average"] + 1e-9
+
+
 # --- the forward half of SOS ---------------------------------------------------
 
 

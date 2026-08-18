@@ -573,8 +573,9 @@ def test_sor_is_coloured_by_its_sign():
     ).split("Strength of Schedule")[1].split("</table>")[0]
 
     # every SOR cell carries exactly one direction class, matching its sign
-    for cell in re.findall(r'<td class="num (better|worse)">([^<]*)</td>', section):
-        css, text = cell
+    cells = re.findall(r'<td class="num sos-sor (better|worse)">([^<]*)</td>', section)
+    assert cells, "no coloured SOR cells found"
+    for css, text in cells:
         assert (css == "better") == text.startswith("+")
 
 
@@ -592,6 +593,97 @@ def test_the_to_come_column_appears_only_when_games_remain():
         [{"team1": "Alpha", "team2": "Bravo"}, {"team1": "Charlie", "team2": "Delta"}]
     ]
     assert "To&nbsp;come" in to_html.render(with_games)
+
+
+def test_the_to_come_number_hovers_to_a_week_by_week_breakdown():
+    """Each upcoming game is listed as 'week OPP : PPG', matching the engine."""
+    import strength
+
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    history = weekly(names)
+    remaining = [
+        [{"team1": "Alpha", "team2": "Bravo"}, {"team1": "Charlie", "team2": "Delta"}]
+    ]
+    doc_payload = payload(
+        [team(n, 1, 1, 100.0, "alive") for n in names],
+        weekly_scores=history,
+        current_week=2,
+    )
+    # remaining_matchups lives on base_league_data, not among the league settings
+    doc_payload["base_league_data"]["remaining_matchups"] = remaining
+    doc = to_html.render(doc_payload)
+
+    section = doc.split("Strength of Schedule")[1].split("</table>")[0]
+    # the tooltip data cells are the only class-less spans in the section
+    data = re.findall(r"<span>([^<]*)</span>", section)
+    triples = {tuple(data[i : i + 3]) for i in range(0, len(data), 3)}
+
+    engine = strength.strength_table(history, remaining)
+    expected = set()
+    for row in engine:
+        for d in row["remaining"]:
+            # current_week 2, offset 0 -> week 3
+            expected.add(
+                (str(3 + d["week_offset"]), to_html.monogram(d["opponent"], {}), f'{d["value"]:.1f}')
+            )
+    assert triples == expected
+
+
+def test_a_finished_season_has_no_hover_and_no_to_come_cell():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    doc = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names], weekly_scores=weekly(names)
+        )
+    )
+    section = doc.split("Strength of Schedule")[1].split("</table>")[0]
+
+    assert "tipbox" not in section
+
+
+def test_the_slider_and_benchmark_controls_are_present():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+        )
+    )
+
+    assert 'id="sos-blend"' in document, "no weighting slider"
+    assert 'id="sos-bench"' in document, "no benchmark toggle"
+    assert "addEventListener" in document, "no enhancing script"
+    assert_wellformed(document)
+
+
+def test_the_embedded_row_data_matches_the_engine():
+    """The slider recomputes SOS in the browser from these attributes, so they
+    must equal what the engine computed, or the interactive view would drift from
+    the static one it was rendered from."""
+    import strength
+
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    history = weekly(names)
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names], weekly_scores=history
+        )
+    )
+    section = document.split("Strength of Schedule")[1].split("</table>")[0]
+    rows = re.findall(
+        r'<tr data-ppn="([^"]*)" data-rcn="([^"]*)" data-sor-avg="([^"]*)"'
+        r' data-sor-elite="([^"]*)">.*?</span>([^<]*)</td>',
+        section,
+    )
+    assert len(rows) == len(names), "one data-bearing row per team"
+
+    engine = {r["name"]: r for r in strength.strength_table(history)}
+    for ppn, rcn, sor_avg, sor_elite, name in rows:
+        row = engine[name]
+        assert float(ppn) == pytest.approx(row["points_norm"], abs=1e-6)
+        assert float(rcn) == pytest.approx(row["record_norm"], abs=1e-6)
+        assert float(sor_avg) == pytest.approx(row["sor_average"], abs=1e-6)
+        assert float(sor_elite) == pytest.approx(row["sor_elite"], abs=1e-6)
 
 
 def test_record_text_reports_ties_only_when_there_are_any():
