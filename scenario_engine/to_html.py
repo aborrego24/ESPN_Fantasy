@@ -183,7 +183,7 @@ SOS_GAIN = 400
 
 
 def _sos_display(ratio):
-    return None if ratio is None else round(SOS_CENTER + (ratio - 1.0) * SOS_GAIN)
+    return None if ratio is None else round(SOS_CENTER + (ratio - 1.0) * SOS_GAIN, 1)
 
 
 # Progressive enhancement for the strength table: the slider re-blends SOS and the
@@ -209,7 +209,7 @@ STRENGTH_JS = """
       var sos = (pi === null || ri === null) ? null : w * pi + (1 - w) * ri;
       tr._s = (sos === null) ? -1 : sos;
       var sv = tr.querySelector('.sos-val');
-      if (sv) sv.textContent = (sos === null) ? '\\u2014' : Math.round(SOS_CENTER + (sos - 1) * SOS_GAIN);
+      if (sv) sv.textContent = (sos === null) ? '\\u2014' : (SOS_CENTER + (sos - 1) * SOS_GAIN).toFixed(1);
       var v = num(tr.getAttribute(elite ? 'data-sor-elite' : 'data-sor-avg'));
       var sc = tr.querySelector('.sos-sor');
       if (sc) {

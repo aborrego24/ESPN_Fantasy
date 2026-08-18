@@ -665,11 +665,13 @@ def test_sos_display_recentres_on_50_and_widens_the_gap():
     """The engine's ratio (1.0 = average) is shown recentred on 50 and amplified.
 
     An average schedule reads 50, and a 0.10 spread in the ratio opens to a
-    40-point spread on screen instead of the ~10 a bare *100 would give.
+    40-point spread on screen instead of the ~10 a bare *100 would give. Rounded
+    to one decimal so near-equal schedules still separate.
     """
-    assert to_html._sos_display(1.0) == 50
+    assert to_html._sos_display(1.0) == 50.0
     assert to_html._sos_display(None) is None
-    assert to_html._sos_display(1.05) - to_html._sos_display(0.95) == 40
+    assert to_html._sos_display(1.05) - to_html._sos_display(0.95) == pytest.approx(40.0)
+    assert to_html._sos_display(1.0011) == 50.4  # 50 + 0.44, to one decimal
 
 
 def test_played_games_show_the_in_season_table_not_the_preseason_one():
