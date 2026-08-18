@@ -26,8 +26,8 @@ Two questions the standings cannot answer on their own:
   how often it would have out-scored each. SOR is your real win percentage minus
   the benchmark's: positive means you did better than the benchmark would have
   against your slate, which a hard schedule makes easier to achieve and an easy
-  one harder. The benchmark is a pool of weekly scores -- the whole league for an
-  "average team", or one strong team's weeks for an "elite" one.
+  one harder. The benchmark is a pool of weekly scores -- the whole league, i.e.
+  an average team.
 
 Everything here reads only completed weeks (for records and points) and the
 remaining pairings (for the forward half of SOS). Like the season-review tables,
@@ -144,13 +144,14 @@ def _ratio_to_average(values):
     }
 
 
-def strength_table(weekly_scores, remaining_matchups=None, blend=0.5, benchmark="average"):
+def strength_table(weekly_scores, remaining_matchups=None, blend=0.5):
     """Per-team SOS and SOR, sorted hardest schedule first.
 
-    `blend` slides SOS from pure record (0.0) to pure points (1.0). `benchmark`
-    is "average" (the whole league's weekly scores) or "elite" (the single
-    highest-scoring team's weeks). Returns a list of row dicts; empty if no week
-    has been played yet, so a preseason payload degrades to nothing here.
+    `blend` slides SOS from pure record (0.0) to pure points (1.0). SOR is always
+    measured against an average league team (the whole league's weekly scores) --
+    the question is "given your schedule, how did you do?", which a neutral team
+    answers, not a stacked one. Returns a list of row dicts; empty if no week has
+    been played yet, so a preseason payload degrades to nothing here.
     """
     points, opponents = _series(weekly_scores)
     if not any(_played(s) for scores in points.values() for s in scores):
@@ -192,23 +193,13 @@ def strength_table(weekly_scores, remaining_matchups=None, blend=0.5, benchmark=
             return None
         return blend * p + (1 - blend) * r
 
-    # Both benchmarks are computed for every row, not just the selected one, so
-    # the interactive page can swap between them in the browser without a second
-    # server pass. `benchmark`/`sor` stay the caller's choice for the static
-    # render and for callers that want a single answer.
-    references = {
-        "average": _benchmark_scores(points, ppg, "average"),
-        "elite": _benchmark_scores(points, ppg, "elite"),
-    }
-
-    def sor_against(name, reference):
-        expected = _benchmark_win_pct(games[name], reference)
-        return None if expected is None else _win_pct(games[name]) - expected
+    # The benchmark is the whole league's weekly scores -- an average team.
+    reference = _benchmark_scores(points)
 
     rows = []
     for name in points:
         actual = _win_pct(games[name])
-        expected = _benchmark_win_pct(games[name], references[benchmark])
+        expected = _benchmark_win_pct(games[name], reference)
         rows.append(
             {
                 "name": name,
@@ -231,8 +222,6 @@ def strength_table(weekly_scores, remaining_matchups=None, blend=0.5, benchmark=
                 "actual_win_pct": actual,
                 "benchmark_win_pct": expected,
                 "sor": None if expected is None else actual - expected,
-                "sor_average": sor_against(name, references["average"]),
-                "sor_elite": sor_against(name, references["elite"]),
             }
         )
     rows.sort(key=lambda row: (-(row["sos"] or 0.0), row["name"]))
@@ -280,12 +269,8 @@ def preseason_strength(projected_ppg, matchups):
     return rows
 
 
-def _benchmark_scores(points, ppg, benchmark):
-    """The pool of weekly scores that stands in for the benchmark team."""
-    if benchmark == "elite":
-        best = max(ppg, key=lambda name: ppg[name])
-        return [s for s in points[best] if _played(s)]
-    # "average": the whole league's weekly scores
+def _benchmark_scores(points):
+    """The pool of weekly scores standing in for an average team: the league's."""
     return [s for scores in points.values() for s in scores if _played(s)]
 
 

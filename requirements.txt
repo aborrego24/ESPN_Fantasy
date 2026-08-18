@@ -1,3 +1,7 @@
 # Only scenario_engine/league_data.py needs this, and only in --irl mode.
 # Stages 2-5 of the pipeline run on the standard library alone.
 espn-api>=0.44,<1.0
+
+# Only for --irl --logos, to thumbnail uploaded team photos before inlining
+# them. Not needed for the default report or any offline/--test run.
+Pillow>=10,<12

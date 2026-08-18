@@ -73,6 +73,38 @@ def monogram_html(name, abbreviations):
     )
 
 
+def team_mark(name, abbreviations, logo_class=None):
+    """A team's inlined logo if --logos captured one, else its monogram chip.
+
+    `logo_class` maps a name to its CSS class (see _logo_styles); the image data
+    lives once in that class, so this only emits a reference. The chip is always
+    the fallback, so a team whose logo failed to fetch and a report built
+    without --logos both read the same as before.
+    """
+    cls = (logo_class or {}).get(name)
+    if cls:
+        return (
+            f'<span class="logo {cls}" role="img" aria-label="{esc(name)}" '
+            f'title="{esc(name)}"></span>'
+        )
+    return monogram_html(name, abbreviations)
+
+
+def _logo_styles(logos):
+    """(css_rules, {name: class}) with each logo's data URI written exactly once.
+
+    A team's image goes in one CSS rule; every table cell references it by class.
+    That is what keeps the mailable file small -- a logo shown in the standings,
+    the matchups and the strength table is still inlined a single time.
+    """
+    rules, classes = [], {}
+    for index, (name, uri) in enumerate(sorted(logos.items())):
+        cls = f"lg{index}"
+        classes[name] = cls
+        rules.append(f'.{cls}{{background-image:url("{uri}")}}')
+    return "".join(rules), classes
+
+
 def record_text(tally):
     """'9-4', or '9-4-1' when there is a tie to report."""
     text = f"{tally['wins']}-{tally['losses']}"
@@ -150,6 +182,12 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .worst { background: var(--bad-bg); color: var(--bad); font-weight: 700; }
 .grid th .mono { min-width: 0; margin-right: 0; padding: .1rem .25rem; }
 .grid td.name .mono { min-width: 2.6rem; }
+.logo {
+  display: inline-block; height: 1.5rem; width: 1.5rem; margin-right: .5rem;
+  border-radius: 4px; vertical-align: middle;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+}
+.grid td.name .logo { height: 1.3rem; width: 1.3rem; }
 .self { outline: 2px solid var(--ink); outline-offset: -2px; font-weight: 700; }
 .better { background: var(--good-bg); color: var(--good); }
 .worse { background: var(--bad-bg); color: var(--bad); }
@@ -176,6 +214,10 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto;
   align-items: center; gap: .35rem .5rem; margin-top: .5rem;
 }
+/* display:grid above overrides the `hidden` attribute's display:none, which
+   would leak the axis pickers into the table view -- the id+attribute selector
+   outranks it and hides the chart until it is chosen. */
+#sos-chart-view[hidden] { display: none; }
 .chart-y { grid-column: 1; grid-row: 1; }
 #sos-chart { grid-column: 2; grid-row: 1; width: 100%; height: auto; font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .chart-x { grid-column: 2; grid-row: 2; text-align: center; }
@@ -185,6 +227,9 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .ctick { fill: var(--dim); font-size: 11px; }
 .clabel { fill: var(--ink); font-size: 12px; font-weight: 600; }
 .cpt { fill: #fff; font-size: 9px; font-weight: 700; }
+/* Sits below a logo on the chart background, so it needs the dark ink fill the
+   on-circle label (white on colour) must not use. */
+.cpt-lbl { fill: var(--ink); font-size: 9px; font-weight: 700; }
 footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 """
 
@@ -204,17 +249,16 @@ def _sos_display(ratio):
 
 
 # Progressive enhancement for the strength section, all from data already on each
-# row -- no round-trip, no assets. The slider re-blends SOS, the select swaps the
-# SOR benchmark, and a Table/Chart toggle draws an inline-SVG scatter whose axes
-# pick any metric. SOS and SOR on an axis stay live with the slider and toggle;
-# the rest are fixed per team. With scripting off the static table stands.
+# row -- no round-trip, no assets. The slider re-blends SOS, and a Table/Chart
+# toggle draws an inline-SVG scatter whose axes pick any metric. SOS on an axis
+# stays live with the slider; the rest are fixed per team. With scripting off the
+# static table stands.
 STRENGTH_JS = """
 (function () {
   var body = document.getElementById('sos-body');
   if (!body) return;
   var section = document.getElementById('sos-section');
   var blend = document.getElementById('sos-blend');
-  var bench = document.getElementById('sos-bench');
   var label = document.getElementById('sos-blend-label');
   var view = document.getElementById('sos-view');
   var xsel = document.getElementById('sos-x');
@@ -224,6 +268,18 @@ STRENGTH_JS = """
   var chartView = document.getElementById('sos-chart-view');
   var rows = Array.prototype.slice.call(body.getElementsByTagName('tr'));
 
+  // Read each row's logo once, now, while the table view is still shown -- the
+  // image lives in a CSS class (inlined a single time), so the scatter pulls the
+  // data URI off the cell's computed background rather than duplicating it.
+  rows.forEach(function (tr) {
+    tr._logo = '';
+    var el = tr.querySelector('td.name .logo');
+    if (el) {
+      var m = (getComputedStyle(el).backgroundImage || '').match(/url\\(["']?(data:[^"')]+)["']?\\)/);
+      if (m) tr._logo = m[1];
+    }
+  });
+
   function num(s) { var v = parseFloat(s); return isNaN(v) ? null : v; }
   function fmtSor(v) { return (v >= 0 ? '+' : '\\u2212') + Math.abs(v).toFixed(3); }
   function refOf(k) { return k === 'sos' ? SOS_CENTER : (k === 'sor' ? 0 : null); }
@@ -232,27 +288,25 @@ STRENGTH_JS = """
   // auto-scale to their data, since they do not move with the controls.
   function fixedDomain(k) { return k === 'sos' ? [15, 85] : (k === 'sor' ? [-0.3, 0.3] : null); }
 
-  // The value of any metric for a team. SOS and SOR are recomputed from the
-  // blend and benchmark so they track the controls; the rest are read straight
-  // off the row -- one source of truth for the number, whether table or chart.
-  function metricVal(tr, key, w, elite) {
+  // The value of any metric for a team. SOS is recomputed from the blend so it
+  // tracks the slider; the rest are read straight off the row -- one source of
+  // truth for the number, whether table or chart.
+  function metricVal(tr, key, w) {
     if (key === 'sos') {
       var pi = num(tr.getAttribute('data-pi')), ri = num(tr.getAttribute('data-ri'));
       return (pi === null || ri === null) ? null : SOS_CENTER + (w * pi + (1 - w) * ri - 1) * SOS_GAIN;
     }
-    if (key === 'sor') return num(tr.getAttribute(elite ? 'data-sor-elite' : 'data-sor-avg'));
     return num(tr.getAttribute('data-' + key));
   }
 
   function updateTable() {
     var w = parseInt(blend.value, 10) / 100;
-    var elite = bench.value === 'elite';
     rows.forEach(function (tr) {
-      var sos = metricVal(tr, 'sos', w, elite);
+      var sos = metricVal(tr, 'sos', w);
       tr._s = (sos === null) ? -Infinity : sos;
       var sv = tr.querySelector('.sos-val');
       if (sv) sv.textContent = (sos === null) ? '\\u2014' : sos.toFixed(1);
-      var v = metricVal(tr, 'sor', w, elite);
+      var v = metricVal(tr, 'sor', w);
       var sc = tr.querySelector('.sos-sor');
       if (sc) {
         if (v === null) { sc.textContent = '\\u2014'; sc.className = 'num sos-sor'; }
@@ -279,12 +333,12 @@ STRENGTH_JS = """
 
   function drawChart() {
     if (!svg) return;
-    var w = parseInt(blend.value, 10) / 100, elite = bench.value === 'elite';
+    var w = parseInt(blend.value, 10) / 100;
     var xk = xsel.value, yk = ysel.value, pts = [];
     rows.forEach(function (tr) {
-      var x = metricVal(tr, xk, w, elite), y = metricVal(tr, yk, w, elite);
+      var x = metricVal(tr, xk, w), y = metricVal(tr, yk, w);
       if (x === null || y === null) return;
-      pts.push({ x: x, y: y, abbr: tr.getAttribute('data-abbr') || '', color: tr.getAttribute('data-color') || '#888' });
+      pts.push({ x: x, y: y, abbr: tr.getAttribute('data-abbr') || '', color: tr.getAttribute('data-color') || '#888', logo: tr._logo || '' });
     });
     if (!pts.length) { svg.innerHTML = ''; return; }
     var W = 660, H = 430, mL = 52, mR = 24, mT = 18, mB = 30;
@@ -308,10 +362,16 @@ STRENGTH_JS = """
     e.push('<text x="' + (mL - 8) + '" y="' + (mT + 10) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[1]) + '</text>');
     pts.forEach(function (p) {
       var cx = SX(p.x), cy = SY(p.y);
-      // TODO: once team logos resolve (currently 401), draw the logo here in
-      // place of the circle and move the abbreviation just below it.
-      e.push('<circle cx="' + cx + '" cy="' + cy + '" r="13" fill="' + p.color + '"/>');
-      e.push('<text x="' + cx + '" y="' + (cy + 3) + '" class="cpt" text-anchor="middle">' + p.abbr + '</text>');
+      if (p.logo) {
+        // --logos inlined this team's image: draw it in place of the circle,
+        // abbreviation just below.
+        var s = 26;
+        e.push('<image href="' + p.logo + '" x="' + (cx - s / 2) + '" y="' + (cy - s / 2) + '" width="' + s + '" height="' + s + '" preserveAspectRatio="xMidYMid slice"/>');
+        e.push('<text x="' + cx + '" y="' + (cy + s / 2 + 9) + '" class="cpt-lbl" text-anchor="middle">' + p.abbr + '</text>');
+      } else {
+        e.push('<circle cx="' + cx + '" cy="' + cy + '" r="13" fill="' + p.color + '"/>');
+        e.push('<text x="' + cx + '" y="' + (cy + 3) + '" class="cpt" text-anchor="middle">' + p.abbr + '</text>');
+      }
     });
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.innerHTML = e.join('');
@@ -328,7 +388,6 @@ STRENGTH_JS = """
   function update() { updateTable(); if (view && view.value === 'chart') drawChart(); }
 
   blend.addEventListener('input', update);
-  bench.addEventListener('change', update);
   if (view) view.addEventListener('change', showView);
   if (xsel) xsel.addEventListener('change', drawChart);
   if (ysel) ysel.addEventListener('change', drawChart);
@@ -349,7 +408,7 @@ def render_header(standings, league):
 </p>"""
 
 
-def render_standings(standings, league, abbreviations=None):
+def render_standings(standings, league, abbreviations=None, logo_class=None):
     spots = league["playoff_spots"]
     rows = []
     for position, team in enumerate(standings, 1):
@@ -359,7 +418,7 @@ def render_standings(standings, league, abbreviations=None):
         cut = ' class="cut"' if position == spots else ""
         rows.append(
             f"<tr{cut}><td class=\"num\">{position}</td>"
-            f"<td>{monogram_html(team['team_name'], abbreviations)}"
+            f"<td>{team_mark(team['team_name'], abbreviations, logo_class)}"
             f"{esc(team['team_name'])}</td>"
             f"<td class=\"num\">{team['wins']}-{team['losses']}</td>"
             f"<td class=\"num\">{team['points_for']:.1f}</td>"
@@ -374,13 +433,13 @@ def render_standings(standings, league, abbreviations=None):
 <p class="cutnote">The rule marks the playoff cut line: {spots} spots.</p>"""
 
 
-def render_matchups(matchups, league, abbreviations=None):
+def render_matchups(matchups, league, abbreviations=None, logo_class=None):
     if not matchups:
         return '<h2>Next Week</h2>\n<p class="empty">No games left to play.</p>'
     rows = "".join(
-        f"<tr><td>{monogram_html(m['team1'], abbreviations)}{esc(m['team1'])}</td>"
+        f"<tr><td>{team_mark(m['team1'], abbreviations, logo_class)}{esc(m['team1'])}</td>"
         f'<td class="empty">vs</td>'
-        f"<td>{monogram_html(m['team2'], abbreviations)}{esc(m['team2'])}</td></tr>"
+        f"<td>{team_mark(m['team2'], abbreviations, logo_class)}{esc(m['team2'])}</td></tr>"
         for m in matchups
     )
     return (
@@ -653,8 +712,8 @@ def _to_come_cell(row, current_week, abbreviations):
     return f'<td class="num">{tip}</td>'
 
 
-# Metrics the scatter's two axes can pick from. SOS and SOR are live (recomputed
-# from the slider and benchmark); the rest are fixed per team, carried as row data.
+# Metrics the scatter's two axes can pick from. SOS is live (recomputed from the
+# slider); the rest are fixed per team, carried as row data.
 CHART_METRICS = [
     ("sos", "SOS"),
     ("sor", "SOR"),
@@ -673,7 +732,8 @@ def _metric_options(selected):
 
 
 def render_strength(
-    weekly_scores, remaining_matchups=None, abbreviations=None, current_week=0, standings=None
+    weekly_scores, remaining_matchups=None, abbreviations=None, current_week=0,
+    standings=None, logo_class=None
 ):
     rows = strength.strength_table(weekly_scores, remaining_matchups)
     if not rows:
@@ -697,17 +757,18 @@ def render_strength(
             else None
         )
         # Everything an axis might plot rides on the row: the normalised SOS
-        # components and both benchmark SORs (recomputed live), and the season
-        # figures (fixed). The chart and the table read the same numbers.
+        # components (SOS recomputed live from the slider), the SOR against the
+        # average team, and the season figures (fixed). The chart and the table
+        # read the same numbers.
         body.append(
             f'<tr data-pi="{_attr(row["points_index"])}" data-ri="{_attr(row["record_index"])}"'
-            f' data-sor-avg="{_attr(row["sor_average"])}" data-sor-elite="{_attr(row["sor_elite"])}"'
+            f' data-sor="{_attr(row["sor"])}"'
             f' data-wins="{_attr(team.get("wins"))}" data-ppg="{_attr(own_ppg)}"'
             f' data-pf="{_attr(points_for)}" data-oppppg="{_attr(row["opp_ppg"])}"'
             f' data-abbr="{esc(monogram(row["name"], abbreviations))}"'
             f' data-color="{monogram_colour(row["name"])}">'
             f'<td class="num sos-rank">{position}</td>'
-            f'<td class="name">{monogram_html(row["name"], abbreviations)}'
+            f'<td class="name">{team_mark(row["name"], abbreviations, logo_class)}'
             f'{esc(row["name"])}</td>'
             f'<td class="num total sos-val">{sos}</td>'
             f'<td class="num">{_ppg(row["opp_ppg"])}</td>'
@@ -721,11 +782,11 @@ def render_strength(
 <p class="lede"><strong>SOS</strong> rates how hard a team's opponents are against the league
 average: <strong>50 is an average schedule</strong>, above it tougher and below it easier,
 blending how much those opponents score with how often they win{" (and the 'to&nbsp;come' column is how hard the schedule still ahead is)" if any_remaining else ""}.
-<strong>SOR</strong> is strength of record: how a team's own win rate compares with what a
-benchmark team would manage against the same schedule &mdash; green means it has done better
-than its schedule would give that team, red worse. Drag the weighting or change the benchmark
-to re-rank; switch to <strong>Chart</strong> for a scatter of any two metrics. With no browser
-the table shows a 50/50 blend against an average team.</p>
+<strong>SOR</strong> is strength of record: how a team's own win rate compares with what an
+average league team would manage against the same schedule &mdash; green means it has done better
+than its schedule would give that team, red worse. Drag the weighting to re-rank; switch to
+<strong>Chart</strong> for a scatter of any two metrics. With no browser the table shows a
+50/50 blend against an average team.</p>
 <div id="sos-section">
 <div class="controls">
   <label>View
@@ -736,9 +797,6 @@ the table shows a 50/50 blend against an average team.</p>
     <input type="range" id="sos-blend" min="0" max="100" value="50">
     <span class="dim">points</span>
     <span id="sos-blend-label" class="dim">50% points / 50% record</span>
-  </label>
-  <label>SOR benchmark
-    <select id="sos-bench"><option value="average">average team</option><option value="elite">elite team</option></select>
   </label>
 </div>
 <div id="sos-table-view">
@@ -758,7 +816,7 @@ the table shows a 50/50 blend against an average team.</p>
 <script>var SOS_CENTER={SOS_CENTER},SOS_GAIN={SOS_GAIN};{STRENGTH_JS}</script>"""
 
 
-def render_preseason_strength(projected_ppg, matchups, abbreviations=None):
+def render_preseason_strength(projected_ppg, matchups, abbreviations=None, logo_class=None):
     """SOS before a game is played, from projected opponent scoring.
 
     No record component and no SOR yet, so this is a plainer, static table than
@@ -780,7 +838,7 @@ def render_preseason_strength(projected_ppg, matchups, abbreviations=None):
         )
         body.append(
             f'<tr><td class="num">{position}</td>'
-            f'<td class="name">{monogram_html(row["name"], abbreviations)}'
+            f'<td class="name">{team_mark(row["name"], abbreviations, logo_class)}'
             f'{esc(row["name"])}</td>'
             f'<td class="num total">{sos}</td>{cell}</tr>'
         )
@@ -808,16 +866,17 @@ def render(payload, show=None):
     scenarios = payload["scenarios"]
     weekly_scores = base.get("weekly_scores") or []
     abbreviations = base.get("abbreviations") or {}
+    logo_css, logo_class = _logo_styles(base.get("logos") or {})
     thresholds = margins.load_thresholds()
 
     parts = []
     if "header" in show:
         parts.append(render_header(standings, league))
     if "standings" in show:
-        parts.append(render_standings(standings, league, abbreviations))
+        parts.append(render_standings(standings, league, abbreviations, logo_class))
     if "matchups" in show:
         parts.append(
-            render_matchups(base["next_week_matchups"], league, abbreviations)
+            render_matchups(base["next_week_matchups"], league, abbreviations, logo_class)
         )
     if "scenarios" in show:
         parts.append(
@@ -835,6 +894,7 @@ def render(payload, show=None):
                 abbreviations,
                 league.get("current_week", 0),
                 standings,
+                logo_class,
             )
         )
         parts.append(render_all_play(weekly_scores))
@@ -843,7 +903,7 @@ def render(payload, show=None):
         # No games yet, but projections and a full schedule -> a preseason SOS.
         parts.append(
             render_preseason_strength(
-                base["projected_ppg"], base["remaining_matchups"], abbreviations
+                base["projected_ppg"], base["remaining_matchups"], abbreviations, logo_class
             )
         )
 
@@ -855,6 +915,7 @@ def render(payload, show=None):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Playoff scenarios &middot; after week {played}</title>
 <style>{CSS}</style>
+{f"<style>{logo_css}</style>" if logo_css else ""}
 </head>
 <body>
 {chr(10).join(p for p in parts if p)}

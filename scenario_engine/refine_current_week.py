@@ -145,6 +145,9 @@ if __name__ == "__main__":
         # from older saved payloads, so it stays optional the whole way down.
         "weekly_scores": league_data.get("weekly_scores", []),
         "abbreviations": league_data.get("abbreviations", {}),
+        # Logo URLs captured for a future image-capable report; drawn only once
+        # the auth work that resolves custom uploads lands. Optional all the way.
+        "logos": league_data.get("logos", {}),
         # Name-keyed, so it stays correct however the standings get re-sorted
         "divisions": league_data.get("divisions"),
         # Preseason projected PPG per team, passed straight through for the
