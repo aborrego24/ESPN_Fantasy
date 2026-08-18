@@ -416,10 +416,13 @@ def test_the_seed_race_lists_who_is_still_alive_for_the_top_seed():
             ]
         )
     )
-    race = document.split("Overall #1 Seed")[1].split("</details>")[0]
+    race = document.split("Race for #1 Overall Seed")[1].split("</details>")[0]
 
     assert "Alpha" in race and "Bravo" in race
     assert "Charlie" not in race, "a team out of the #1-seed race is left out"
+    # collapsed on load: the <details> has no `open` attribute
+    assert '<details class="race">' in document
+    assert 'class="race" open' not in document
     assert_wellformed(document)
 
 
@@ -434,7 +437,7 @@ def test_no_seed_race_once_the_top_seed_is_clinched():
         )
     )
 
-    assert "Overall #1 Seed" not in document
+    assert "Race for #1 Overall Seed" not in document
 
 
 def test_no_seed_race_section_when_nobody_can_still_take_it():
@@ -443,7 +446,7 @@ def test_no_seed_race_section_when_nobody_can_still_take_it():
         payload([team("Alpha", 1, 0, 10.0, "alive", top_seed="eliminated")])
     )
 
-    assert "Overall #1 Seed" not in document
+    assert "Race for #1 Overall Seed" not in document
 
 
 # --- season review tables -----------------------------------------------------

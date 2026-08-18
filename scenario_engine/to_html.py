@@ -547,7 +547,7 @@ def render_seed_race(standings, abbreviations=None, logo_class=None):
         for t in contenders
     )
     return (
-        '<details class="race" open><summary>Overall #1 Seed</summary>'
+        '<details class="race"><summary>Race for #1 Overall Seed</summary>'
         '<table><thead><tr><th>Team</th><th class="num">Record</th>'
         '<th class="num">Points for</th></tr></thead>'
         f"<tbody>{rows}</tbody></table></details>"
