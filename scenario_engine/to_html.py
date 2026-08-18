@@ -144,9 +144,13 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .cutnote { font-size: .72rem; color: var(--dim); padding-top: .5rem; }
 /* Divisional standings: one table per division, side by side where there is
    room, stacking on a narrow screen (and in email clients that ignore flex). */
-.divisions { display: flex; flex-wrap: wrap; gap: 1.25rem 2.5rem; }
+.divisions { display: flex; flex-wrap: wrap; gap: 1.25rem 2.5rem; align-items: flex-start; }
 .division { flex: 1 1 340px; min-width: 0; }
 .division h3 { font-size: 1rem; margin: .25rem 0 .5rem; font-weight: 600; }
+/* Keep each side-by-side table's cells on one line so the two line up: a long
+   name or a wrapped 'Points for' header would make one table's rows taller and
+   look shifted against the other. */
+.division th, .division td { white-space: nowrap; }
 details.race { margin: 1.25rem 0 0; }
 details.race > summary { cursor: pointer; font-weight: 700; font-size: 1rem; padding: .2rem 0; }
 details.race table { margin-top: .5rem; }
