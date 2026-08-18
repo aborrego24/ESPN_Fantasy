@@ -77,7 +77,8 @@ def text_of(document):
     return " ".join(" ".join(chunks).split())
 
 
-def team(name, wins, losses, points, verdict, margins=None, tiebreak=None):
+def team(name, wins, losses, points, verdict, margins=None, tiebreak=None,
+         top_seed=None, bye=None):
     return {
         "team_name": name,
         "wins": wins,
@@ -87,6 +88,8 @@ def team(name, wins, losses, points, verdict, margins=None, tiebreak=None):
         "status": verdict,
         "margins": margins or [],
         "tiebreak": tiebreak,
+        "top_seed": top_seed,
+        "bye": bye,
     }
 
 
@@ -117,6 +120,8 @@ def payload(
     weekly_scores=None,
     abbreviations=None,
     logos=None,
+    divisions=None,
+    division_names=None,
     **league,
 ):
     """Build a stage-4 payload.
@@ -140,6 +145,8 @@ def payload(
             "weekly_scores": weekly_scores or [],
             "abbreviations": abbreviations or {},
             "logos": logos or {},
+            "divisions": divisions,
+            "division_names": division_names or {},
         },
         "scenarios": scenarios or [],
     }
@@ -332,6 +339,111 @@ def test_no_games_left_is_stated_rather_than_left_blank():
     )
 
     assert "No games left to play." in text_of(document)
+
+
+# --- divisional standings ------------------------------------------------------
+
+
+DIVISIONAL = payload(
+    [
+        team("East A", 4, 0, 400.0, "clinched", top_seed="clinched"),
+        team("West A", 3, 1, 380.0, "clinched", bye="clinched"),
+        team("East B", 2, 2, 360.0, "alive"),
+        team("West B", 1, 3, 340.0, "alive"),
+        team("East C", 0, 4, 300.0, "eliminated"),
+        team("West C", 0, 4, 280.0, "eliminated"),
+    ],
+    divisions={
+        "East A": 0, "East B": 0, "East C": 0,
+        "West A": 1, "West B": 1, "West C": 1,
+    },
+    division_names={0: "East Division", 1: "West Division"},
+    playoff_spots=4,
+)
+
+
+def test_a_divisional_league_gets_one_table_per_division():
+    document = to_html.render(DIVISIONAL)
+
+    assert "East Division" in document and "West Division" in document
+    # two grouped tables, not one flat standings table
+    assert document.count('<div class="division">') == 2
+    body = document.split("<h2>Standings</h2>")[1]
+    east = body.split("East Division")[1].split("</div>")[0]
+    assert "East A" in east and "East B" in east and "East C" in east
+    assert "West A" not in east, "divisions do not bleed into each other"
+    assert_wellformed(document)
+
+
+def test_each_division_table_is_ranked_within_the_division():
+    """The # column restarts at 1 per division and follows that division's record."""
+    document = to_html.render(DIVISIONAL)
+    body = document.split("<h2>Standings</h2>")[1]
+    east = body.split("East Division")[1].split("</table>")[0]
+
+    order = re.findall(r'<td class="num">(\d+)</td><td>.*?([A-Za-z].*?)</td>', east)
+    ranks = [n for n, _ in order]
+    assert ranks[:3] == ["1", "2", "3"], "within-division rank starts at 1"
+
+
+def test_a_single_division_league_keeps_one_table_and_the_cut_line():
+    """No divisions -> unchanged behaviour, cut line and all."""
+    document = to_html.render(BASIC)
+
+    assert '<div class="divisions">' not in document
+    assert "playoff cut line" in document
+
+
+def test_the_division_names_come_through_even_as_json_string_keys():
+    """The payload round-trips through JSON, which turns the int ids into strings."""
+    data = json.loads(json.dumps(DIVISIONAL))  # ids in division_names become "0"/"1"
+    document = to_html.render(data)
+
+    assert "East Division" in document and "West Division" in document
+    assert "Division 0" not in document, "fell back to the id instead of the name"
+
+
+# --- #1-seed race --------------------------------------------------------------
+
+
+def test_the_seed_race_lists_who_is_still_alive_for_the_top_seed():
+    document = to_html.render(
+        payload(
+            [
+                team("Alpha", 3, 1, 400.0, "clinched", top_seed="alive"),
+                team("Bravo", 3, 1, 390.0, "clinched", top_seed="alive"),
+                team("Charlie", 1, 3, 300.0, "alive", top_seed="eliminated"),
+            ]
+        )
+    )
+    race = document.split("Overall #1 Seed")[1].split("</details>")[0]
+
+    assert "Alpha" in race and "Bravo" in race
+    assert "Charlie" not in race, "a team out of the #1-seed race is left out"
+    assert_wellformed(document)
+
+
+def test_no_seed_race_once_the_top_seed_is_clinched():
+    """A decided #1 seed is not a race, so the whole section is dropped."""
+    document = to_html.render(
+        payload(
+            [
+                team("Alpha", 4, 0, 400.0, "clinched", top_seed="clinched"),
+                team("Bravo", 2, 2, 300.0, "alive", top_seed="eliminated"),
+            ]
+        )
+    )
+
+    assert "Overall #1 Seed" not in document
+
+
+def test_no_seed_race_section_when_nobody_can_still_take_it():
+    """If every team is eliminated from the #1 seed, drop the section entirely."""
+    document = to_html.render(
+        payload([team("Alpha", 1, 0, 10.0, "alive", top_seed="eliminated")])
+    )
+
+    assert "Overall #1 Seed" not in document
 
 
 # --- season review tables -----------------------------------------------------

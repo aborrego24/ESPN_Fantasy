@@ -127,6 +127,7 @@ def test_payload_has_the_shape_stage_two_expects():
         "abbreviations",
         "logos",
         "divisions",
+        "division_names",
         "projected_ppg",
     }
     assert payload["league_settings"] == {
@@ -166,6 +167,27 @@ def test_logos_are_inlined_only_when_asked(monkeypatch):
     assert off["logos"] == {}, "no --logos means no logos, not even the URLs"
     assert on["logos"]["Alpha"] == "inlined:http://logos/Alpha.svg"
     assert set(on["logos"]) == {"Alpha", "Bravo", "Charlie", "Delta"}
+
+
+def test_division_names_come_from_the_settings_map():
+    class Settings:
+        division_map = {0: "East", 1: "West"}
+
+    class League:
+        settings = Settings()
+
+    assert league_data.division_names_of(League()) == {0: "East", 1: "West"}
+
+
+def test_division_names_are_empty_for_a_single_division_or_none():
+    class OneDivision:
+        settings = type("S", (), {"division_map": {0: "The League"}})()
+
+    class NoMap:
+        settings = type("S", (), {})()
+
+    assert league_data.division_names_of(OneDivision()) == {}
+    assert league_data.division_names_of(NoMap()) == {}
 
 
 def test_next_week_matchups_come_from_the_requested_week():

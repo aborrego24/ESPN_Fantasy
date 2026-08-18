@@ -36,6 +36,7 @@ def test_stage2_emits_the_documented_wire_format(stage1_json, run_stages, name):
         "abbreviations",
         "logos",
         "divisions",
+        "division_names",
         "projected_ppg",
     }
     assert set(payload["league_data"]) == {

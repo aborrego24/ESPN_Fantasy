@@ -142,6 +142,14 @@ th { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color:
 td.num, th.num { text-align: right; }
 tr.cut td { border-bottom: 2px solid var(--ink); }
 .cutnote { font-size: .72rem; color: var(--dim); padding-top: .5rem; }
+/* Divisional standings: one table per division, side by side where there is
+   room, stacking on a narrow screen (and in email clients that ignore flex). */
+.divisions { display: flex; flex-wrap: wrap; gap: 1.25rem 2.5rem; }
+.division { flex: 1 1 340px; min-width: 0; }
+.division h3 { font-size: 1rem; margin: .25rem 0 .5rem; font-weight: 600; }
+details.race { margin: 1.25rem 0 0; }
+details.race > summary { cursor: pointer; font-weight: 700; font-size: 1rem; padding: .2rem 0; }
+details.race table { margin-top: .5rem; }
 .mono {
   display: inline-block; min-width: 3.4rem; padding: .1rem .3rem; margin-right: .5rem;
   border-radius: 4px; color: #fff; font-size: .68rem; font-weight: 700;
@@ -157,7 +165,7 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .alive { color: var(--open); }
 .pill {
   display: inline-block; padding: .05rem .45rem; border-radius: 999px;
-  font-size: .75rem; font-weight: 600;
+  font-size: .75rem; font-weight: 600; white-space: nowrap;
 }
 .pill.top_seed { background: var(--top-bg); }
 .pill.bye { background: var(--bye-bg); }
@@ -450,29 +458,100 @@ def render_header(standings, league):
 </p>"""
 
 
-def render_standings(standings, league, abbreviations=None, logo_class=None):
+def _standings_row(position, team, abbreviations, logo_class, cut=False):
+    status = pretty_print.display_status(team)
+    label = pretty_print.status_label(team)
+    cls = ' class="cut"' if cut else ""
+    return (
+        f'<tr{cls}><td class="num">{position}</td>'
+        f"<td>{team_mark(team['team_name'], abbreviations, logo_class)}"
+        f"{esc(team['team_name'])}</td>"
+        f'<td class="num">{team["wins"]}-{team["losses"]}</td>'
+        f'<td class="num">{team["points_for"]:.1f}</td>'
+        f'<td><span class="pill {status}">{esc(label)}</span></td></tr>'
+    )
+
+
+def _standings_table(teams, abbreviations, logo_class, cut_at=None):
+    rows = "".join(
+        _standings_row(i, t, abbreviations, logo_class, cut=(i == cut_at))
+        for i, t in enumerate(teams, 1)
+    )
+    return (
+        '<table><thead><tr><th class="num">#</th><th>Team</th>'
+        '<th class="num">Record</th><th class="num">Points for</th>'
+        f"<th>Status</th></tr></thead><tbody>{rows}</tbody></table>"
+    )
+
+
+def render_standings(
+    standings, league, abbreviations=None, logo_class=None,
+    divisions=None, division_names=None
+):
     spots = league["playoff_spots"]
-    rows = []
-    for position, team in enumerate(standings, 1):
-        status = pretty_print.display_status(team)
-        label = pretty_print.status_label(team)
-        # The cut line is drawn under the last team holding a seat
-        cut = ' class="cut"' if position == spots else ""
-        rows.append(
-            f"<tr{cut}><td class=\"num\">{position}</td>"
-            f"<td>{team_mark(team['team_name'], abbreviations, logo_class)}"
-            f"{esc(team['team_name'])}</td>"
-            f"<td class=\"num\">{team['wins']}-{team['losses']}</td>"
-            f"<td class=\"num\">{team['points_for']:.1f}</td>"
-            f'<td><span class="pill {status}">{esc(label)}</span></td></tr>'
+    if not divisions:
+        table = _standings_table(standings, abbreviations, logo_class, cut_at=spots)
+        return (
+            f"<h2>Standings</h2>\n{table}"
+            f'<p class="cutnote">The rule marks the playoff cut line: {spots} spots.</p>'
         )
-    return f"""<h2>Standings</h2>
-<table>
-<thead><tr><th class="num">#</th><th>Team</th><th class="num">Record</th>
-<th class="num">Points for</th><th>Status</th></tr></thead>
-<tbody>{''.join(rows)}</tbody>
-</table>
-<p class="cutnote">The rule marks the playoff cut line: {spots} spots.</p>"""
+
+    # Divisional: one table per division. Divisions appear in the order their best
+    # seed does; within a table teams are in their own record order, and the #
+    # column is the within-division rank. Division ids arrive as ints, but JSON
+    # turns the division_names keys into strings, so look both up.
+    names = division_names or {}
+    ordered, seen, groups = [], set(), {}
+    for team in standings:
+        did = divisions.get(team["team_name"])
+        groups.setdefault(did, []).append(team)
+        if did not in seen:
+            seen.add(did)
+            ordered.append(did)
+
+    blocks = []
+    for did in ordered:
+        teams = sorted(groups[did], key=lambda t: (-t["wins"], -t["points_for"]))
+        title = names.get(did) or names.get(str(did)) or f"Division {did}"
+        blocks.append(
+            f'<div class="division"><h3>{esc(title)}</h3>'
+            f"{_standings_table(teams, abbreviations, logo_class)}</div>"
+        )
+    return (
+        f"<h2>Standings</h2>\n"
+        f'<div class="divisions">{"".join(blocks)}</div>'
+        f'<p class="cutnote">{spots} playoff spots league-wide; '
+        f"division winners are seeded first.</p>"
+    )
+
+
+def render_seed_race(standings, abbreviations=None, logo_class=None):
+    """The race for the #1 overall seed, as a collapsible section.
+
+    Reads the exact `top_seed` verdict already on each team, so it is the same
+    answer the standings badge gives -- gathered here as its own race. Teams
+    eliminated from the #1 seed are left out; that is the point of a race.
+    """
+    # Only a race while it is undecided: once a team has clinched the #1 seed
+    # (or nobody can still take it) there is nothing to show.
+    if any(t.get("top_seed") == "clinched" for t in standings):
+        return ""
+    contenders = [t for t in standings if t.get("top_seed") == "alive"]
+    if not contenders:
+        return ""
+    rows = "".join(
+        f"<tr><td>{team_mark(t['team_name'], abbreviations, logo_class)}"
+        f"{esc(t['team_name'])}</td>"
+        f'<td class="num">{t["wins"]}-{t["losses"]}</td>'
+        f'<td class="num">{t["points_for"]:.1f}</td></tr>'
+        for t in contenders
+    )
+    return (
+        '<details class="race" open><summary>Overall #1 Seed</summary>'
+        '<table><thead><tr><th>Team</th><th class="num">Record</th>'
+        '<th class="num">Points for</th></tr></thead>'
+        f"<tbody>{rows}</tbody></table></details>"
+    )
 
 
 def render_matchups(matchups, league, abbreviations=None, logo_class=None):
@@ -909,13 +988,20 @@ def render(payload, show=None):
     weekly_scores = base.get("weekly_scores") or []
     abbreviations = base.get("abbreviations") or {}
     logo_css, logo_class = _logo_styles(base.get("logos") or {})
+    divisions = base.get("divisions")
+    division_names = base.get("division_names") or {}
     thresholds = margins.load_thresholds()
 
     parts = []
     if "header" in show:
         parts.append(render_header(standings, league))
     if "standings" in show:
-        parts.append(render_standings(standings, league, abbreviations, logo_class))
+        parts.append(
+            render_standings(
+                standings, league, abbreviations, logo_class, divisions, division_names
+            )
+        )
+        parts.append(render_seed_race(standings, abbreviations, logo_class))
     if "matchups" in show:
         parts.append(
             render_matchups(base["next_week_matchups"], league, abbreviations, logo_class)
