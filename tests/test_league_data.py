@@ -47,6 +47,7 @@ class FakeTeam:
         points_for=99999.0,
         team_id=None,
         team_abbrev=None,
+        logo_url=None,
     ):
         self.team_name = name
         self.scores = list(scores)
@@ -60,6 +61,7 @@ class FakeTeam:
             FakeTeam._next_id += 1
         self.team_id = team_id
         self.team_abbrev = team_abbrev
+        self.logo_url = logo_url
 
 
 class FakeMatchup:
@@ -123,6 +125,7 @@ def test_payload_has_the_shape_stage_two_expects():
         "next_week_matchups",
         "weekly_scores",
         "abbreviations",
+        "logos",
         "divisions",
         "projected_ppg",
     }
@@ -143,6 +146,26 @@ def test_payload_has_the_shape_stage_two_expects():
     # Alpha beat Bravo 120-100 in week 1 and Charlie 110-100 in week 2
     assert payload["teams"][0]["record"] == {"wins": 2, "losses": 0, "ties": 0}
     assert payload["teams"][0]["points_for"] == 230.0
+
+
+def test_logos_are_inlined_only_when_asked(monkeypatch):
+    """--logos drives the fetch; without it stage 1 does no image work at all."""
+    league = four_team_league()
+    for team in league.teams:
+        team.logo_url = f"http://logos/{team.team_name}.svg"
+    # Stub the fetch+encode so the test needs no network or Pillow
+    monkeypatch.setattr(
+        league_data.logo,
+        "inline_all",
+        lambda urls: {name: f"inlined:{url}" for name, url in urls.items()},
+    )
+
+    off = league_data.build_payload(league, current_week=2)
+    on = league_data.build_payload(league, current_week=2, inline_logos=True)
+
+    assert off["logos"] == {}, "no --logos means no logos, not even the URLs"
+    assert on["logos"]["Alpha"] == "inlined:http://logos/Alpha.svg"
+    assert set(on["logos"]) == {"Alpha", "Bravo", "Charlie", "Delta"}
 
 
 def test_next_week_matchups_come_from_the_requested_week():

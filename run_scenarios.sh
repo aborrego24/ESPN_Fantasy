@@ -25,6 +25,7 @@ usage() {
   echo "League options select which league to download (--irl only):"
   echo "  --league-id <id> ESPN league id (default: the author's)"
   echo "  --year <year>    season to read"
+  echo "  --logos          fetch and inline team logos (needs Pillow)"
   echo "  --dump <path>    also save the downloaded data, replayable with --test"
   echo
   echo "Display flags are passed to the report and are all optional:"
@@ -81,6 +82,11 @@ while [ $# -gt 0 ]; do
       esac
       shift
       ;;
+    --logos)
+      # Fetched during the download, so it belongs to stage 1, not the renderer
+      LEAGUE_FLAGS+=("$1")
+      shift
+      ;;
     *)
       DISPLAY_FLAGS+=("$1")
       shift
@@ -90,7 +96,7 @@ done
 
 if [ "$MODE" != "--irl" ]; then
   if [ ${#LEAGUE_FLAGS[@]} -gt 0 ]; then
-    echo "Error: --league-id and --year only apply to --irl" >&2
+    echo "Error: --league-id, --year and --logos only apply to --irl" >&2
     exit 1
   fi
   # Dumping a replay would just copy the file it was given
