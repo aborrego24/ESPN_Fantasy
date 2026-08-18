@@ -168,12 +168,18 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 }
 .tip:hover .tipbox, .tip:focus .tipbox { display: grid; }
 .tiphead { color: #8b95a1; font-size: .64rem; text-transform: uppercase; letter-spacing: .06em; padding-bottom: .1rem; }
-/* The chart is an alternate view of the same section: hidden until the toggle
-   flips, and its axis pickers hidden until then too. No JS -> the table stands. */
-.chart-only { display: none; }
-#sos-section.charting .chart-only { display: flex; }
-#sos-chart-view { margin-top: .5rem; }
-#sos-chart { width: 100%; height: auto; font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+/* The chart is an alternate view of the same section, hidden until the toggle
+   flips (so with no JS the table stands). Its axis pickers sit ON the axes -- the
+   X picker under the plot, the Y picker down the left -- rather than in the top
+   controls, which is why they never show in the table view. */
+#sos-chart-view {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto;
+  align-items: center; gap: .35rem .5rem; margin-top: .5rem;
+}
+.chart-y { grid-column: 1; grid-row: 1; }
+#sos-chart { grid-column: 2; grid-row: 1; width: 100%; height: auto; font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.chart-x { grid-column: 2; grid-row: 2; text-align: center; }
+.chart-x label, .chart-y label { display: inline-flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--dim); }
 .cax { stroke: var(--dim); stroke-width: 1; }
 .cref { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
 .ctick { fill: var(--dim); font-size: 11px; }
@@ -221,7 +227,10 @@ STRENGTH_JS = """
   function num(s) { var v = parseFloat(s); return isNaN(v) ? null : v; }
   function fmtSor(v) { return (v >= 0 ? '+' : '\\u2212') + Math.abs(v).toFixed(3); }
   function refOf(k) { return k === 'sos' ? SOS_CENTER : (k === 'sor' ? 0 : null); }
-  function labelOf(k) { var o = xsel.querySelector('option[value="' + k + '"]'); return o ? o.textContent : k; }
+  // SOS and SOR get a fixed axis so dragging the slider moves the dots, not the
+  // scale -- SOS is pinned 15..85 around 50, SOR 0.3..-0.3 around 0. The rest
+  // auto-scale to their data, since they do not move with the controls.
+  function fixedDomain(k) { return k === 'sos' ? [15, 85] : (k === 'sor' ? [-0.3, 0.3] : null); }
 
   // The value of any metric for a team. SOS and SOR are recomputed from the
   // blend and benchmark so they track the controls; the rest are read straight
@@ -278,11 +287,12 @@ STRENGTH_JS = """
       pts.push({ x: x, y: y, abbr: tr.getAttribute('data-abbr') || '', color: tr.getAttribute('data-color') || '#888' });
     });
     if (!pts.length) { svg.innerHTML = ''; return; }
-    var W = 660, H = 430, mL = 60, mR = 24, mT = 18, mB = 46;
-    var xe = extent(pts.map(function (p) { return p.x; }));
-    var ye = extent(pts.map(function (p) { return p.y; }));
-    function SX(v) { return mL + (v - xe[0]) / (xe[1] - xe[0]) * (W - mL - mR); }
-    function SY(v) { return H - mB - (v - ye[0]) / (ye[1] - ye[0]) * (H - mT - mB); }
+    var W = 660, H = 430, mL = 52, mR = 24, mT = 18, mB = 30;
+    var xe = fixedDomain(xk) || extent(pts.map(function (p) { return p.x; }));
+    var ye = fixedDomain(yk) || extent(pts.map(function (p) { return p.y; }));
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function SX(v) { return clamp(mL + (v - xe[0]) / (xe[1] - xe[0]) * (W - mL - mR), mL, W - mR); }
+    function SY(v) { return clamp(H - mB - (v - ye[0]) / (ye[1] - ye[0]) * (H - mT - mB), mT, H - mB); }
     var e = [];
     var xr = refOf(xk);
     if (xr !== null && xr > xe[0] && xr < xe[1]) e.push('<line x1="' + SX(xr) + '" y1="' + mT + '" x2="' + SX(xr) + '" y2="' + (H - mB) + '" class="cref"/>');
@@ -290,14 +300,16 @@ STRENGTH_JS = """
     if (yr !== null && yr > ye[0] && yr < ye[1]) e.push('<line x1="' + mL + '" y1="' + SY(yr) + '" x2="' + (W - mR) + '" y2="' + SY(yr) + '" class="cref"/>');
     e.push('<line x1="' + mL + '" y1="' + (H - mB) + '" x2="' + (W - mR) + '" y2="' + (H - mB) + '" class="cax"/>');
     e.push('<line x1="' + mL + '" y1="' + mT + '" x2="' + mL + '" y2="' + (H - mB) + '" class="cax"/>');
+    // Axis tick numbers only -- the metric names live in the HTML selects on each
+    // axis, so they are not repeated here.
     e.push('<text x="' + mL + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="start">' + fmtAxis(xe[0]) + '</text>');
     e.push('<text x="' + (W - mR) + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="end">' + fmtAxis(xe[1]) + '</text>');
-    e.push('<text x="' + ((mL + W - mR) / 2) + '" y="' + (H - 8) + '" class="clabel" text-anchor="middle">' + labelOf(xk) + '</text>');
     e.push('<text x="' + (mL - 8) + '" y="' + (H - mB) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[0]) + '</text>');
     e.push('<text x="' + (mL - 8) + '" y="' + (mT + 10) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[1]) + '</text>');
-    e.push('<text transform="translate(16,' + ((mT + H - mB) / 2) + ') rotate(-90)" class="clabel" text-anchor="middle">' + labelOf(yk) + '</text>');
     pts.forEach(function (p) {
       var cx = SX(p.x), cy = SY(p.y);
+      // TODO: once team logos resolve (currently 401), draw the logo here in
+      // place of the circle and move the abbreviation just below it.
       e.push('<circle cx="' + cx + '" cy="' + cy + '" r="13" fill="' + p.color + '"/>');
       e.push('<text x="' + cx + '" y="' + (cy + 3) + '" class="cpt" text-anchor="middle">' + p.abbr + '</text>');
     });
@@ -728,12 +740,6 @@ the table shows a 50/50 blend against an average team.</p>
   <label>SOR benchmark
     <select id="sos-bench"><option value="average">average team</option><option value="elite">elite team</option></select>
   </label>
-  <label class="chart-only">X axis
-    <select id="sos-x">{_metric_options("sos")}</select>
-  </label>
-  <label class="chart-only">Y axis
-    <select id="sos-y">{_metric_options("sor")}</select>
-  </label>
 </div>
 <div id="sos-table-view">
 <table class="grid">
@@ -744,7 +750,9 @@ the table shows a 50/50 blend against an average team.</p>
 </table>
 </div>
 <div id="sos-chart-view" hidden>
+<div class="chart-y"><label>Y&nbsp;axis <select id="sos-y">{_metric_options("sor")}</select></label></div>
 <svg id="sos-chart" role="img" aria-label="Scatter of two chosen metrics per team"></svg>
+<div class="chart-x"><label>X&nbsp;axis <select id="sos-x">{_metric_options("sos")}</select></label></div>
 </div>
 </div>
 <script>var SOS_CENTER={SOS_CENTER},SOS_GAIN={SOS_GAIN};{STRENGTH_JS}</script>"""
