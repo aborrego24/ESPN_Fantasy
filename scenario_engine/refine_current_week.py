@@ -135,6 +135,7 @@ if __name__ == "__main__":
         swing_envelope=envelope,
         bye_spots=bye_spots,
         divisions=divisions_in_order(expanded_data, divisions),
+        with_division_winner=True,
     )
     combined = {
         "league_data": metadata[0],

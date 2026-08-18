@@ -525,32 +525,98 @@ def render_standings(
     )
 
 
-def render_seed_race(standings, abbreviations=None, logo_class=None):
-    """The race for the #1 overall seed, as a collapsible section.
-
-    Reads the exact `top_seed` verdict already on each team, so it is the same
-    answer the standings badge gives -- gathered here as its own race. Teams
-    eliminated from the #1 seed are left out; that is the point of a race.
-    """
-    # Only a race while it is undecided: once a team has clinched the #1 seed
-    # (or nobody can still take it) there is nothing to show.
-    if any(t.get("top_seed") == "clinched" for t in standings):
-        return ""
-    contenders = [t for t in standings if t.get("top_seed") == "alive"]
-    if not contenders:
-        return ""
+def _race_section(title, teams, abbreviations, logo_class, note=None):
+    """A collapsed race: title, optional note, and a Team/Record/Points table."""
     rows = "".join(
         f"<tr><td>{team_mark(t['team_name'], abbreviations, logo_class)}"
         f"{esc(t['team_name'])}</td>"
         f'<td class="num">{t["wins"]}-{t["losses"]}</td>'
         f'<td class="num">{t["points_for"]:.1f}</td></tr>'
-        for t in contenders
+        for t in teams
     )
+    lede = f'<p class="note">{note}</p>' if note else ""
     return (
-        '<details class="race"><summary>Race for #1 Overall Seed</summary>'
+        f'<details class="race"><summary>{esc(title)}</summary>{lede}'
         '<table><thead><tr><th>Team</th><th class="num">Record</th>'
         '<th class="num">Points for</th></tr></thead>'
         f"<tbody>{rows}</tbody></table></details>"
+    )
+
+
+def render_seed_race(standings, abbreviations=None, logo_class=None):
+    """The race for the #1 overall seed, as a collapsible section.
+
+    Reads the exact `top_seed` verdict already on each team. Shown only while it
+    is undecided: once a team has clinched the #1 seed (or nobody can still take
+    it) there is no race.
+    """
+    if any(t.get("top_seed") == "clinched" for t in standings):
+        return ""
+    contenders = [t for t in standings if t.get("top_seed") == "alive"]
+    if not contenders:
+        return ""
+    return _race_section(
+        "Race for #1 Overall Seed", contenders, abbreviations, logo_class
+    )
+
+
+def render_division_races(
+    standings, divisions, division_names, abbreviations=None, logo_class=None
+):
+    """One collapsible per division for its title race, shown only while that
+    division is undecided. Uses the exact `division_winner` verdict per team."""
+    if not divisions:
+        return ""
+    names = division_names or {}
+    ordered, seen = [], set()
+    for team in standings:
+        did = divisions.get(team["team_name"])
+        if did not in seen:
+            seen.add(did)
+            ordered.append(did)
+
+    blocks = []
+    for did in ordered:
+        members = [t for t in standings if divisions.get(t["team_name"]) == did]
+        if any(m.get("division_winner") == "clinched" for m in members):
+            continue  # the title is settled -- no race
+        contenders = [m for m in members if m.get("division_winner") == "alive"]
+        if not contenders:
+            continue
+        title = names.get(did) or names.get(str(did)) or f"Division {did}"
+        blocks.append(
+            _race_section(
+                f"Race for the {title} Division", contenders, abbreviations, logo_class
+            )
+        )
+    return "".join(blocks)
+
+
+def render_wildcard_race(
+    standings, divisions, playoff_spots, abbreviations=None, logo_class=None
+):
+    """The race for the playoff seats that are not division-winner seats.
+
+    Contenders are teams still alive for a playoff spot that have not clinched
+    their division -- if they get in without winning it, it is via a wildcard.
+    Shown only while at least one such seat is undecided.
+    """
+    if not divisions:
+        return ""
+    contenders = [
+        t
+        for t in standings
+        if t.get("verdict") == "alive" and t.get("division_winner") != "clinched"
+    ]
+    if not contenders:
+        return ""
+    wildcard_spots = playoff_spots - len(set(divisions.values()))
+    note = (
+        f"{wildcard_spots} wildcard spot{'s' if wildcard_spots != 1 else ''} "
+        "for teams that do not win their division."
+    )
+    return _race_section(
+        "Race for the Wildcard Spots", contenders, abbreviations, logo_class, note=note
     )
 
 
@@ -1002,6 +1068,16 @@ def render(payload, show=None):
             )
         )
         parts.append(render_seed_race(standings, abbreviations, logo_class))
+        parts.append(
+            render_division_races(
+                standings, divisions, division_names, abbreviations, logo_class
+            )
+        )
+        parts.append(
+            render_wildcard_race(
+                standings, divisions, league["playoff_spots"], abbreviations, logo_class
+            )
+        )
     if "matchups" in show:
         parts.append(
             render_matchups(base["next_week_matchups"], league, abbreviations, logo_class)

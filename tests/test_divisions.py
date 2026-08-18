@@ -436,3 +436,104 @@ def test_hypotheticals_keep_the_divisional_seeding(load_fixture):
         assert order == list(range(len(result))), (
             f"permutation {permutation} left the standings out of seed order"
         )
+
+
+# --- division-winner verdict (the title race) ---------------------------------
+
+
+def brute_force_division_winner(state):
+    """Enumerate every completion and mark, per team, whether it ever / never
+    finishes best in its own division (by wins, then points). O(2^games)."""
+    n = state.num_teams
+    ever_win = [False] * n
+    ever_not = [False] * n
+    for outcome in itertools.product(*[(i, j) for (i, j) in state.games]):
+        wins = list(state.wins)
+        for (i, j), winner in zip(state.games, outcome):
+            wins[winner] += 1
+        for division in set(state.divisions):
+            members = [t for t in range(n) if state.divisions[t] == division]
+            best = max(members, key=lambda t: (wins[t], state.points[t]))
+            for t in members:
+                (ever_win if t == best else ever_not)[t] = True
+    statuses = {}
+    for t in range(n):
+        if not ever_not[t]:
+            statuses[state.names[t]] = "clinched"
+        elif not ever_win[t]:
+            statuses[state.names[t]] = "eliminated"
+        else:
+            statuses[state.names[t]] = "alive"
+    return statuses
+
+
+def division_verdicts(state):
+    return {
+        state.names[t]: playoff_math.division_verdict(state, t)
+        for t in range(state.num_teams)
+    }
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_division_winner_agrees_with_brute_force(seed):
+    rng = random.Random(7000 + seed)
+    state = divisional_state(rng, n=6, weeks=2, spots=3, divisions=2, played=8)
+
+    assert division_verdicts(state) == brute_force_division_winner(state)
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_division_winner_agrees_with_brute_force_three_divisions(seed):
+    rng = random.Random(9000 + seed)
+    state = divisional_state(rng, n=9, weeks=2, spots=4, divisions=3, played=8)
+
+    assert division_verdicts(state) == brute_force_division_winner(state)
+
+
+def test_a_runaway_division_leader_has_clinched_its_title():
+    """One team so far ahead that losing out still tops the division."""
+    state = LeagueState(
+        ["Runaway", "Chaser", "Other"],
+        wins=[9, 5, 0], losses=[3, 7, 12], points=[1800.0, 1700.0, 1500.0],
+        games=[(0, 1), (1, 2)],  # one week left
+        playoff_spots=1, divisions=[0, 0, 1],
+    )
+    assert playoff_math.division_verdict(state, 0) == "clinched"
+    # the chaser cannot catch a two-game lead with one game left
+    assert playoff_math.division_verdict(state, 1) == "eliminated"
+
+
+def test_a_tight_division_is_still_a_live_race():
+    state = LeagueState(
+        ["A", "B", "Other"],
+        wins=[6, 6, 0], losses=[6, 6, 12], points=[1700.0, 1690.0, 1500.0],
+        games=[(0, 1)],  # they play head to head, winner takes the division
+        playoff_spots=1, divisions=[0, 0, 1],
+    )
+    assert playoff_math.division_verdict(state, 0) == "alive"
+    assert playoff_math.division_verdict(state, 1) == "alive"
+
+
+def test_division_verdict_is_none_without_divisions():
+    state = LeagueState(
+        ["A", "B"], [1, 0], [0, 1], [100.0, 90.0], [(0, 1)], playoff_spots=1
+    )
+    assert playoff_math.division_verdict(state, 0) is None
+
+
+def test_an_outside_game_still_counts_toward_the_division_race():
+    """A member's game against the other division must feed its own record.
+
+    Leader and Rival are tied on wins; each has one game left, but against
+    OUTSIDE teams. Whoever wins theirs takes the division, so both are alive --
+    which only holds if the phantom (outside) game is modelled at all.
+    """
+    state = LeagueState(
+        ["Leader", "Rival", "OutX", "OutY"],
+        wins=[6, 6, 3, 3], losses=[6, 6, 9, 9],
+        points=[1700.0, 1680.0, 1500.0, 1490.0],
+        games=[(0, 2), (1, 3)],  # Leader vs OutX, Rival vs OutY -- cross-division
+        playoff_spots=1, divisions=[0, 0, 1, 1],
+    )
+    assert playoff_math.division_verdict(state, 0) == "alive"
+    assert playoff_math.division_verdict(state, 1) == "alive"

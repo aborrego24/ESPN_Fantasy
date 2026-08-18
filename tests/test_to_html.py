@@ -78,7 +78,7 @@ def text_of(document):
 
 
 def team(name, wins, losses, points, verdict, margins=None, tiebreak=None,
-         top_seed=None, bye=None):
+         top_seed=None, bye=None, division_winner=None):
     return {
         "team_name": name,
         "wins": wins,
@@ -90,6 +90,7 @@ def team(name, wins, losses, points, verdict, margins=None, tiebreak=None,
         "tiebreak": tiebreak,
         "top_seed": top_seed,
         "bye": bye,
+        "division_winner": division_winner,
     }
 
 
@@ -447,6 +448,61 @@ def test_no_seed_race_section_when_nobody_can_still_take_it():
     )
 
     assert "Race for #1 Overall Seed" not in document
+
+
+# --- division-winner + wildcard races ------------------------------------------
+
+
+def _divisional_race_payload():
+    return payload(
+        [
+            team("East A", 3, 1, 400.0, "clinched", division_winner="alive"),
+            team("East B", 3, 1, 390.0, "alive", division_winner="alive"),
+            team("East C", 0, 4, 300.0, "eliminated", division_winner="eliminated"),
+            team("West A", 4, 0, 420.0, "clinched", division_winner="clinched"),
+            team("West B", 1, 3, 320.0, "alive", division_winner="eliminated"),
+            team("West C", 0, 4, 280.0, "eliminated", division_winner="eliminated"),
+        ],
+        divisions={
+            "East A": 0, "East B": 0, "East C": 0,
+            "West A": 1, "West B": 1, "West C": 1,
+        },
+        division_names={0: "East", 1: "West"},
+        playoff_spots=4,
+    )
+
+
+def test_a_division_with_a_live_title_race_shows_it():
+    document = to_html.render(_divisional_race_payload())
+    race = document.split("Race for the East Division")[1].split("</details>")[0]
+
+    assert "East A" in race and "East B" in race
+    assert "East C" not in race, "a team out of the division race is dropped"
+
+
+def test_a_decided_division_shows_no_race():
+    """West A has clinched the West, so there is no West title race."""
+    document = to_html.render(_divisional_race_payload())
+
+    assert "Race for the West Division" not in document
+
+
+def test_the_wildcard_race_lists_the_still_alive_non_winners():
+    document = to_html.render(_divisional_race_payload())
+    race = document.split("Race for the Wildcard Spots")[1].split("</details>")[0]
+
+    # alive teams that have not clinched their division are in it
+    assert "East B" in race and "West B" in race
+    assert "West A" not in race, "a clinched division winner is not a wildcard"
+    assert "East C" not in race, "an eliminated team is not in the race"
+    assert "wildcard spot" in document
+
+
+def test_the_races_are_absent_in_a_non_divisional_league():
+    document = to_html.render(BASIC)
+
+    assert "Race for the" not in document, "no division/wildcard races without divisions"
+    assert "Wildcard" not in document
 
 
 # --- season review tables -----------------------------------------------------
