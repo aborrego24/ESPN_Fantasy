@@ -190,9 +190,9 @@ STRENGTH_JS = """
     var w = parseInt(blend.value, 10) / 100;
     var elite = bench.value === 'elite';
     rows.forEach(function (tr) {
-      var ppn = num(tr.getAttribute('data-ppn'));
-      var rcn = num(tr.getAttribute('data-rcn'));
-      var sos = (ppn === null || rcn === null) ? null : w * ppn + (1 - w) * rcn;
+      var pi = num(tr.getAttribute('data-pi'));
+      var ri = num(tr.getAttribute('data-ri'));
+      var sos = (pi === null || ri === null) ? null : w * pi + (1 - w) * ri;
       tr._s = (sos === null) ? -1 : sos;
       var sv = tr.querySelector('.sos-val');
       if (sv) sv.textContent = (sos === null) ? '\\u2014' : Math.round(sos * 100);
@@ -546,7 +546,7 @@ def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None, 
         # the browser without another server pass. With no JavaScript the static
         # cells below stand as they are -- the default 50/50, average-benchmark view.
         body.append(
-            f'<tr data-ppn="{_attr(row["points_norm"])}" data-rcn="{_attr(row["record_norm"])}"'
+            f'<tr data-pi="{_attr(row["points_index"])}" data-ri="{_attr(row["record_index"])}"'
             f' data-sor-avg="{_attr(row["sor_average"])}" data-sor-elite="{_attr(row["sor_elite"])}">'
             f'<td class="num sos-rank">{position}</td>'
             f'<td class="name">{monogram_html(row["name"], abbreviations)}'
@@ -560,9 +560,9 @@ def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None, 
 
     ahead_head = '<th class="num">To&nbsp;come</th>' if any_remaining else ""
     return f"""<h2>Strength of Schedule &amp; Record</h2>
-<p class="lede"><strong>SOS</strong> rates how hard a team's opponents are, 100 the toughest
-slate in the league and 0 the easiest, blending how much those opponents score with how
-often they win{" (and, in the 'to&nbsp;come' column, how hard the schedule still ahead is)" if any_remaining else ""}.
+<p class="lede"><strong>SOS</strong> rates how hard a team's opponents are against the league
+average: <strong>100 is an average schedule</strong>, above it tougher and below it easier,
+blending how much those opponents score with how often they win{" (and the 'to&nbsp;come' column is how hard the schedule still ahead is)" if any_remaining else ""}.
 <strong>SOR</strong> is strength of record: how a team's own win rate compares with what a
 benchmark team would manage against the same schedule &mdash; green means it has done better
 than its schedule would give that team, red worse. Drag the weighting or change the benchmark

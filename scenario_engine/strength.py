@@ -125,22 +125,22 @@ def _mean(values):
     return sum(values) / len(values) if values else None
 
 
-def _normalize(values):
-    """Map a {name: number} to {name: 0..1} across the league.
+def _ratio_to_average(values):
+    """Map a {name: number} to its ratio against the league mean.
 
-    Min-max, so the hardest schedule reads 1 and the easiest 0. All-equal (a very
-    early or a degenerate league) maps everyone to 0.5 rather than dividing by
-    zero.
+    An absolute scale, not min-max: the league-average schedule is 1.0, a tougher
+    one above, an easier one below. The point is that nobody is *forced* to the
+    extremes -- if every schedule is similar (as in a near-round-robin league)
+    every ratio sits near 1.0, rather than pinning some team to 0 and another to
+    1 however small the real spread. Mean of zero (a degenerate league) maps
+    everyone to 1.0 rather than dividing by zero.
     """
     numbers = [v for v in values.values() if v is not None]
-    if not numbers:
-        return {name: None for name in values}
-    low, high = min(numbers), max(numbers)
-    if high == low:
-        return {name: (0.5 if v is not None else None) for name, v in values.items()}
+    average = sum(numbers) / len(numbers) if numbers else 0.0
+    if not average:
+        return {name: (None if v is None else 1.0) for name, v in values.items()}
     return {
-        name: (None if v is None else (v - low) / (high - low))
-        for name, v in values.items()
+        name: (None if v is None else v / average) for name, v in values.items()
     }
 
 
@@ -181,12 +181,13 @@ def strength_table(weekly_scores, remaining_matchups=None, blend=0.5, benchmark=
     }
 
     # The blended index needs the two components on one scale, so each is
-    # normalised across the league before mixing.
-    pts_norm = _normalize(opp_ppg)
-    rec_norm = _normalize(opp_wp)
+    # expressed as a ratio to the league-average schedule before mixing. 1.0 is an
+    # average slate, so the blend is too, and *100 in the report reads as 100.
+    pts_idx = _ratio_to_average(opp_ppg)
+    rec_idx = _ratio_to_average(opp_wp)
 
     def index(name):
-        p, r = pts_norm[name], rec_norm[name]
+        p, r = pts_idx[name], rec_idx[name]
         if p is None or r is None:
             return None
         return blend * p + (1 - blend) * r
@@ -213,10 +214,11 @@ def strength_table(weekly_scores, remaining_matchups=None, blend=0.5, benchmark=
                 "name": name,
                 "opp_ppg": opp_ppg[name],
                 "opp_win_pct": opp_wp[name],
-                # The two normalised components, so a blend can be recomputed
-                # without re-normalising -- the min-max stays single-sourced here.
-                "points_norm": pts_norm[name],
-                "record_norm": rec_norm[name],
+                # The two components as ratios to an average schedule, so a blend
+                # can be recomputed without re-deriving the average -- the scale
+                # stays single-sourced here.
+                "points_index": pts_idx[name],
+                "record_index": rec_idx[name],
                 "sos_played": sos_played[name],
                 "sos_remaining": sos_remaining[name],
                 # Each upcoming game, in schedule order, with the opponent's PPG --
