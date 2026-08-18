@@ -249,17 +249,16 @@ def _sos_display(ratio):
 
 
 # Progressive enhancement for the strength section, all from data already on each
-# row -- no round-trip, no assets. The slider re-blends SOS, the select swaps the
-# SOR benchmark, and a Table/Chart toggle draws an inline-SVG scatter whose axes
-# pick any metric. SOS and SOR on an axis stay live with the slider and toggle;
-# the rest are fixed per team. With scripting off the static table stands.
+# row -- no round-trip, no assets. The slider re-blends SOS, and a Table/Chart
+# toggle draws an inline-SVG scatter whose axes pick any metric. SOS on an axis
+# stays live with the slider; the rest are fixed per team. With scripting off the
+# static table stands.
 STRENGTH_JS = """
 (function () {
   var body = document.getElementById('sos-body');
   if (!body) return;
   var section = document.getElementById('sos-section');
   var blend = document.getElementById('sos-blend');
-  var bench = document.getElementById('sos-bench');
   var label = document.getElementById('sos-blend-label');
   var view = document.getElementById('sos-view');
   var xsel = document.getElementById('sos-x');
@@ -289,27 +288,25 @@ STRENGTH_JS = """
   // auto-scale to their data, since they do not move with the controls.
   function fixedDomain(k) { return k === 'sos' ? [15, 85] : (k === 'sor' ? [-0.3, 0.3] : null); }
 
-  // The value of any metric for a team. SOS and SOR are recomputed from the
-  // blend and benchmark so they track the controls; the rest are read straight
-  // off the row -- one source of truth for the number, whether table or chart.
-  function metricVal(tr, key, w, elite) {
+  // The value of any metric for a team. SOS is recomputed from the blend so it
+  // tracks the slider; the rest are read straight off the row -- one source of
+  // truth for the number, whether table or chart.
+  function metricVal(tr, key, w) {
     if (key === 'sos') {
       var pi = num(tr.getAttribute('data-pi')), ri = num(tr.getAttribute('data-ri'));
       return (pi === null || ri === null) ? null : SOS_CENTER + (w * pi + (1 - w) * ri - 1) * SOS_GAIN;
     }
-    if (key === 'sor') return num(tr.getAttribute(elite ? 'data-sor-elite' : 'data-sor-avg'));
     return num(tr.getAttribute('data-' + key));
   }
 
   function updateTable() {
     var w = parseInt(blend.value, 10) / 100;
-    var elite = bench.value === 'elite';
     rows.forEach(function (tr) {
-      var sos = metricVal(tr, 'sos', w, elite);
+      var sos = metricVal(tr, 'sos', w);
       tr._s = (sos === null) ? -Infinity : sos;
       var sv = tr.querySelector('.sos-val');
       if (sv) sv.textContent = (sos === null) ? '\\u2014' : sos.toFixed(1);
-      var v = metricVal(tr, 'sor', w, elite);
+      var v = metricVal(tr, 'sor', w);
       var sc = tr.querySelector('.sos-sor');
       if (sc) {
         if (v === null) { sc.textContent = '\\u2014'; sc.className = 'num sos-sor'; }
@@ -336,10 +333,10 @@ STRENGTH_JS = """
 
   function drawChart() {
     if (!svg) return;
-    var w = parseInt(blend.value, 10) / 100, elite = bench.value === 'elite';
+    var w = parseInt(blend.value, 10) / 100;
     var xk = xsel.value, yk = ysel.value, pts = [];
     rows.forEach(function (tr) {
-      var x = metricVal(tr, xk, w, elite), y = metricVal(tr, yk, w, elite);
+      var x = metricVal(tr, xk, w), y = metricVal(tr, yk, w);
       if (x === null || y === null) return;
       pts.push({ x: x, y: y, abbr: tr.getAttribute('data-abbr') || '', color: tr.getAttribute('data-color') || '#888', logo: tr._logo || '' });
     });
@@ -391,7 +388,6 @@ STRENGTH_JS = """
   function update() { updateTable(); if (view && view.value === 'chart') drawChart(); }
 
   blend.addEventListener('input', update);
-  bench.addEventListener('change', update);
   if (view) view.addEventListener('change', showView);
   if (xsel) xsel.addEventListener('change', drawChart);
   if (ysel) ysel.addEventListener('change', drawChart);
@@ -716,8 +712,8 @@ def _to_come_cell(row, current_week, abbreviations):
     return f'<td class="num">{tip}</td>'
 
 
-# Metrics the scatter's two axes can pick from. SOS and SOR are live (recomputed
-# from the slider and benchmark); the rest are fixed per team, carried as row data.
+# Metrics the scatter's two axes can pick from. SOS is live (recomputed from the
+# slider); the rest are fixed per team, carried as row data.
 CHART_METRICS = [
     ("sos", "SOS"),
     ("sor", "SOR"),
@@ -761,11 +757,12 @@ def render_strength(
             else None
         )
         # Everything an axis might plot rides on the row: the normalised SOS
-        # components and both benchmark SORs (recomputed live), and the season
-        # figures (fixed). The chart and the table read the same numbers.
+        # components (SOS recomputed live from the slider), the SOR against the
+        # average team, and the season figures (fixed). The chart and the table
+        # read the same numbers.
         body.append(
             f'<tr data-pi="{_attr(row["points_index"])}" data-ri="{_attr(row["record_index"])}"'
-            f' data-sor-avg="{_attr(row["sor_average"])}" data-sor-elite="{_attr(row["sor_elite"])}"'
+            f' data-sor="{_attr(row["sor"])}"'
             f' data-wins="{_attr(team.get("wins"))}" data-ppg="{_attr(own_ppg)}"'
             f' data-pf="{_attr(points_for)}" data-oppppg="{_attr(row["opp_ppg"])}"'
             f' data-abbr="{esc(monogram(row["name"], abbreviations))}"'
@@ -785,11 +782,11 @@ def render_strength(
 <p class="lede"><strong>SOS</strong> rates how hard a team's opponents are against the league
 average: <strong>50 is an average schedule</strong>, above it tougher and below it easier,
 blending how much those opponents score with how often they win{" (and the 'to&nbsp;come' column is how hard the schedule still ahead is)" if any_remaining else ""}.
-<strong>SOR</strong> is strength of record: how a team's own win rate compares with what a
-benchmark team would manage against the same schedule &mdash; green means it has done better
-than its schedule would give that team, red worse. Drag the weighting or change the benchmark
-to re-rank; switch to <strong>Chart</strong> for a scatter of any two metrics. With no browser
-the table shows a 50/50 blend against an average team.</p>
+<strong>SOR</strong> is strength of record: how a team's own win rate compares with what an
+average league team would manage against the same schedule &mdash; green means it has done better
+than its schedule would give that team, red worse. Drag the weighting to re-rank; switch to
+<strong>Chart</strong> for a scatter of any two metrics. With no browser the table shows a
+50/50 blend against an average team.</p>
 <div id="sos-section">
 <div class="controls">
   <label>View
@@ -800,9 +797,6 @@ the table shows a 50/50 blend against an average team.</p>
     <input type="range" id="sos-blend" min="0" max="100" value="50">
     <span class="dim">points</span>
     <span id="sos-blend-label" class="dim">50% points / 50% record</span>
-  </label>
-  <label>SOR benchmark
-    <select id="sos-bench"><option value="average">average team</option><option value="elite">elite team</option></select>
   </label>
 </div>
 <div id="sos-table-view">

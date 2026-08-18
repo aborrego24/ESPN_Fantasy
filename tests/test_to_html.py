@@ -748,7 +748,7 @@ def test_the_slider_and_benchmark_controls_are_present():
     )
 
     assert 'id="sos-blend"' in document, "no weighting slider"
-    assert 'id="sos-bench"' in document, "no benchmark toggle"
+    assert 'id="sos-bench"' not in document, "the benchmark toggle was removed"
     assert "addEventListener" in document, "no enhancing script"
     assert_wellformed(document)
 
@@ -768,19 +768,18 @@ def test_the_embedded_row_data_matches_the_engine():
     )
     section = document.split("Strength of Schedule")[1].split("</table>")[0]
     rows = re.findall(
-        r'<tr data-pi="([^"]*)" data-ri="([^"]*)" data-sor-avg="([^"]*)"'
-        r' data-sor-elite="([^"]*)"[^>]*>.*?</span>([^<]*)</td>',
+        r'<tr data-pi="([^"]*)" data-ri="([^"]*)" data-sor="([^"]*)"'
+        r'[^>]*>.*?</span>([^<]*)</td>',
         section,
     )
     assert len(rows) == len(names), "one data-bearing row per team"
 
     engine = {r["name"]: r for r in strength.strength_table(history)}
-    for pi, ri, sor_avg, sor_elite, name in rows:
+    for pi, ri, sor, name in rows:
         row = engine[name]
         assert float(pi) == pytest.approx(row["points_index"], abs=1e-6)
         assert float(ri) == pytest.approx(row["record_index"], abs=1e-6)
-        assert float(sor_avg) == pytest.approx(row["sor_average"], abs=1e-6)
-        assert float(sor_elite) == pytest.approx(row["sor_elite"], abs=1e-6)
+        assert float(sor) == pytest.approx(row["sor"], abs=1e-6)
 
 
 def test_record_text_reports_ties_only_when_there_are_any():

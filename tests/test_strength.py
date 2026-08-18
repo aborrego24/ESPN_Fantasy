@@ -196,18 +196,6 @@ def test_sor_rewards_a_good_record_against_a_hard_schedule():
     assert b["sor"] == pytest.approx(-0.0625)
 
 
-def test_the_elite_benchmark_is_harder_to_beat_than_the_average_one():
-    """An elite benchmark out-scores more opponents, so every SOR is lower."""
-    average = strength.strength_table(build(), benchmark="average")
-    elite = strength.strength_table(build(), benchmark="elite")
-
-    for name in SCORES:
-        assert row_of(elite, name)["benchmark_win_pct"] >= row_of(
-            average, name
-        )["benchmark_win_pct"]
-        assert row_of(elite, name)["sor"] <= row_of(average, name)["sor"]
-
-
 # --- ingredients the interactive page recomputes from -------------------------
 
 
@@ -223,13 +211,12 @@ def test_rows_expose_the_components_that_blend_into_sos():
             assert row["sos"] == pytest.approx(expected)
 
 
-def test_rows_carry_both_benchmark_sors():
-    """Both are precomputed so the benchmark toggle needs no second server pass."""
-    rows = strength.strength_table(build(), benchmark="average")
-
-    for row in rows:
-        assert row["sor"] == pytest.approx(row["sor_average"])
-        assert row["sor_elite"] <= row["sor_average"] + 1e-9
+def test_sor_is_the_win_rate_minus_the_average_benchmark():
+    """SOR is always measured against the average team -- no benchmark choice."""
+    for row in strength.strength_table(build()):
+        assert row["sor"] == pytest.approx(
+            row["actual_win_pct"] - row["benchmark_win_pct"]
+        )
 
 
 # --- the forward half of SOS ---------------------------------------------------
