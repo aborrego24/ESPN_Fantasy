@@ -22,6 +22,7 @@ import sys
 import league_stats
 import margins
 import pretty_print
+import strength
 
 def esc(value):
     """Escape for HTML. Team names really do contain apostrophes and quotes."""
@@ -418,6 +419,61 @@ somebody else's opponents, and whose schedule it would have taken.</p>
 </table>"""
 
 
+def _pct(value):
+    """A win percentage as .541, or a dash when there is nothing to show."""
+    return "&mdash;" if value is None else f"{value:.3f}"
+
+
+def _ppg(value):
+    return "&mdash;" if value is None else f"{value:.1f}"
+
+
+def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None):
+    rows = strength.strength_table(weekly_scores, remaining_matchups)
+    if not rows:
+        return ""
+    any_remaining = any(row["sos_remaining"] is not None for row in rows)
+
+    body = []
+    for position, row in enumerate(rows, 1):
+        sos = "&mdash;" if row["sos"] is None else f"{round(row['sos'] * 100)}"
+        sor = row["sor"]
+        sor_cell = (
+            '<td class="num">&mdash;</td>'
+            if sor is None
+            else f'<td class="num {"better" if sor >= 0 else "worse"}">'
+            f'{"+" if sor >= 0 else "−"}{abs(sor):.3f}</td>'
+        )
+        ahead = (
+            f'<td class="num">{_ppg(row["sos_remaining"])}</td>' if any_remaining else ""
+        )
+        body.append(
+            f'<tr><td class="num">{position}</td>'
+            f'<td class="name">{monogram_html(row["name"], abbreviations)}'
+            f'{esc(row["name"])}</td>'
+            f'<td class="num total">{sos}</td>'
+            f'<td class="num">{_ppg(row["opp_ppg"])}</td>'
+            f'<td class="num">{_pct(row["opp_win_pct"])}</td>'
+            f"{ahead}"
+            f"{sor_cell}</tr>"
+        )
+
+    ahead_head = '<th class="num">To&nbsp;come</th>' if any_remaining else ""
+    return f"""<h2>Strength of Schedule &amp; Record</h2>
+<p class="lede"><strong>SOS</strong> rates how hard a team's opponents are, 100 the toughest
+slate in the league and 0 the easiest, blending how much those opponents score with how
+often they win{" (and, in the 'to&nbsp;come' column, how hard the schedule still ahead is)" if any_remaining else ""}.
+<strong>SOR</strong> is strength of record: how a team's own win rate compares with what an
+average team would manage against the same schedule &mdash; green means it has done better
+than its schedule would give a neutral team, red worse.</p>
+<table class="grid">
+<thead><tr><th class="num">#</th><th class="name">Team</th>
+<th class="num total">SOS</th><th class="num">Opp&nbsp;PPG</th><th class="num">Opp&nbsp;Win%</th>
+{ahead_head}<th class="num">SOR</th></tr></thead>
+<tbody>{''.join(body)}</tbody>
+</table>"""
+
+
 def render(payload, show=None):
     """The whole document. `show` names the sections to include."""
     show = show or {"header", "standings", "matchups", "scenarios", "stats"}
@@ -444,6 +500,11 @@ def render(payload, show=None):
         )
         parts.append(render_scenarios(standings, scenarios, league, thresholds, "elim"))
     if "stats" in show and weekly_scores:
+        parts.append(
+            render_strength(
+                weekly_scores, base.get("remaining_matchups"), abbreviations
+            )
+        )
         parts.append(render_all_play(weekly_scores))
         parts.append(render_schedule_luck(weekly_scores, abbreviations))
 
