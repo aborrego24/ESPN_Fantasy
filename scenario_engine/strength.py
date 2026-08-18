@@ -239,6 +239,47 @@ def strength_table(weekly_scores, remaining_matchups=None, blend=0.5, benchmark=
     return rows
 
 
+def preseason_strength(projected_ppg, matchups):
+    """SOS before a game is played, from projected opponent scoring.
+
+    With no results yet there is no record component and no strength of record --
+    only how strong the full season's opponents project to be. Each team's SOS is
+    the ratio of its opponents' mean projected PPG to the league-average schedule,
+    the same absolute scale the in-season SOS uses (1.0 is average). Returns rows
+    sorted hardest first, each with the per-week schedule behind the number.
+
+    ⚠️ Low-confidence by construction: it rests entirely on preseason projections,
+    which barely predict (see tools/validate_projections.py). Empty without both a
+    projection map and a schedule.
+    """
+    if not projected_ppg or not matchups:
+        return []
+
+    schedule = _remaining_schedule(matchups)
+    opp_ppg = {
+        name: _mean(
+            [projected_ppg[opp] for _, opp in schedule.get(name, []) if opp in projected_ppg]
+        )
+        for name in projected_ppg
+    }
+    idx = _ratio_to_average(opp_ppg)
+
+    rows = [
+        {
+            "name": name,
+            "opp_ppg": opp_ppg[name],
+            "sos": idx[name],
+            "schedule": [
+                {"week_offset": offset, "opponent": opp, "value": projected_ppg.get(opp)}
+                for offset, opp in schedule.get(name, [])
+            ],
+        }
+        for name in projected_ppg
+    ]
+    rows.sort(key=lambda row: (-(row["sos"] or 0.0), row["name"]))
+    return rows
+
+
 def _benchmark_scores(points, ppg, benchmark):
     """The pool of weekly scores that stands in for the benchmark team."""
     if benchmark == "elite":

@@ -641,6 +641,49 @@ def test_a_finished_season_has_no_hover_and_no_to_come_cell():
     assert "tipbox" not in section
 
 
+def test_preseason_strength_appears_from_projections_before_any_game():
+    """No weekly history, but projections and a schedule -> a preseason SOS."""
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    p = payload([team(n, 0, 0, 0.0, "alive") for n in names])  # no weekly_scores
+    p["base_league_data"]["projected_ppg"] = {
+        "Alpha": 130.0, "Bravo": 120.0, "Charlie": 110.0, "Delta": 100.0
+    }
+    p["base_league_data"]["remaining_matchups"] = [
+        [{"team1": "Alpha", "team2": "Bravo"}, {"team1": "Charlie", "team2": "Delta"}]
+    ]
+    doc = to_html.render(p)
+    headings = re.findall(r"<h2>(.*?)</h2>", doc)
+
+    assert any("Preseason" in h for h in headings)
+    assert "weak predictor" in doc, "the low-confidence caveat must be shown"
+    assert "tipbox" in doc, "the schedule hover must be present"
+    assert "Strength of Schedule &amp; Record" not in doc, "the in-season table needs games"
+    assert_wellformed(doc)
+
+
+def test_sos_display_recentres_on_50_and_widens_the_gap():
+    """The engine's ratio (1.0 = average) is shown recentred on 50 and amplified.
+
+    An average schedule reads 50, and a 0.10 spread in the ratio opens to a
+    40-point spread on screen instead of the ~10 a bare *100 would give.
+    """
+    assert to_html._sos_display(1.0) == 50
+    assert to_html._sos_display(None) is None
+    assert to_html._sos_display(1.05) - to_html._sos_display(0.95) == 40
+
+
+def test_played_games_show_the_in_season_table_not_the_preseason_one():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    p = payload(
+        [team(n, 1, 1, 100.0, "alive") for n in names], weekly_scores=weekly(names)
+    )
+    p["base_league_data"]["projected_ppg"] = {n: 100.0 for n in names}
+    doc = to_html.render(p)
+
+    assert "Strength of Schedule &amp; Record" in doc
+    assert "Preseason" not in doc
+
+
 def test_the_slider_and_benchmark_controls_are_present():
     names = ["Alpha", "Bravo", "Charlie", "Delta"]
     document = to_html.render(

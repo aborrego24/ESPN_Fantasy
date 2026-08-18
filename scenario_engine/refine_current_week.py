@@ -147,6 +147,9 @@ if __name__ == "__main__":
         "abbreviations": league_data.get("abbreviations", {}),
         # Name-keyed, so it stays correct however the standings get re-sorted
         "divisions": league_data.get("divisions"),
+        # Preseason projected PPG per team, passed straight through for the
+        # projection-based SOS the renderer shows before any game is played.
+        "projected_ppg": league_data.get("projected_ppg", {}),
     }
     print(json.dumps(combined, indent=2))
 
