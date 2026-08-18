@@ -34,6 +34,7 @@ def test_stage2_emits_the_documented_wire_format(stage1_json, run_stages, name):
         "standings",
         "weekly_scores",
         "abbreviations",
+        "logos",
         "divisions",
         "projected_ppg",
     }

@@ -73,6 +73,38 @@ def monogram_html(name, abbreviations):
     )
 
 
+def team_mark(name, abbreviations, logo_class=None):
+    """A team's inlined logo if --logos captured one, else its monogram chip.
+
+    `logo_class` maps a name to its CSS class (see _logo_styles); the image data
+    lives once in that class, so this only emits a reference. The chip is always
+    the fallback, so a team whose logo failed to fetch and a report built
+    without --logos both read the same as before.
+    """
+    cls = (logo_class or {}).get(name)
+    if cls:
+        return (
+            f'<span class="logo {cls}" role="img" aria-label="{esc(name)}" '
+            f'title="{esc(name)}"></span>'
+        )
+    return monogram_html(name, abbreviations)
+
+
+def _logo_styles(logos):
+    """(css_rules, {name: class}) with each logo's data URI written exactly once.
+
+    A team's image goes in one CSS rule; every table cell references it by class.
+    That is what keeps the mailable file small -- a logo shown in the standings,
+    the matchups and the strength table is still inlined a single time.
+    """
+    rules, classes = [], {}
+    for index, (name, uri) in enumerate(sorted(logos.items())):
+        cls = f"lg{index}"
+        classes[name] = cls
+        rules.append(f'.{cls}{{background-image:url("{uri}")}}')
+    return "".join(rules), classes
+
+
 def record_text(tally):
     """'9-4', or '9-4-1' when there is a tie to report."""
     text = f"{tally['wins']}-{tally['losses']}"
@@ -150,6 +182,12 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .worst { background: var(--bad-bg); color: var(--bad); font-weight: 700; }
 .grid th .mono { min-width: 0; margin-right: 0; padding: .1rem .25rem; }
 .grid td.name .mono { min-width: 2.6rem; }
+.logo {
+  display: inline-block; height: 1.5rem; width: 1.5rem; margin-right: .5rem;
+  border-radius: 4px; vertical-align: middle;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+}
+.grid td.name .logo { height: 1.3rem; width: 1.3rem; }
 .self { outline: 2px solid var(--ink); outline-offset: -2px; font-weight: 700; }
 .better { background: var(--good-bg); color: var(--good); }
 .worse { background: var(--bad-bg); color: var(--bad); }
@@ -185,6 +223,9 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .ctick { fill: var(--dim); font-size: 11px; }
 .clabel { fill: var(--ink); font-size: 12px; font-weight: 600; }
 .cpt { fill: #fff; font-size: 9px; font-weight: 700; }
+/* Sits below a logo on the chart background, so it needs the dark ink fill the
+   on-circle label (white on colour) must not use. */
+.cpt-lbl { fill: var(--ink); font-size: 9px; font-weight: 700; }
 footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 """
 
@@ -223,6 +264,18 @@ STRENGTH_JS = """
   var tableView = document.getElementById('sos-table-view');
   var chartView = document.getElementById('sos-chart-view');
   var rows = Array.prototype.slice.call(body.getElementsByTagName('tr'));
+
+  // Read each row's logo once, now, while the table view is still shown -- the
+  // image lives in a CSS class (inlined a single time), so the scatter pulls the
+  // data URI off the cell's computed background rather than duplicating it.
+  rows.forEach(function (tr) {
+    tr._logo = '';
+    var el = tr.querySelector('td.name .logo');
+    if (el) {
+      var m = (getComputedStyle(el).backgroundImage || '').match(/url\\(["']?(data:[^"')]+)["']?\\)/);
+      if (m) tr._logo = m[1];
+    }
+  });
 
   function num(s) { var v = parseFloat(s); return isNaN(v) ? null : v; }
   function fmtSor(v) { return (v >= 0 ? '+' : '\\u2212') + Math.abs(v).toFixed(3); }
@@ -284,7 +337,7 @@ STRENGTH_JS = """
     rows.forEach(function (tr) {
       var x = metricVal(tr, xk, w, elite), y = metricVal(tr, yk, w, elite);
       if (x === null || y === null) return;
-      pts.push({ x: x, y: y, abbr: tr.getAttribute('data-abbr') || '', color: tr.getAttribute('data-color') || '#888' });
+      pts.push({ x: x, y: y, abbr: tr.getAttribute('data-abbr') || '', color: tr.getAttribute('data-color') || '#888', logo: tr._logo || '' });
     });
     if (!pts.length) { svg.innerHTML = ''; return; }
     var W = 660, H = 430, mL = 52, mR = 24, mT = 18, mB = 30;
@@ -308,10 +361,16 @@ STRENGTH_JS = """
     e.push('<text x="' + (mL - 8) + '" y="' + (mT + 10) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[1]) + '</text>');
     pts.forEach(function (p) {
       var cx = SX(p.x), cy = SY(p.y);
-      // TODO: once team logos resolve (currently 401), draw the logo here in
-      // place of the circle and move the abbreviation just below it.
-      e.push('<circle cx="' + cx + '" cy="' + cy + '" r="13" fill="' + p.color + '"/>');
-      e.push('<text x="' + cx + '" y="' + (cy + 3) + '" class="cpt" text-anchor="middle">' + p.abbr + '</text>');
+      if (p.logo) {
+        // --logos inlined this team's image: draw it in place of the circle,
+        // abbreviation just below.
+        var s = 26;
+        e.push('<image href="' + p.logo + '" x="' + (cx - s / 2) + '" y="' + (cy - s / 2) + '" width="' + s + '" height="' + s + '" preserveAspectRatio="xMidYMid slice"/>');
+        e.push('<text x="' + cx + '" y="' + (cy + s / 2 + 9) + '" class="cpt-lbl" text-anchor="middle">' + p.abbr + '</text>');
+      } else {
+        e.push('<circle cx="' + cx + '" cy="' + cy + '" r="13" fill="' + p.color + '"/>');
+        e.push('<text x="' + cx + '" y="' + (cy + 3) + '" class="cpt" text-anchor="middle">' + p.abbr + '</text>');
+      }
     });
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.innerHTML = e.join('');
@@ -349,7 +408,7 @@ def render_header(standings, league):
 </p>"""
 
 
-def render_standings(standings, league, abbreviations=None):
+def render_standings(standings, league, abbreviations=None, logo_class=None):
     spots = league["playoff_spots"]
     rows = []
     for position, team in enumerate(standings, 1):
@@ -359,7 +418,7 @@ def render_standings(standings, league, abbreviations=None):
         cut = ' class="cut"' if position == spots else ""
         rows.append(
             f"<tr{cut}><td class=\"num\">{position}</td>"
-            f"<td>{monogram_html(team['team_name'], abbreviations)}"
+            f"<td>{team_mark(team['team_name'], abbreviations, logo_class)}"
             f"{esc(team['team_name'])}</td>"
             f"<td class=\"num\">{team['wins']}-{team['losses']}</td>"
             f"<td class=\"num\">{team['points_for']:.1f}</td>"
@@ -374,13 +433,13 @@ def render_standings(standings, league, abbreviations=None):
 <p class="cutnote">The rule marks the playoff cut line: {spots} spots.</p>"""
 
 
-def render_matchups(matchups, league, abbreviations=None):
+def render_matchups(matchups, league, abbreviations=None, logo_class=None):
     if not matchups:
         return '<h2>Next Week</h2>\n<p class="empty">No games left to play.</p>'
     rows = "".join(
-        f"<tr><td>{monogram_html(m['team1'], abbreviations)}{esc(m['team1'])}</td>"
+        f"<tr><td>{team_mark(m['team1'], abbreviations, logo_class)}{esc(m['team1'])}</td>"
         f'<td class="empty">vs</td>'
-        f"<td>{monogram_html(m['team2'], abbreviations)}{esc(m['team2'])}</td></tr>"
+        f"<td>{team_mark(m['team2'], abbreviations, logo_class)}{esc(m['team2'])}</td></tr>"
         for m in matchups
     )
     return (
@@ -673,7 +732,8 @@ def _metric_options(selected):
 
 
 def render_strength(
-    weekly_scores, remaining_matchups=None, abbreviations=None, current_week=0, standings=None
+    weekly_scores, remaining_matchups=None, abbreviations=None, current_week=0,
+    standings=None, logo_class=None
 ):
     rows = strength.strength_table(weekly_scores, remaining_matchups)
     if not rows:
@@ -707,7 +767,7 @@ def render_strength(
             f' data-abbr="{esc(monogram(row["name"], abbreviations))}"'
             f' data-color="{monogram_colour(row["name"])}">'
             f'<td class="num sos-rank">{position}</td>'
-            f'<td class="name">{monogram_html(row["name"], abbreviations)}'
+            f'<td class="name">{team_mark(row["name"], abbreviations, logo_class)}'
             f'{esc(row["name"])}</td>'
             f'<td class="num total sos-val">{sos}</td>'
             f'<td class="num">{_ppg(row["opp_ppg"])}</td>'
@@ -758,7 +818,7 @@ the table shows a 50/50 blend against an average team.</p>
 <script>var SOS_CENTER={SOS_CENTER},SOS_GAIN={SOS_GAIN};{STRENGTH_JS}</script>"""
 
 
-def render_preseason_strength(projected_ppg, matchups, abbreviations=None):
+def render_preseason_strength(projected_ppg, matchups, abbreviations=None, logo_class=None):
     """SOS before a game is played, from projected opponent scoring.
 
     No record component and no SOR yet, so this is a plainer, static table than
@@ -780,7 +840,7 @@ def render_preseason_strength(projected_ppg, matchups, abbreviations=None):
         )
         body.append(
             f'<tr><td class="num">{position}</td>'
-            f'<td class="name">{monogram_html(row["name"], abbreviations)}'
+            f'<td class="name">{team_mark(row["name"], abbreviations, logo_class)}'
             f'{esc(row["name"])}</td>'
             f'<td class="num total">{sos}</td>{cell}</tr>'
         )
@@ -808,16 +868,17 @@ def render(payload, show=None):
     scenarios = payload["scenarios"]
     weekly_scores = base.get("weekly_scores") or []
     abbreviations = base.get("abbreviations") or {}
+    logo_css, logo_class = _logo_styles(base.get("logos") or {})
     thresholds = margins.load_thresholds()
 
     parts = []
     if "header" in show:
         parts.append(render_header(standings, league))
     if "standings" in show:
-        parts.append(render_standings(standings, league, abbreviations))
+        parts.append(render_standings(standings, league, abbreviations, logo_class))
     if "matchups" in show:
         parts.append(
-            render_matchups(base["next_week_matchups"], league, abbreviations)
+            render_matchups(base["next_week_matchups"], league, abbreviations, logo_class)
         )
     if "scenarios" in show:
         parts.append(
@@ -835,6 +896,7 @@ def render(payload, show=None):
                 abbreviations,
                 league.get("current_week", 0),
                 standings,
+                logo_class,
             )
         )
         parts.append(render_all_play(weekly_scores))
@@ -843,7 +905,7 @@ def render(payload, show=None):
         # No games yet, but projections and a full schedule -> a preseason SOS.
         parts.append(
             render_preseason_strength(
-                base["projected_ppg"], base["remaining_matchups"], abbreviations
+                base["projected_ppg"], base["remaining_matchups"], abbreviations, logo_class
             )
         )
 
@@ -855,6 +917,7 @@ def render(payload, show=None):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Playoff scenarios &middot; after week {played}</title>
 <style>{CSS}</style>
+{f"<style>{logo_css}</style>" if logo_css else ""}
 </head>
 <body>
 {chr(10).join(p for p in parts if p)}

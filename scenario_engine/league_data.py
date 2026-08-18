@@ -4,6 +4,7 @@ import os
 import sys
 from collections import Counter
 
+import logo
 import projections
 
 # Known-good leagues, kept as defaults because they are the ones actually used
@@ -263,12 +264,15 @@ def weekly_history(team, weeks, names):
     return history
 
 
-def build_payload(league, current_week):
+def build_payload(league, current_week, inline_logos=False):
     """Shape a League into the stage-1 payload.
 
     `current_week` is the number of weeks already played, so the next week to be
     decided is `current_week + 1`, and team.schedule[current_week] is its first
     unplayed matchup (schedule is 0-indexed by matchup period).
+
+    `inline_logos` (the --logos flag) fetches each team's logo and inlines it as
+    a data URI; off by default so the report stays lean and asset-free.
 
     Kept separate from argument handling so the ESPN-facing logic can be tested
     against a fake league with no network access.
@@ -351,6 +355,19 @@ def build_payload(league, current_week):
             for team in league.teams
             if getattr(team, "team_abbrev", None)
         },
+        # Team logos inlined as data URIs, or {} unless --logos was given. The
+        # SVGs go in verbatim; uploaded photos are thumbnailed first (see logo).
+        # Name-keyed to survive re-sorting; a logo that fails to fetch is simply
+        # absent, and the row falls back to its monogram.
+        "logos": logo.inline_all(
+            {
+                names[team.team_id]: team.logo_url
+                for team in league.teams
+                if getattr(team, "logo_url", None)
+            }
+        )
+        if inline_logos
+        else {},
     }
 
 
@@ -381,6 +398,11 @@ def parse_args(argv):
         type=int,
         default=int(os.environ.get("ESPN_YEAR", DEFAULT_YEAR)),
         help=f"season (default {DEFAULT_YEAR})",
+    )
+    parser.add_argument(
+        "--logos",
+        action="store_true",
+        help="fetch and inline team logos (needs Pillow; adds weight to the report)",
     )
     return parser.parse_args(argv), parser
 
@@ -413,7 +435,7 @@ def main(argv=None):
             f"cannot build standings through week {args.week}"
         )
 
-    print(json.dumps(build_payload(league, args.week), indent=2))
+    print(json.dumps(build_payload(league, args.week, inline_logos=args.logos), indent=2))
     return 0
 
 

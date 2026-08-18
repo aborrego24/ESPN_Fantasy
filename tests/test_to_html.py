@@ -116,6 +116,7 @@ def payload(
     matchups=None,
     weekly_scores=None,
     abbreviations=None,
+    logos=None,
     **league,
 ):
     """Build a stage-4 payload.
@@ -138,6 +139,7 @@ def payload(
             "next_week_matchups": matchups if matchups is not None else [],
             "weekly_scores": weekly_scores or [],
             "abbreviations": abbreviations or {},
+            "logos": logos or {},
         },
         "scenarios": scenarios or [],
     }
@@ -869,8 +871,12 @@ def test_every_standings_row_and_matchup_side_carries_a_chip():
     assert_wellformed(document)
 
 
-def test_a_chip_does_not_reach_out_to_the_network():
-    """The whole point of not using ESPN's logo URLs: 6 of 10 need auth."""
+def test_the_default_report_stays_asset_free():
+    """Without --logos the report draws chips only -- no images, no network.
+
+    Logos are opt-in precisely so the default page keeps this property; the
+    with-logos case inlines them as data URIs and is covered separately.
+    """
     document = to_html.render(BASIC)
 
     assert "<img" not in document
@@ -888,4 +894,112 @@ def test_a_punctuated_abbreviation_is_escaped():
 
     assert "A&amp;B" in document
     assert "A&B<" not in document
+    assert_wellformed(document)
+
+
+# --- team logos (opt-in, inlined as data URIs) --------------------------------
+
+LOGO_URI = "data:image/svg+xml;base64,PHN2Zy8+"  # a tiny <svg/>
+
+
+def test_team_mark_draws_the_logo_when_one_was_inlined():
+    # the third argument is the name->class map, not the URIs (which live in CSS)
+    mark = to_html.team_mark("Alpha", {"Alpha": "ALF"}, {"Alpha": "lg0"})
+
+    assert mark.startswith('<span class="logo lg0"')
+    assert "mono" not in mark, "a logo replaces the chip, not adds to it"
+
+
+def test_team_mark_falls_back_to_the_chip_without_a_logo():
+    assert 'class="mono"' in to_html.team_mark("Alpha", {"Alpha": "ALF"}, {})
+    assert 'class="mono"' in to_html.team_mark("Alpha", {"Alpha": "ALF"}, None)
+    # a team missing from the logo map still gets its chip
+    assert 'class="mono"' in to_html.team_mark("Bravo", {}, {"Alpha": "lg0"})
+
+
+def test_standings_and_matchups_show_the_logo_when_present():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            matchups=[
+                {"team1": "Alpha", "team2": "Bravo"},
+                {"team1": "Charlie", "team2": "Delta"},
+            ],
+            logos={n: LOGO_URI for n in names},
+        )
+    )
+    standings = document.split("<h2>Standings</h2>")[1].split("</table>")[0]
+    matchups = document.split("Matchups</h2>")[1].split("</table>")[0]
+
+    assert standings.count('class="logo ') == 4
+    assert matchups.count('class="logo ') == 4
+    assert 'class="mono"' not in standings, "logos replace every chip here"
+    assert_wellformed(document)
+
+
+def test_each_logo_is_inlined_exactly_once():
+    """The whole point of the refactor: a logo shown in three tables, one copy."""
+    names = ["Alpha", "Bravo"]
+    uris = {
+        "Alpha": "data:image/svg+xml;base64,QUFBQQ==",
+        "Bravo": "data:image/svg+xml;base64,QkJCQg==",
+    }
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            matchups=[{"team1": "Alpha", "team2": "Bravo"}],
+            weekly_scores=weekly(names),
+            logos=uris,
+        )
+    )
+
+    for uri in uris.values():
+        assert document.count(uri) == 1, "each URI appears once (in CSS), not per cell"
+        assert f'url("{uri}")' in document, "and it is a CSS background rule"
+    # yet each team is still marked in several places (standings, matchup, strength)
+    assert document.count('class="logo lg') >= 6
+
+
+def test_a_team_without_a_logo_keeps_its_chip_beside_ones_that_have_them():
+    document = to_html.render(
+        payload(
+            [team("Alpha", 1, 1, 100.0, "alive"), team("Bravo", 1, 1, 90.0, "alive")],
+            logos={"Alpha": LOGO_URI},
+        )
+    )
+    standings = document.split("<h2>Standings</h2>")[1].split("</table>")[0]
+
+    assert standings.count('class="logo ') == 1
+    assert standings.count('class="mono"') == 1
+
+
+def test_the_strength_name_cell_carries_the_logo_for_the_chart():
+    """The scatter reads the URI off the name cell's logo span at run time, so a
+    team with a logo must render that span and one without must not."""
+    names = ["Alpha", "Bravo", "Charlie"]
+    document = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+            logos={"Alpha": LOGO_URI},
+        )
+    )
+    section = document.split("Strength of Schedule")[1].split("</table>")[0]
+    rows = section.split("<tr")
+    alpha = next(r for r in rows if ">Alpha<" in r)
+    bravo = next(r for r in rows if ">Bravo<" in r)
+
+    assert 'class="logo lg' in alpha, "Alpha's name cell carries the logo span"
+    assert 'class="logo lg' not in bravo and 'class="mono"' in bravo, (
+        "Bravo has none, so the chart falls back to a circle"
+    )
+
+
+def test_logos_survive_being_switched_off_with_the_stats_section():
+    """A logo-bearing payload with stats hidden must still be well-formed."""
+    document = to_html.render(
+        payload([team("Alpha", 1, 0, 10.0, "alive")], logos={"Alpha": LOGO_URI}),
+        {"standings"},
+    )
     assert_wellformed(document)
