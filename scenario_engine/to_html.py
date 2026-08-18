@@ -153,9 +153,6 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 }
 .seg button:first-child { margin-left: 0; }
 .seg button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
-details.race { margin: 1.25rem 0 0; }
-details.race > summary { cursor: pointer; font-weight: 700; font-size: 1rem; padding: .2rem 0; }
-details.race table { margin-top: .5rem; }
 .mono {
   display: inline-block; min-width: 3.4rem; padding: .1rem .3rem; margin-right: .5rem;
   border-radius: 4px; color: #fff; font-size: .68rem; font-weight: 700;
@@ -515,41 +512,75 @@ def render_standings(
     standings, league, abbreviations=None, logo_class=None,
     divisions=None, division_names=None
 ):
+    """The standings section, with a view selector on the header.
+
+    Overall (the seed-ordered full table) is the default. Extra views become
+    square buttons beside it: one per division, then the #1-seed and wildcard
+    races when those are still live. All views are in the page; the buttons only
+    toggle which shows, so with scripting off the default overall table stands.
+    """
     spots = league["playoff_spots"]
     overall = _standings_table(standings, abbreviations, logo_class, cut_at=spots)
-    if not divisions:
-        return (
-            f"<h2>Standings</h2>\n{overall}"
-            f'<p class="cutnote">The rule marks the playoff cut line: {spots} spots.</p>'
-        )
+    cutnote = (
+        f"{spots} playoff spots league-wide; division winners are seeded first."
+        if divisions
+        else f"The rule marks the playoff cut line: {spots} spots."
+    )
+    overall_view = f'{overall}<p class="cutnote">{cutnote}</p>'
 
-    # Divisional: the overall seed-ordered table is the default view, and a button
-    # per division switches to that division's own standings (ranked within it).
-    # One view shows at a time; with scripting off the default overall view stands.
-    # Division ids arrive as ints, but JSON turns division_names keys into strings.
-    names = division_names or {}
-    ordered, seen, groups = [], set(), {}
-    for team in standings:
-        did = divisions.get(team["team_name"])
-        groups.setdefault(did, []).append(team)
-        if did not in seen:
-            seen.add(did)
-            ordered.append(did)
+    # Views beyond the overall table, each a (label, id, inner) that becomes a
+    # button. Division ids arrive as ints; JSON turns division_names keys into
+    # strings, so look both up.
+    extra = []
+    if divisions:
+        names = division_names or {}
+        ordered, seen, groups = [], set(), {}
+        for team in standings:
+            did = divisions.get(team["team_name"])
+            groups.setdefault(did, []).append(team)
+            if did not in seen:
+                seen.add(did)
+                ordered.append(did)
+        for k, did in enumerate(ordered):
+            teams = sorted(groups[did], key=lambda t: (-t["wins"], -t["points_for"]))
+            title = names.get(did) or names.get(str(did)) or f"Division {did}"
+            extra.append(
+                (title, f"d{k}", _standings_table(teams, abbreviations, logo_class))
+            )
+
+    # #1-seed race: only while undecided (nobody has clinched it, someone can).
+    if not any(t.get("top_seed") == "clinched" for t in standings):
+        contenders = [t for t in standings if t.get("top_seed") == "alive"]
+        if contenders:
+            extra.append(
+                ("#1 Seed", "seed", _race_table(contenders, abbreviations, logo_class))
+            )
+
+    # Wildcard race: teams still alive for a spot that have not clinched a division.
+    if divisions:
+        contenders = [
+            t
+            for t in standings
+            if t.get("verdict") == "alive" and t.get("division_winner") != "clinched"
+        ]
+        if contenders:
+            n = spots - len(set(divisions.values()))
+            note = (
+                f'<p class="note">{n} wildcard spot{"s" if n != 1 else ""} '
+                "for teams that do not win their division.</p>"
+            )
+            extra.append(
+                ("Wildcard", "wild", note + _race_table(contenders, abbreviations, logo_class))
+            )
+
+    if not extra:
+        return f"<h2>Standings</h2>\n{overall_view}"
 
     buttons = ['<button data-view="overall" class="on">Overall</button>']
-    views = [
-        f'<div class="std-view" data-view="overall">{overall}'
-        f'<p class="cutnote">{spots} playoff spots league-wide; '
-        f"division winners are seeded first.</p></div>"
-    ]
-    for k, did in enumerate(ordered):
-        teams = sorted(groups[did], key=lambda t: (-t["wins"], -t["points_for"]))
-        title = names.get(did) or names.get(str(did)) or f"Division {did}"
-        buttons.append(f'<button data-view="d{k}">{esc(title)}</button>')
-        views.append(
-            f'<div class="std-view" data-view="d{k}" hidden>'
-            f"{_standings_table(teams, abbreviations, logo_class)}</div>"
-        )
+    views = [f'<div class="std-view" data-view="overall">{overall_view}</div>']
+    for label, view_id, inner in extra:
+        buttons.append(f'<button data-view="{view_id}">{esc(label)}</button>')
+        views.append(f'<div class="std-view" data-view="{view_id}" hidden>{inner}</div>')
     return (
         f'<h2>Standings <span class="seg" id="std-seg">{"".join(buttons)}</span></h2>\n'
         f'{"".join(views)}'
@@ -557,8 +588,8 @@ def render_standings(
     )
 
 
-def _race_section(title, teams, abbreviations, logo_class, note=None):
-    """A collapsed race: title, optional note, and a Team/Record/Points table."""
+def _race_table(teams, abbreviations, logo_class):
+    """A Team/Record/Points table of race contenders (no status, no rank)."""
     rows = "".join(
         f"<tr><td>{team_mark(t['team_name'], abbreviations, logo_class)}"
         f"{esc(t['team_name'])}</td>"
@@ -566,89 +597,10 @@ def _race_section(title, teams, abbreviations, logo_class, note=None):
         f'<td class="num">{t["points_for"]:.1f}</td></tr>'
         for t in teams
     )
-    lede = f'<p class="note">{note}</p>' if note else ""
     return (
-        f'<details class="race"><summary>{esc(title)}</summary>{lede}'
         '<table><thead><tr><th>Team</th><th class="num">Record</th>'
         '<th class="num">Points for</th></tr></thead>'
-        f"<tbody>{rows}</tbody></table></details>"
-    )
-
-
-def render_seed_race(standings, abbreviations=None, logo_class=None):
-    """The race for the #1 overall seed, as a collapsible section.
-
-    Reads the exact `top_seed` verdict already on each team. Shown only while it
-    is undecided: once a team has clinched the #1 seed (or nobody can still take
-    it) there is no race.
-    """
-    if any(t.get("top_seed") == "clinched" for t in standings):
-        return ""
-    contenders = [t for t in standings if t.get("top_seed") == "alive"]
-    if not contenders:
-        return ""
-    return _race_section(
-        "Race for #1 Overall Seed", contenders, abbreviations, logo_class
-    )
-
-
-def render_division_races(
-    standings, divisions, division_names, abbreviations=None, logo_class=None
-):
-    """One collapsible per division for its title race, shown only while that
-    division is undecided. Uses the exact `division_winner` verdict per team."""
-    if not divisions:
-        return ""
-    names = division_names or {}
-    ordered, seen = [], set()
-    for team in standings:
-        did = divisions.get(team["team_name"])
-        if did not in seen:
-            seen.add(did)
-            ordered.append(did)
-
-    blocks = []
-    for did in ordered:
-        members = [t for t in standings if divisions.get(t["team_name"]) == did]
-        if any(m.get("division_winner") == "clinched" for m in members):
-            continue  # the title is settled -- no race
-        contenders = [m for m in members if m.get("division_winner") == "alive"]
-        if not contenders:
-            continue
-        title = names.get(did) or names.get(str(did)) or f"Division {did}"
-        blocks.append(
-            _race_section(
-                f"Race for the {title} Division", contenders, abbreviations, logo_class
-            )
-        )
-    return "".join(blocks)
-
-
-def render_wildcard_race(
-    standings, divisions, playoff_spots, abbreviations=None, logo_class=None
-):
-    """The race for the playoff seats that are not division-winner seats.
-
-    Contenders are teams still alive for a playoff spot that have not clinched
-    their division -- if they get in without winning it, it is via a wildcard.
-    Shown only while at least one such seat is undecided.
-    """
-    if not divisions:
-        return ""
-    contenders = [
-        t
-        for t in standings
-        if t.get("verdict") == "alive" and t.get("division_winner") != "clinched"
-    ]
-    if not contenders:
-        return ""
-    wildcard_spots = playoff_spots - len(set(divisions.values()))
-    note = (
-        f"{wildcard_spots} wildcard spot{'s' if wildcard_spots != 1 else ''} "
-        "for teams that do not win their division."
-    )
-    return _race_section(
-        "Race for the Wildcard Spots", contenders, abbreviations, logo_class, note=note
+        f"<tbody>{rows}</tbody></table>"
     )
 
 
@@ -1097,17 +1049,6 @@ def render(payload, show=None):
         parts.append(
             render_standings(
                 standings, league, abbreviations, logo_class, divisions, division_names
-            )
-        )
-        parts.append(render_seed_race(standings, abbreviations, logo_class))
-        parts.append(
-            render_division_races(
-                standings, divisions, division_names, abbreviations, logo_class
-            )
-        )
-        parts.append(
-            render_wildcard_race(
-                standings, divisions, league["playoff_spots"], abbreviations, logo_class
             )
         )
     if "matchups" in show:

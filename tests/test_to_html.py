@@ -409,10 +409,16 @@ def test_the_division_names_come_through_even_as_json_string_keys():
     assert "Division 0" not in document, "fell back to the id instead of the name"
 
 
-# --- #1-seed race --------------------------------------------------------------
+# --- races folded into the standings selector ---------------------------------
 
 
-def test_the_seed_race_lists_who_is_still_alive_for_the_top_seed():
+def _view(document, view_id):
+    """The inner HTML of one std-view, by its data-view id (not the button)."""
+    marker = f'<div class="std-view" data-view="{view_id}"'
+    return document.split(marker)[1].split("</div>")[0]
+
+
+def test_the_seed_race_is_a_selector_view_of_the_still_alive():
     document = to_html.render(
         payload(
             [
@@ -422,18 +428,17 @@ def test_the_seed_race_lists_who_is_still_alive_for_the_top_seed():
             ]
         )
     )
-    race = document.split("Race for #1 Overall Seed")[1].split("</details>")[0]
 
-    assert "Alpha" in race and "Bravo" in race
-    assert "Charlie" not in race, "a team out of the #1-seed race is left out"
-    # collapsed on load: the <details> has no `open` attribute
-    assert '<details class="race">' in document
-    assert 'class="race" open' not in document
+    assert ">#1 Seed</button>" in document
+    seed = _view(document, "seed")
+    assert "Alpha" in seed and "Bravo" in seed
+    assert "Charlie" not in seed, "a team out of the #1-seed race is left out"
+    # a race view is not a dropdown any more
+    assert "<details" not in document
     assert_wellformed(document)
 
 
-def test_no_seed_race_once_the_top_seed_is_clinched():
-    """A decided #1 seed is not a race, so the whole section is dropped."""
+def test_no_seed_button_once_the_top_seed_is_clinched():
     document = to_html.render(
         payload(
             [
@@ -443,19 +448,16 @@ def test_no_seed_race_once_the_top_seed_is_clinched():
         )
     )
 
-    assert "Race for #1 Overall Seed" not in document
+    assert ">#1 Seed</button>" not in document
 
 
-def test_no_seed_race_section_when_nobody_can_still_take_it():
-    """If every team is eliminated from the #1 seed, drop the section entirely."""
+def test_no_seed_button_when_nobody_can_still_take_it():
     document = to_html.render(
         payload([team("Alpha", 1, 0, 10.0, "alive", top_seed="eliminated")])
     )
 
-    assert "Race for #1 Overall Seed" not in document
-
-
-# --- division-winner + wildcard races ------------------------------------------
+    assert ">#1 Seed</button>" not in document
+    assert 'id="std-seg"' not in document, "no extra views -> no selector at all"
 
 
 def _divisional_race_payload():
@@ -477,37 +479,23 @@ def _divisional_race_payload():
     )
 
 
-def test_a_division_with_a_live_title_race_shows_it():
-    document = to_html.render(_divisional_race_payload())
-    race = document.split("Race for the East Division")[1].split("</details>")[0]
-
-    assert "East A" in race and "East B" in race
-    assert "East C" not in race, "a team out of the division race is dropped"
-
-
-def test_a_decided_division_shows_no_race():
-    """West A has clinched the West, so there is no West title race."""
+def test_the_wildcard_is_a_selector_view_of_the_still_alive_non_winners():
     document = to_html.render(_divisional_race_payload())
 
-    assert "Race for the West Division" not in document
-
-
-def test_the_wildcard_race_lists_the_still_alive_non_winners():
-    document = to_html.render(_divisional_race_payload())
-    race = document.split("Race for the Wildcard Spots")[1].split("</details>")[0]
-
-    # alive teams that have not clinched their division are in it
-    assert "East B" in race and "West B" in race
-    assert "West A" not in race, "a clinched division winner is not a wildcard"
-    assert "East C" not in race, "an eliminated team is not in the race"
+    assert ">Wildcard</button>" in document
+    wild = _view(document, "wild")
+    assert "East B" in wild and "West B" in wild
+    assert "West A" not in wild, "a clinched division winner is not a wildcard"
+    assert "East C" not in wild, "an eliminated team is not in the race"
     assert "wildcard spot" in document
+    assert_wellformed(document)
 
 
-def test_the_races_are_absent_in_a_non_divisional_league():
+def test_the_race_views_are_absent_in_a_non_divisional_league_without_a_race():
     document = to_html.render(BASIC)
 
-    assert "Race for the" not in document, "no division/wildcard races without divisions"
-    assert "Wildcard" not in document
+    assert ">Wildcard</button>" not in document
+    assert 'id="std-seg"' not in document
 
 
 # --- season review tables -----------------------------------------------------
