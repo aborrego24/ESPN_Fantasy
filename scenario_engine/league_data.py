@@ -131,6 +131,17 @@ def divisions_of(league, names):
     return ids if len(set(ids.values())) > 1 else None
 
 
+def division_names_of(league):
+    """{division_id: name}, or {} for a single-division league.
+
+    espn_api carries the names on `settings.division_map`; the pipeline only kept
+    the numeric ids before, so a divisional standings view had nothing to title
+    its tables with. Empty when there is one division, matching divisions_of.
+    """
+    mapping = getattr(league.settings, "division_map", {}) or {}
+    return dict(mapping) if len(mapping) > 1 else {}
+
+
 def starting_slots(league):
     """{slot_name: count} for the scoring slots, or {} if unavailable.
 
@@ -343,6 +354,9 @@ def build_payload(league, current_week, inline_logos=False):
         # One division id per team when the league has more than one division,
         # because that changes the seeding order and so every verdict.
         "divisions": divisions_of(league, names),
+        # {division_id: name}, to title the per-division standings tables. Empty
+        # for a single-division league.
+        "division_names": division_names_of(league),
         # Projected optimal-lineup PPG per team, for the preseason SOS view. Empty
         # unless a live league can supply rosters and projections; low-confidence
         # by nature (see projected_ppg).

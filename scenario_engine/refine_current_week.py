@@ -150,6 +150,8 @@ if __name__ == "__main__":
         "logos": league_data.get("logos", {}),
         # Name-keyed, so it stays correct however the standings get re-sorted
         "divisions": league_data.get("divisions"),
+        # {division_id: name}, to title the per-division standings tables.
+        "division_names": league_data.get("division_names", {}),
         # Preseason projected PPG per team, passed straight through for the
         # projection-based SOS the renderer shows before any game is played.
         "projected_ppg": league_data.get("projected_ppg", {}),
