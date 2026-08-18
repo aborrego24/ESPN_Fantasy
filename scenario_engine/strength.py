@@ -105,15 +105,20 @@ def _win_pct_excluding(games_list, excluded):
     return league_stats.win_pct(_tally(kept)) if kept else 0.0
 
 
-def _remaining_opponents(remaining_matchups):
-    """{team: [opponent, ...]} from the weeks of upcoming pairings."""
-    upcoming = {}
-    for week in remaining_matchups or []:
+def _remaining_schedule(remaining_matchups):
+    """{team: [(week_offset, opponent), ...]} from the upcoming pairings.
+
+    The week offset (0 for the next week to play) is kept so the report can label
+    each upcoming game with its real week, and a team that has a bye in some week
+    simply has no entry for that offset.
+    """
+    schedule = {}
+    for offset, week in enumerate(remaining_matchups or []):
         for game in week:
             a, b = game["team1"], game["team2"]
-            upcoming.setdefault(a, []).append(b)
-            upcoming.setdefault(b, []).append(a)
-    return upcoming
+            schedule.setdefault(a, []).append((offset, b))
+            schedule.setdefault(b, []).append((offset, a))
+    return schedule
 
 
 def _mean(values):
@@ -153,7 +158,8 @@ def strength_table(weekly_scores, remaining_matchups=None, blend=0.5, benchmark=
 
     ppg = _team_ppg(points)
     games = _games(points, opponents)
-    upcoming = _remaining_opponents(remaining_matchups)
+    schedule = _remaining_schedule(remaining_matchups)
+    upcoming = {name: [opp for _, opp in schedule.get(name, [])] for name in points}
 
     # Opponent strength, averaged over who each team plays (with multiplicity).
     played_faced = {name: [opp for opp, _, _ in games[name]] for name in points}
@@ -213,6 +219,12 @@ def strength_table(weekly_scores, remaining_matchups=None, blend=0.5, benchmark=
                 "record_norm": rec_norm[name],
                 "sos_played": sos_played[name],
                 "sos_remaining": sos_remaining[name],
+                # Each upcoming game, in schedule order, with the opponent's PPG --
+                # the per-week breakdown behind the remaining number.
+                "remaining": [
+                    {"week_offset": offset, "opponent": opp, "value": ppg.get(opp)}
+                    for offset, opp in schedule.get(name, [])
+                ],
                 "sos": index(name),
                 "actual_win_pct": actual,
                 "benchmark_win_pct": expected,

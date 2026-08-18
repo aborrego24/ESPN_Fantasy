@@ -158,6 +158,15 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .controls label { display: flex; align-items: center; gap: .5rem; }
 .controls .dim { color: var(--dim); font-size: .8rem; }
 .controls input[type=range] { vertical-align: middle; }
+.tip { position: relative; cursor: help; border-bottom: 1px dotted var(--dim); outline: none; }
+.tipbox {
+  display: none; position: absolute; right: 0; top: 1.5rem; z-index: 5;
+  background: var(--ink); color: #fff; padding: .45rem .6rem; border-radius: 6px;
+  font-size: .74rem; font-weight: 400; line-height: 1.55; white-space: nowrap;
+  text-align: right; box-shadow: 0 4px 16px rgba(0, 0, 0, .28);
+}
+.tip:hover .tipbox, .tip:focus .tipbox { display: block; }
+.tiphead { display: block; color: #aeb7c2; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .2rem; }
 footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 """
 
@@ -492,7 +501,31 @@ def _sor_cell(value):
     return f'<td class="num sos-sor {css}">{sign}{abs(value):.3f}</td>'
 
 
-def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None):
+def _to_come_cell(row, current_week, abbreviations):
+    """The remaining-schedule number, hovering to a week-by-week breakdown.
+
+    A CSS-only tooltip lists each upcoming game as "week OPP : PPG", so the single
+    averaged number can be traced to the opponents behind it. No script: it works
+    in a mailed or printed page the same as on screen (as a stacked list there).
+    """
+    if row["sos_remaining"] is None:
+        return '<td class="num">&mdash;</td>'
+    lines = [
+        f'{current_week + 1 + d["week_offset"]} '
+        f'{esc(monogram(d["opponent"], abbreviations))} : {_ppg(d["value"])}'
+        for d in row["remaining"]
+    ]
+    box = (
+        '<span class="tiphead">week &middot; opp &middot; PPG</span>'
+        + "<br>".join(lines)
+    )
+    return (
+        '<td class="num"><span class="tip" tabindex="0">'
+        f'{_ppg(row["sos_remaining"])}<span class="tipbox">{box}</span></span></td>'
+    )
+
+
+def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None, current_week=0):
     rows = strength.strength_table(weekly_scores, remaining_matchups)
     if not rows:
         return ""
@@ -502,7 +535,7 @@ def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None):
     for position, row in enumerate(rows, 1):
         sos = "&mdash;" if row["sos"] is None else f"{round(row['sos'] * 100)}"
         ahead = (
-            f'<td class="num">{_ppg(row["sos_remaining"])}</td>' if any_remaining else ""
+            _to_come_cell(row, current_week, abbreviations) if any_remaining else ""
         )
         # The normalised components and both benchmark SORs ride on the row, so
         # the slider recomputes the blend and the toggle swaps the benchmark in
@@ -578,7 +611,10 @@ def render(payload, show=None):
     if "stats" in show and weekly_scores:
         parts.append(
             render_strength(
-                weekly_scores, base.get("remaining_matchups"), abbreviations
+                weekly_scores,
+                base.get("remaining_matchups"),
+                abbreviations,
+                league.get("current_week", 0),
             )
         )
         parts.append(render_all_play(weekly_scores))

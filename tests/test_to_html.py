@@ -595,6 +595,52 @@ def test_the_to_come_column_appears_only_when_games_remain():
     assert "To&nbsp;come" in to_html.render(with_games)
 
 
+def test_the_to_come_number_hovers_to_a_week_by_week_breakdown():
+    """Each upcoming game is listed as 'week OPP : PPG', matching the engine."""
+    import strength
+
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    history = weekly(names)
+    remaining = [
+        [{"team1": "Alpha", "team2": "Bravo"}, {"team1": "Charlie", "team2": "Delta"}]
+    ]
+    doc_payload = payload(
+        [team(n, 1, 1, 100.0, "alive") for n in names],
+        weekly_scores=history,
+        current_week=2,
+    )
+    # remaining_matchups lives on base_league_data, not among the league settings
+    doc_payload["base_league_data"]["remaining_matchups"] = remaining
+    doc = to_html.render(doc_payload)
+
+    section = doc.split("Strength of Schedule")[1].split("</table>")[0]
+    lines = set()
+    for box in re.findall(r'</span>([^<]*(?:<br>[^<]*)*)</span></span>', section):
+        lines |= set(box.split("<br>"))
+
+    engine = strength.strength_table(history, remaining)
+    expected = set()
+    for row in engine:
+        for d in row["remaining"]:
+            # current_week 2, offset 0 -> week 3
+            expected.add(
+                f'{3 + d["week_offset"]} {to_html.monogram(d["opponent"], {})} : {d["value"]:.1f}'
+            )
+    assert lines == expected
+
+
+def test_a_finished_season_has_no_hover_and_no_to_come_cell():
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    doc = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names], weekly_scores=weekly(names)
+        )
+    )
+    section = doc.split("Strength of Schedule")[1].split("</table>")[0]
+
+    assert "tipbox" not in section
+
+
 def test_the_slider_and_benchmark_controls_are_present():
     names = ["Alpha", "Bravo", "Charlie", "Delta"]
     document = to_html.render(
