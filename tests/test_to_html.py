@@ -363,35 +363,40 @@ DIVISIONAL = payload(
 )
 
 
-def test_a_divisional_league_gets_one_table_per_division():
+def test_a_divisional_league_gets_a_view_selector_defaulting_to_overall():
     document = to_html.render(DIVISIONAL)
 
-    assert "East Division" in document and "West Division" in document
-    # two grouped tables, not one flat standings table
-    assert document.count('<div class="division">') == 2
-    body = document.split("<h2>Standings</h2>")[1]
-    east = body.split("East Division")[1].split("</div>")[0]
-    assert "East A" in east and "East B" in east and "East C" in east
-    assert "West A" not in east, "divisions do not bleed into each other"
+    # a segmented selector: Overall (active) + one button per division
+    assert 'id="std-seg"' in document
+    assert '<button data-view="overall" class="on">Overall</button>' in document
+    assert ">East Division</button>" in document and ">West Division</button>" in document
+    # rigid, square buttons
+    assert "border-radius: 0" in document
+    # overall is the default view (shown); division views are present but hidden
+    assert '<div class="std-view" data-view="overall">' in document
+    assert '<div class="std-view" data-view="d0" hidden>' in document
+    # the overall view carries every team
+    overall = document.split('data-view="overall">')[1].split("</div>")[0]
+    for name in ("East A", "West A", "East C", "West C"):
+        assert name in overall
     assert_wellformed(document)
 
 
-def test_each_division_table_is_ranked_within_the_division():
-    """The # column restarts at 1 per division and follows that division's record."""
+def test_a_division_view_is_ranked_within_the_division():
+    """Each division view restarts # at 1 and follows that division's record."""
     document = to_html.render(DIVISIONAL)
-    body = document.split("<h2>Standings</h2>")[1]
-    east = body.split("East Division")[1].split("</table>")[0]
+    east = document.split('data-view="d0" hidden>')[1].split("</div>")[0]
 
-    order = re.findall(r'<td class="num">(\d+)</td><td>.*?([A-Za-z].*?)</td>', east)
-    ranks = [n for n, _ in order]
+    assert "East A" in east and "West A" not in east, "one division only"
+    ranks = re.findall(r'<td class="num">(\d+)</td><td>', east)
     assert ranks[:3] == ["1", "2", "3"], "within-division rank starts at 1"
 
 
-def test_a_single_division_league_keeps_one_table_and_the_cut_line():
-    """No divisions -> unchanged behaviour, cut line and all."""
+def test_a_single_division_league_has_no_selector():
+    """No divisions -> one table, no switcher, cut line intact."""
     document = to_html.render(BASIC)
 
-    assert '<div class="divisions">' not in document
+    assert 'id="std-seg"' not in document
     assert "playoff cut line" in document
 
 
@@ -400,7 +405,7 @@ def test_the_division_names_come_through_even_as_json_string_keys():
     data = json.loads(json.dumps(DIVISIONAL))  # ids in division_names become "0"/"1"
     document = to_html.render(data)
 
-    assert "East Division" in document and "West Division" in document
+    assert ">East Division</button>" in document and ">West Division</button>" in document
     assert "Division 0" not in document, "fell back to the id instead of the name"
 
 

@@ -144,13 +144,15 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .cutnote { font-size: .72rem; color: var(--dim); padding-top: .5rem; }
 /* Divisional standings: one table per division, side by side where there is
    room, stacking on a narrow screen (and in email clients that ignore flex). */
-.divisions { display: flex; flex-wrap: wrap; gap: 1.25rem 2.5rem; align-items: flex-start; }
-.division { flex: 1 1 340px; min-width: 0; }
-.division h3 { font-size: 1rem; margin: .25rem 0 .5rem; font-weight: 600; }
-/* Keep each side-by-side table's cells on one line so the two line up: a long
-   name or a wrapped 'Points for' header would make one table's rows taller and
-   look shifted against the other. */
-.division th, .division td { white-space: nowrap; }
+/* The standings view switcher: rigid, square segmented buttons on the header. */
+.seg { display: inline-flex; margin-left: 1rem; vertical-align: middle; }
+.seg button {
+  font: inherit; font-size: .8rem; font-weight: 600; line-height: 1.3;
+  padding: .15rem .7rem; border: 1px solid var(--line); background: #fff;
+  color: var(--dim); cursor: pointer; border-radius: 0; margin-left: -1px;
+}
+.seg button:first-child { margin-left: 0; }
+.seg button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 details.race { margin: 1.25rem 0 0; }
 details.race > summary { cursor: pointer; font-weight: 700; font-size: 1rem; padding: .2rem 0; }
 details.race table { margin-top: .5rem; }
@@ -450,6 +452,27 @@ STRENGTH_JS = """
 """
 
 
+# The standings view switcher: buttons on the section header flip between the
+# overall table and each division's own. All views are in the page; the button
+# just toggles which is shown, so with scripting off the default overall stands.
+STANDINGS_JS = """
+(function () {
+  var seg = document.getElementById('std-seg');
+  if (!seg) return;
+  var views = document.querySelectorAll('.std-view');
+  seg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-view]');
+    if (!b) return;
+    var want = b.getAttribute('data-view');
+    views.forEach(function (el) { el.hidden = el.getAttribute('data-view') !== want; });
+    seg.querySelectorAll('button').forEach(function (x) {
+      if (x === b) x.classList.add('on'); else x.classList.remove('on');
+    });
+  });
+})();
+"""
+
+
 def render_header(standings, league):
     counts = pretty_print.summarise(standings, league)
     return f"""<h1>{esc(title_case(pretty_print.header_title(league)))}</h1>
@@ -493,17 +516,17 @@ def render_standings(
     divisions=None, division_names=None
 ):
     spots = league["playoff_spots"]
+    overall = _standings_table(standings, abbreviations, logo_class, cut_at=spots)
     if not divisions:
-        table = _standings_table(standings, abbreviations, logo_class, cut_at=spots)
         return (
-            f"<h2>Standings</h2>\n{table}"
+            f"<h2>Standings</h2>\n{overall}"
             f'<p class="cutnote">The rule marks the playoff cut line: {spots} spots.</p>'
         )
 
-    # Divisional: one table per division. Divisions appear in the order their best
-    # seed does; within a table teams are in their own record order, and the #
-    # column is the within-division rank. Division ids arrive as ints, but JSON
-    # turns the division_names keys into strings, so look both up.
+    # Divisional: the overall seed-ordered table is the default view, and a button
+    # per division switches to that division's own standings (ranked within it).
+    # One view shows at a time; with scripting off the default overall view stands.
+    # Division ids arrive as ints, but JSON turns division_names keys into strings.
     names = division_names or {}
     ordered, seen, groups = [], set(), {}
     for team in standings:
@@ -513,19 +536,24 @@ def render_standings(
             seen.add(did)
             ordered.append(did)
 
-    blocks = []
-    for did in ordered:
+    buttons = ['<button data-view="overall" class="on">Overall</button>']
+    views = [
+        f'<div class="std-view" data-view="overall">{overall}'
+        f'<p class="cutnote">{spots} playoff spots league-wide; '
+        f"division winners are seeded first.</p></div>"
+    ]
+    for k, did in enumerate(ordered):
         teams = sorted(groups[did], key=lambda t: (-t["wins"], -t["points_for"]))
         title = names.get(did) or names.get(str(did)) or f"Division {did}"
-        blocks.append(
-            f'<div class="division"><h3>{esc(title)}</h3>'
+        buttons.append(f'<button data-view="d{k}">{esc(title)}</button>')
+        views.append(
+            f'<div class="std-view" data-view="d{k}" hidden>'
             f"{_standings_table(teams, abbreviations, logo_class)}</div>"
         )
     return (
-        f"<h2>Standings</h2>\n"
-        f'<div class="divisions">{"".join(blocks)}</div>'
-        f'<p class="cutnote">{spots} playoff spots league-wide; '
-        f"division winners are seeded first.</p>"
+        f'<h2>Standings <span class="seg" id="std-seg">{"".join(buttons)}</span></h2>\n'
+        f'{"".join(views)}'
+        f"<script>{STANDINGS_JS}</script>"
     )
 
 
