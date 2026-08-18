@@ -168,6 +168,23 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 }
 .tip:hover .tipbox, .tip:focus .tipbox { display: grid; }
 .tiphead { color: #8b95a1; font-size: .64rem; text-transform: uppercase; letter-spacing: .06em; padding-bottom: .1rem; }
+/* The chart is an alternate view of the same section, hidden until the toggle
+   flips (so with no JS the table stands). Its axis pickers sit ON the axes -- the
+   X picker under the plot, the Y picker down the left -- rather than in the top
+   controls, which is why they never show in the table view. */
+#sos-chart-view {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto;
+  align-items: center; gap: .35rem .5rem; margin-top: .5rem;
+}
+.chart-y { grid-column: 1; grid-row: 1; }
+#sos-chart { grid-column: 2; grid-row: 1; width: 100%; height: auto; font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.chart-x { grid-column: 2; grid-row: 2; text-align: center; }
+.chart-x label, .chart-y label { display: inline-flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--dim); }
+.cax { stroke: var(--dim); stroke-width: 1; }
+.cref { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.ctick { fill: var(--dim); font-size: 11px; }
+.clabel { fill: var(--ink); font-size: 12px; font-weight: 600; }
+.cpt { fill: #fff; font-size: 9px; font-weight: 700; }
 footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 """
 
@@ -183,34 +200,59 @@ SOS_GAIN = 400
 
 
 def _sos_display(ratio):
-    return None if ratio is None else round(SOS_CENTER + (ratio - 1.0) * SOS_GAIN)
+    return None if ratio is None else round(SOS_CENTER + (ratio - 1.0) * SOS_GAIN, 1)
 
 
-# Progressive enhancement for the strength table: the slider re-blends SOS and the
-# select swaps the SOR benchmark, both from data already on each row, so the page
-# needs no server round-trip and no assets. With scripting off, the static table
-# the server rendered (50/50 blend, average benchmark) stands unchanged.
+# Progressive enhancement for the strength section, all from data already on each
+# row -- no round-trip, no assets. The slider re-blends SOS, the select swaps the
+# SOR benchmark, and a Table/Chart toggle draws an inline-SVG scatter whose axes
+# pick any metric. SOS and SOR on an axis stay live with the slider and toggle;
+# the rest are fixed per team. With scripting off the static table stands.
 STRENGTH_JS = """
 (function () {
   var body = document.getElementById('sos-body');
   if (!body) return;
+  var section = document.getElementById('sos-section');
   var blend = document.getElementById('sos-blend');
   var bench = document.getElementById('sos-bench');
   var label = document.getElementById('sos-blend-label');
+  var view = document.getElementById('sos-view');
+  var xsel = document.getElementById('sos-x');
+  var ysel = document.getElementById('sos-y');
+  var svg = document.getElementById('sos-chart');
+  var tableView = document.getElementById('sos-table-view');
+  var chartView = document.getElementById('sos-chart-view');
   var rows = Array.prototype.slice.call(body.getElementsByTagName('tr'));
+
   function num(s) { var v = parseFloat(s); return isNaN(v) ? null : v; }
   function fmtSor(v) { return (v >= 0 ? '+' : '\\u2212') + Math.abs(v).toFixed(3); }
-  function update() {
+  function refOf(k) { return k === 'sos' ? SOS_CENTER : (k === 'sor' ? 0 : null); }
+  // SOS and SOR get a fixed axis so dragging the slider moves the dots, not the
+  // scale -- SOS is pinned 15..85 around 50, SOR 0.3..-0.3 around 0. The rest
+  // auto-scale to their data, since they do not move with the controls.
+  function fixedDomain(k) { return k === 'sos' ? [15, 85] : (k === 'sor' ? [-0.3, 0.3] : null); }
+
+  // The value of any metric for a team. SOS and SOR are recomputed from the
+  // blend and benchmark so they track the controls; the rest are read straight
+  // off the row -- one source of truth for the number, whether table or chart.
+  function metricVal(tr, key, w, elite) {
+    if (key === 'sos') {
+      var pi = num(tr.getAttribute('data-pi')), ri = num(tr.getAttribute('data-ri'));
+      return (pi === null || ri === null) ? null : SOS_CENTER + (w * pi + (1 - w) * ri - 1) * SOS_GAIN;
+    }
+    if (key === 'sor') return num(tr.getAttribute(elite ? 'data-sor-elite' : 'data-sor-avg'));
+    return num(tr.getAttribute('data-' + key));
+  }
+
+  function updateTable() {
     var w = parseInt(blend.value, 10) / 100;
     var elite = bench.value === 'elite';
     rows.forEach(function (tr) {
-      var pi = num(tr.getAttribute('data-pi'));
-      var ri = num(tr.getAttribute('data-ri'));
-      var sos = (pi === null || ri === null) ? null : w * pi + (1 - w) * ri;
-      tr._s = (sos === null) ? -1 : sos;
+      var sos = metricVal(tr, 'sos', w, elite);
+      tr._s = (sos === null) ? -Infinity : sos;
       var sv = tr.querySelector('.sos-val');
-      if (sv) sv.textContent = (sos === null) ? '\\u2014' : Math.round(SOS_CENTER + (sos - 1) * SOS_GAIN);
-      var v = num(tr.getAttribute(elite ? 'data-sor-elite' : 'data-sor-avg'));
+      if (sv) sv.textContent = (sos === null) ? '\\u2014' : sos.toFixed(1);
+      var v = metricVal(tr, 'sor', w, elite);
       var sc = tr.querySelector('.sos-sor');
       if (sc) {
         if (v === null) { sc.textContent = '\\u2014'; sc.className = 'num sos-sor'; }
@@ -226,9 +268,71 @@ STRENGTH_JS = """
     if (label) label.textContent =
       Math.round(w * 100) + '% points / ' + Math.round((1 - w) * 100) + '% record';
   }
+
+  function extent(vals) {
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    if (lo === hi) { lo -= 1; hi += 1; }
+    var pad = (hi - lo) * 0.1;
+    return [lo - pad, hi + pad];
+  }
+  function fmtAxis(v) { return Math.abs(v) >= 100 ? String(Math.round(v)) : v.toFixed(1); }
+
+  function drawChart() {
+    if (!svg) return;
+    var w = parseInt(blend.value, 10) / 100, elite = bench.value === 'elite';
+    var xk = xsel.value, yk = ysel.value, pts = [];
+    rows.forEach(function (tr) {
+      var x = metricVal(tr, xk, w, elite), y = metricVal(tr, yk, w, elite);
+      if (x === null || y === null) return;
+      pts.push({ x: x, y: y, abbr: tr.getAttribute('data-abbr') || '', color: tr.getAttribute('data-color') || '#888' });
+    });
+    if (!pts.length) { svg.innerHTML = ''; return; }
+    var W = 660, H = 430, mL = 52, mR = 24, mT = 18, mB = 30;
+    var xe = fixedDomain(xk) || extent(pts.map(function (p) { return p.x; }));
+    var ye = fixedDomain(yk) || extent(pts.map(function (p) { return p.y; }));
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function SX(v) { return clamp(mL + (v - xe[0]) / (xe[1] - xe[0]) * (W - mL - mR), mL, W - mR); }
+    function SY(v) { return clamp(H - mB - (v - ye[0]) / (ye[1] - ye[0]) * (H - mT - mB), mT, H - mB); }
+    var e = [];
+    var xr = refOf(xk);
+    if (xr !== null && xr > xe[0] && xr < xe[1]) e.push('<line x1="' + SX(xr) + '" y1="' + mT + '" x2="' + SX(xr) + '" y2="' + (H - mB) + '" class="cref"/>');
+    var yr = refOf(yk);
+    if (yr !== null && yr > ye[0] && yr < ye[1]) e.push('<line x1="' + mL + '" y1="' + SY(yr) + '" x2="' + (W - mR) + '" y2="' + SY(yr) + '" class="cref"/>');
+    e.push('<line x1="' + mL + '" y1="' + (H - mB) + '" x2="' + (W - mR) + '" y2="' + (H - mB) + '" class="cax"/>');
+    e.push('<line x1="' + mL + '" y1="' + mT + '" x2="' + mL + '" y2="' + (H - mB) + '" class="cax"/>');
+    // Axis tick numbers only -- the metric names live in the HTML selects on each
+    // axis, so they are not repeated here.
+    e.push('<text x="' + mL + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="start">' + fmtAxis(xe[0]) + '</text>');
+    e.push('<text x="' + (W - mR) + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="end">' + fmtAxis(xe[1]) + '</text>');
+    e.push('<text x="' + (mL - 8) + '" y="' + (H - mB) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[0]) + '</text>');
+    e.push('<text x="' + (mL - 8) + '" y="' + (mT + 10) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[1]) + '</text>');
+    pts.forEach(function (p) {
+      var cx = SX(p.x), cy = SY(p.y);
+      // TODO: once team logos resolve (currently 401), draw the logo here in
+      // place of the circle and move the abbreviation just below it.
+      e.push('<circle cx="' + cx + '" cy="' + cy + '" r="13" fill="' + p.color + '"/>');
+      e.push('<text x="' + cx + '" y="' + (cy + 3) + '" class="cpt" text-anchor="middle">' + p.abbr + '</text>');
+    });
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.innerHTML = e.join('');
+  }
+
+  function showView() {
+    var chart = view && view.value === 'chart';
+    if (section) section.className = chart ? 'charting' : '';
+    if (tableView) tableView.hidden = chart;
+    if (chartView) chartView.hidden = !chart;
+    if (chart) drawChart();
+  }
+
+  function update() { updateTable(); if (view && view.value === 'chart') drawChart(); }
+
   blend.addEventListener('input', update);
   bench.addEventListener('change', update);
-  update();
+  if (view) view.addEventListener('change', showView);
+  if (xsel) xsel.addEventListener('change', drawChart);
+  if (ysel) ysel.addEventListener('change', drawChart);
+  updateTable();
 })();
 """
 
@@ -549,11 +653,34 @@ def _to_come_cell(row, current_week, abbreviations):
     return f'<td class="num">{tip}</td>'
 
 
-def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None, current_week=0):
+# Metrics the scatter's two axes can pick from. SOS and SOR are live (recomputed
+# from the slider and benchmark); the rest are fixed per team, carried as row data.
+CHART_METRICS = [
+    ("sos", "SOS"),
+    ("sor", "SOR"),
+    ("wins", "Wins"),
+    ("ppg", "PPG"),
+    ("oppppg", "Opp PPG"),
+    ("pf", "Points For"),
+]
+
+
+def _metric_options(selected):
+    return "".join(
+        f'<option value="{key}"{" selected" if key == selected else ""}>{label}</option>'
+        for key, label in CHART_METRICS
+    )
+
+
+def render_strength(
+    weekly_scores, remaining_matchups=None, abbreviations=None, current_week=0, standings=None
+):
     rows = strength.strength_table(weekly_scores, remaining_matchups)
     if not rows:
         return ""
     any_remaining = any(row["sos_remaining"] is not None for row in rows)
+    # Per-team season figures the chart's fixed axes need, keyed by name.
+    stats = {team["team_name"]: team for team in (standings or [])}
 
     body = []
     for position, row in enumerate(rows, 1):
@@ -562,13 +689,23 @@ def render_strength(weekly_scores, remaining_matchups=None, abbreviations=None, 
         ahead = (
             _to_come_cell(row, current_week, abbreviations) if any_remaining else ""
         )
-        # The normalised components and both benchmark SORs ride on the row, so
-        # the slider recomputes the blend and the toggle swaps the benchmark in
-        # the browser without another server pass. With no JavaScript the static
-        # cells below stand as they are -- the default 50/50, average-benchmark view.
+        team = stats.get(row["name"], {})
+        points_for = team.get("points_for")
+        own_ppg = (
+            round(points_for / current_week, 2)
+            if points_for is not None and current_week
+            else None
+        )
+        # Everything an axis might plot rides on the row: the normalised SOS
+        # components and both benchmark SORs (recomputed live), and the season
+        # figures (fixed). The chart and the table read the same numbers.
         body.append(
             f'<tr data-pi="{_attr(row["points_index"])}" data-ri="{_attr(row["record_index"])}"'
-            f' data-sor-avg="{_attr(row["sor_average"])}" data-sor-elite="{_attr(row["sor_elite"])}">'
+            f' data-sor-avg="{_attr(row["sor_average"])}" data-sor-elite="{_attr(row["sor_elite"])}"'
+            f' data-wins="{_attr(team.get("wins"))}" data-ppg="{_attr(own_ppg)}"'
+            f' data-pf="{_attr(points_for)}" data-oppppg="{_attr(row["opp_ppg"])}"'
+            f' data-abbr="{esc(monogram(row["name"], abbreviations))}"'
+            f' data-color="{monogram_colour(row["name"])}">'
             f'<td class="num sos-rank">{position}</td>'
             f'<td class="name">{monogram_html(row["name"], abbreviations)}'
             f'{esc(row["name"])}</td>'
@@ -587,8 +724,13 @@ blending how much those opponents score with how often they win{" (and the 'to&n
 <strong>SOR</strong> is strength of record: how a team's own win rate compares with what a
 benchmark team would manage against the same schedule &mdash; green means it has done better
 than its schedule would give that team, red worse. Drag the weighting or change the benchmark
-to re-rank; with no browser the table shows a 50/50 blend against an average team.</p>
+to re-rank; switch to <strong>Chart</strong> for a scatter of any two metrics. With no browser
+the table shows a 50/50 blend against an average team.</p>
+<div id="sos-section">
 <div class="controls">
+  <label>View
+    <select id="sos-view"><option value="table">Table</option><option value="chart">Chart</option></select>
+  </label>
   <label>SOS weighting
     <span class="dim">record</span>
     <input type="range" id="sos-blend" min="0" max="100" value="50">
@@ -599,12 +741,20 @@ to re-rank; with no browser the table shows a 50/50 blend against an average tea
     <select id="sos-bench"><option value="average">average team</option><option value="elite">elite team</option></select>
   </label>
 </div>
+<div id="sos-table-view">
 <table class="grid">
 <thead><tr><th class="num">#</th><th class="name">Team</th>
 <th class="num total">SOS</th><th class="num">Opp&nbsp;PPG</th><th class="num">Opp&nbsp;Win%</th>
 {ahead_head}<th class="num">SOR</th></tr></thead>
 <tbody id="sos-body">{''.join(body)}</tbody>
 </table>
+</div>
+<div id="sos-chart-view" hidden>
+<div class="chart-y"><label>Y&nbsp;axis <select id="sos-y">{_metric_options("sor")}</select></label></div>
+<svg id="sos-chart" role="img" aria-label="Scatter of two chosen metrics per team"></svg>
+<div class="chart-x"><label>X&nbsp;axis <select id="sos-x">{_metric_options("sos")}</select></label></div>
+</div>
+</div>
 <script>var SOS_CENTER={SOS_CENTER},SOS_GAIN={SOS_GAIN};{STRENGTH_JS}</script>"""
 
 
@@ -684,6 +834,7 @@ def render(payload, show=None):
                 base.get("remaining_matchups"),
                 abbreviations,
                 league.get("current_week", 0),
+                standings,
             )
         )
         parts.append(render_all_play(weekly_scores))

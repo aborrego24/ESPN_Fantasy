@@ -665,11 +665,13 @@ def test_sos_display_recentres_on_50_and_widens_the_gap():
     """The engine's ratio (1.0 = average) is shown recentred on 50 and amplified.
 
     An average schedule reads 50, and a 0.10 spread in the ratio opens to a
-    40-point spread on screen instead of the ~10 a bare *100 would give.
+    40-point spread on screen instead of the ~10 a bare *100 would give. Rounded
+    to one decimal so near-equal schedules still separate.
     """
-    assert to_html._sos_display(1.0) == 50
+    assert to_html._sos_display(1.0) == 50.0
     assert to_html._sos_display(None) is None
-    assert to_html._sos_display(1.05) - to_html._sos_display(0.95) == 40
+    assert to_html._sos_display(1.05) - to_html._sos_display(0.95) == pytest.approx(40.0)
+    assert to_html._sos_display(1.0011) == 50.4  # 50 + 0.44, to one decimal
 
 
 def test_played_games_show_the_in_season_table_not_the_preseason_one():
@@ -682,6 +684,41 @@ def test_played_games_show_the_in_season_table_not_the_preseason_one():
 
     assert "Strength of Schedule &amp; Record" in doc
     assert "Preseason" not in doc
+
+
+def test_the_chart_view_and_axis_pickers_are_present():
+    """The section can be flipped to a scatter with selectable axes."""
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    doc = to_html.render(
+        payload(
+            [team(n, 1, 1, 100.0, "alive") for n in names], weekly_scores=weekly(names)
+        )
+    )
+
+    assert 'id="sos-view"' in doc, "no Table/Chart toggle"
+    assert 'id="sos-x"' in doc and 'id="sos-y"' in doc, "no axis pickers"
+    assert 'id="sos-chart"' in doc, "no chart svg"
+    # every metric is offered on both axes
+    for key, _ in to_html.CHART_METRICS:
+        assert f'value="{key}"' in doc
+    # default axes are the SOS/SOR quadrant
+    assert '<option value="sos" selected>' in doc
+    assert '<option value="sor" selected>' in doc
+    assert_wellformed(doc)
+
+
+def test_rows_carry_the_fixed_metrics_the_chart_plots():
+    """Wins, PPG, Points For and Opp PPG ride on each row for the chart's axes."""
+    names = ["Alpha", "Bravo", "Charlie", "Delta"]
+    standings = [team(n, 3, 1, 448.0, "alive") for n in names]  # 448 over 2 weeks -> 224 ppg
+    doc = to_html.render(payload(standings, weekly_scores=weekly(names), current_week=2))
+    section = doc.split("Strength of Schedule")[1].split("</table>")[0]
+
+    row = re.search(r"<tr [^>]*>", section).group(0)
+    assert 'data-wins="3' in row
+    assert 'data-pf="448' in row
+    assert 'data-ppg="224' in row  # 448 / 2 weeks
+    assert 'data-abbr="' in row and 'data-color="hsl(' in row
 
 
 def test_the_slider_and_benchmark_controls_are_present():
@@ -715,7 +752,7 @@ def test_the_embedded_row_data_matches_the_engine():
     section = document.split("Strength of Schedule")[1].split("</table>")[0]
     rows = re.findall(
         r'<tr data-pi="([^"]*)" data-ri="([^"]*)" data-sor-avg="([^"]*)"'
-        r' data-sor-elite="([^"]*)">.*?</span>([^<]*)</td>',
+        r' data-sor-elite="([^"]*)"[^>]*>.*?</span>([^<]*)</td>',
         section,
     )
     assert len(rows) == len(names), "one data-bearing row per team"
