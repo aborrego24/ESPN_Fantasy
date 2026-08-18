@@ -741,6 +741,9 @@ def test_the_chart_labels_each_quadrant_from_the_chosen_axes():
         assert f"{key}:" in doc, f"{key} has no quadrant phrase"
     for phrase in ("tough schedule", "wins a lot", "overachieving", "strong opponents"):
         assert phrase in doc
+    # count metrics render whole; both axes get a divider (mean where no fixed one)
+    assert "isCount(" in doc, "wins ticks are not forced to whole numbers"
+    assert "function mean(" in doc, "no average divider for metrics without a fixed one"
 
 
 def test_rows_carry_the_fixed_metrics_the_chart_plots():

@@ -353,7 +353,13 @@ STRENGTH_JS = """
     var pad = (hi - lo) * 0.1;
     return [lo - pad, hi + pad];
   }
-  function fmtAxis(v) { return Math.abs(v) >= 100 ? String(Math.round(v)) : v.toFixed(1); }
+  // Count metrics (wins) read as whole numbers; the rest keep one decimal.
+  function isCount(k) { return k === 'wins'; }
+  function fmtAxis(v, k) {
+    if (isCount(k)) return String(Math.round(v));
+    return Math.abs(v) >= 100 ? String(Math.round(v)) : v.toFixed(1);
+  }
+  function mean(a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; }
 
   function drawChart() {
     if (!svg) return;
@@ -372,18 +378,20 @@ STRENGTH_JS = """
     function SX(v) { return clamp(mL + (v - xe[0]) / (xe[1] - xe[0]) * (W - mL - mR), mL, W - mR); }
     function SY(v) { return clamp(H - mB - (v - ye[0]) / (ye[1] - ye[0]) * (H - mT - mB), mT, H - mB); }
     var e = [];
-    var xr = refOf(xk);
-    if (xr !== null && xr > xe[0] && xr < xe[1]) e.push('<line x1="' + SX(xr) + '" y1="' + mT + '" x2="' + SX(xr) + '" y2="' + (H - mB) + '" class="cref"/>');
-    var yr = refOf(yk);
-    if (yr !== null && yr > ye[0] && yr < ye[1]) e.push('<line x1="' + mL + '" y1="' + SY(yr) + '" x2="' + (W - mR) + '" y2="' + SY(yr) + '" class="cref"/>');
+    // Both axes get a divider so the quadrants mean something: a fixed line where
+    // one exists (SOS at 50, SOR at 0), otherwise the average of the plotted teams.
+    var xr = refOf(xk); if (xr === null) xr = mean(pts.map(function (p) { return p.x; }));
+    var yr = refOf(yk); if (yr === null) yr = mean(pts.map(function (p) { return p.y; }));
+    if (xr > xe[0] && xr < xe[1]) e.push('<line x1="' + SX(xr) + '" y1="' + mT + '" x2="' + SX(xr) + '" y2="' + (H - mB) + '" class="cref"/>');
+    if (yr > ye[0] && yr < ye[1]) e.push('<line x1="' + mL + '" y1="' + SY(yr) + '" x2="' + (W - mR) + '" y2="' + SY(yr) + '" class="cref"/>');
     e.push('<line x1="' + mL + '" y1="' + (H - mB) + '" x2="' + (W - mR) + '" y2="' + (H - mB) + '" class="cax"/>');
     e.push('<line x1="' + mL + '" y1="' + mT + '" x2="' + mL + '" y2="' + (H - mB) + '" class="cax"/>');
     // Axis tick numbers only -- the metric names live in the HTML selects on each
     // axis, so they are not repeated here.
-    e.push('<text x="' + mL + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="start">' + fmtAxis(xe[0]) + '</text>');
-    e.push('<text x="' + (W - mR) + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="end">' + fmtAxis(xe[1]) + '</text>');
-    e.push('<text x="' + (mL - 8) + '" y="' + (H - mB) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[0]) + '</text>');
-    e.push('<text x="' + (mL - 8) + '" y="' + (mT + 10) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[1]) + '</text>');
+    e.push('<text x="' + mL + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="start">' + fmtAxis(xe[0], xk) + '</text>');
+    e.push('<text x="' + (W - mR) + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="end">' + fmtAxis(xe[1], xk) + '</text>');
+    e.push('<text x="' + (mL - 8) + '" y="' + (H - mB) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[0], yk) + '</text>');
+    e.push('<text x="' + (mL - 8) + '" y="' + (mT + 10) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[1], yk) + '</text>');
     pts.forEach(function (p) {
       var cx = SX(p.x), cy = SY(p.y);
       if (p.logo) {
