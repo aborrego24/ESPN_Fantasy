@@ -11,3 +11,9 @@
 
 LEAGUE_ID = 0  # e.g. 123456789
 YEAR = 2024
+
+# Private leagues only. Public leagues can leave these out entirely.
+# Copy both from your browser's cookies for fantasy.espn.com (or set them as
+# the ESPN_S2 / SWID env vars instead). SWID keeps its surrounding braces {...}.
+# ESPN_S2 = "AEB...long-value..."
+# SWID = "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"

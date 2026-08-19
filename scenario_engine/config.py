@@ -26,9 +26,29 @@ def _default(env_var, attr):
     return getattr(_local, attr, None) if _local else None
 
 
+def _default_str(env_var, attr):
+    """Same precedence, for a string setting. An empty value counts as unset."""
+    env = os.environ.get(env_var)
+    if env:
+        return env
+    value = getattr(_local, attr, None) if _local else None
+    return value or None
+
+
 def default_league_id():
     return _default("ESPN_LEAGUE_ID", "LEAGUE_ID")
 
 
 def default_year():
     return _default("ESPN_YEAR", "YEAR")
+
+
+# Private-league cookies. Optional -- public leagues never need them, so these
+# return None unless supplied. Deliberately env/local_config only, never a CLI
+# flag: a secret on the command line ends up in `ps` output and shell history.
+def espn_s2():
+    return _default_str("ESPN_S2", "ESPN_S2")
+
+
+def swid():
+    return _default_str("SWID", "SWID")

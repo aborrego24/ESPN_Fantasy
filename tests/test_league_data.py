@@ -326,6 +326,59 @@ def test_no_league_configured_anywhere_is_a_clear_error(monkeypatch):
         league_data.main(["3"])
 
 
+def test_cookies_resolve_from_env(monkeypatch):
+    monkeypatch.setenv("ESPN_S2", "s2value")
+    monkeypatch.setenv("SWID", "{swid}")
+
+    assert (config.espn_s2(), config.swid()) == ("s2value", "{swid}")
+
+
+def test_cookies_fall_back_to_local_config_then_none(monkeypatch):
+    monkeypatch.delenv("ESPN_S2", raising=False)
+    monkeypatch.delenv("SWID", raising=False)
+    monkeypatch.setattr(config, "_local", types.SimpleNamespace(ESPN_S2="x", SWID="{y}"))
+    assert (config.espn_s2(), config.swid()) == ("x", "{y}")
+
+    monkeypatch.setattr(config, "_local", None)
+    assert config.espn_s2() is None and config.swid() is None
+
+
+def test_private_league_without_cookies_is_a_clear_error(monkeypatch, capsys):
+    from espn_api.requests.espn_requests import ESPNAccessDenied
+
+    monkeypatch.setattr(config, "_local", types.SimpleNamespace(LEAGUE_ID=1, YEAR=2024))
+    monkeypatch.delenv("ESPN_S2", raising=False)
+    monkeypatch.delenv("SWID", raising=False)
+
+    def deny(**kwargs):
+        raise ESPNAccessDenied("espn_s2 and swid are required")
+
+    monkeypatch.setattr("espn_api.football.League", deny)
+
+    with pytest.raises(SystemExit):
+        league_data.main(["5"])
+
+    assert "ESPN_S2 and SWID" in capsys.readouterr().err
+
+
+def test_private_league_with_bad_cookies_says_so(monkeypatch, capsys):
+    from espn_api.requests.espn_requests import ESPNAccessDenied
+
+    monkeypatch.setattr(config, "_local", types.SimpleNamespace(LEAGUE_ID=1, YEAR=2024))
+    monkeypatch.setenv("ESPN_S2", "stale")
+    monkeypatch.setenv("SWID", "{stale}")
+
+    def deny(**kwargs):
+        raise ESPNAccessDenied("cannot be accessed with the provided credentials")
+
+    monkeypatch.setattr("espn_api.football.League", deny)
+
+    with pytest.raises(SystemExit):
+        league_data.main(["5"])
+
+    assert "wrong or expired" in capsys.readouterr().err
+
+
 def test_no_arguments_at_all_is_an_error():
     with pytest.raises(SystemExit):
         league_data.main([])
