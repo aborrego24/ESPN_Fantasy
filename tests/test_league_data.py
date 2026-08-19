@@ -11,9 +11,11 @@ them when a team id matches, so on a bye the attribute does not exist at all.
 
 import json
 import sys
+import types
 
 import pytest
 
+import config
 import league_data
 
 
@@ -295,20 +297,33 @@ def test_league_and_year_are_configurable():
     assert (args.week, args.league_id, args.year) == (3, 999, 2025)
 
 
-def test_league_and_year_default_to_the_known_league():
+def test_local_config_supplies_the_default_when_no_flag_or_env(monkeypatch):
+    monkeypatch.delenv("ESPN_LEAGUE_ID", raising=False)
+    monkeypatch.delenv("ESPN_YEAR", raising=False)
+    monkeypatch.setattr(config, "_local", types.SimpleNamespace(LEAGUE_ID=77, YEAR=2020))
+
     args, _ = league_data.parse_args(["3"])
 
-    assert args.league_id == league_data.DEFAULT_LEAGUE_ID
-    assert args.year == league_data.DEFAULT_YEAR
+    assert (args.league_id, args.year) == (77, 2020)
 
 
-def test_environment_overrides_the_defaults(monkeypatch):
+def test_environment_overrides_local_config(monkeypatch):
     monkeypatch.setenv("ESPN_LEAGUE_ID", "4242")
     monkeypatch.setenv("ESPN_YEAR", "2019")
+    monkeypatch.setattr(config, "_local", types.SimpleNamespace(LEAGUE_ID=77, YEAR=2020))
 
     args, _ = league_data.parse_args(["3"])
 
     assert (args.league_id, args.year) == (4242, 2019)
+
+
+def test_no_league_configured_anywhere_is_a_clear_error(monkeypatch):
+    monkeypatch.delenv("ESPN_LEAGUE_ID", raising=False)
+    monkeypatch.delenv("ESPN_YEAR", raising=False)
+    monkeypatch.setattr(config, "_local", None)
+
+    with pytest.raises(SystemExit):
+        league_data.main(["3"])
 
 
 def test_no_arguments_at_all_is_an_error():

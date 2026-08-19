@@ -1,18 +1,11 @@
 import argparse
 import json
-import os
 import sys
 from collections import Counter
 
+import config
 import logo
 import projections
-
-# Known-good leagues, kept as defaults because they are the ones actually used
-# and their data is a known quantity. Override with --league-id / --year, or
-# ESPN_LEAGUE_ID / ESPN_YEAR.
-DEFAULT_LEAGUE_ID = 123564885  # Laminated Greenwood
-ALTERNATE_LEAGUE_ID = 339875718  # lambda
-DEFAULT_YEAR = 2024
 
 
 def load_league_data(file_path):
@@ -404,14 +397,14 @@ def parse_args(argv):
     parser.add_argument(
         "--league-id",
         type=int,
-        default=int(os.environ.get("ESPN_LEAGUE_ID", DEFAULT_LEAGUE_ID)),
-        help=f"ESPN league id (default {DEFAULT_LEAGUE_ID})",
+        default=config.default_league_id(),
+        help="ESPN league id (falls back to ESPN_LEAGUE_ID, then local_config.py)",
     )
     parser.add_argument(
         "--year",
         type=int,
-        default=int(os.environ.get("ESPN_YEAR", DEFAULT_YEAR)),
-        help=f"season (default {DEFAULT_YEAR})",
+        default=config.default_year(),
+        help="season (falls back to ESPN_YEAR, then local_config.py)",
     )
     parser.add_argument(
         "--logos",
@@ -430,6 +423,17 @@ def main(argv=None):
 
     if args.week is None:
         parser.error("give a week number, or --test <path_to_file.json>")
+
+    if args.league_id is None:
+        parser.error(
+            "no league configured: pass --league-id, set ESPN_LEAGUE_ID, or copy "
+            "scenario_engine/local_config.example.py to local_config.py"
+        )
+    if args.year is None:
+        parser.error(
+            "no season configured: pass --year, set ESPN_YEAR, or set YEAR in "
+            "scenario_engine/local_config.py"
+        )
 
     # Imported here so --test mode works without espn_api installed
     from espn_api.football import League

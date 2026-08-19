@@ -17,9 +17,22 @@ import json
 import os
 import sys
 
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scenario_engine"
+    ),
+)
+
+import config
 from espn_api.football import League
 
-LEAGUE_ID = int(os.environ.get("ESPN_LEAGUE_ID", "123564885"))
+LEAGUE_ID = config.default_league_id()
+if LEAGUE_ID is None:
+    sys.exit(
+        "no league configured: set ESPN_LEAGUE_ID or copy "
+        "scenario_engine/local_config.example.py to local_config.py"
+    )
 MAX_WEEKS = 6
 OUTPUT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
