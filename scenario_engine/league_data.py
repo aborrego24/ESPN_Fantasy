@@ -437,8 +437,27 @@ def main(argv=None):
 
     # Imported here so --test mode works without espn_api installed
     from espn_api.football import League
+    from espn_api.requests.espn_requests import ESPNAccessDenied
 
-    league = League(league_id=args.league_id, year=args.year)
+    # Cookies are optional: only private leagues need them. A public league
+    # passes None for both and is unaffected.
+    espn_s2 = config.espn_s2()
+    swid = config.swid()
+    try:
+        league = League(
+            league_id=args.league_id, year=args.year, espn_s2=espn_s2, swid=swid
+        )
+    except ESPNAccessDenied:
+        if not (espn_s2 and swid):
+            parser.error(
+                f"league {args.league_id} is private: set ESPN_S2 and SWID as env "
+                f"vars or in scenario_engine/local_config.py. Copy both from your "
+                f"browser's cookies for fantasy.espn.com."
+            )
+        parser.error(
+            f"access to league {args.league_id} was denied even with credentials; "
+            f"your ESPN_S2 / SWID may be wrong or expired."
+        )
 
     weeks_in_season = league.settings.reg_season_count
     if not 0 <= args.week <= weeks_in_season:

@@ -107,7 +107,12 @@ pip install -r requirements.txt
 > ```
 > `local_config.py` is gitignored, so your league id never gets committed.
 
-> Only **public** leagues work right now. Private leagues need `espn_s2` and `SWID` cookies, which aren't wired up yet — see [future improvements](#limitations-and-future-improvements).
+> **Private leagues** need your two ESPN cookies, `ESPN_S2` and `SWID`. Set them the same way as the league id — as env vars, or in `local_config.py` (both are gitignored / never committed):
+> ```bash
+> export ESPN_S2='AEB...long-value...'
+> export SWID='{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}'
+> ```
+> Find them in your browser's cookies for `fantasy.espn.com` (keep `SWID`'s braces). A public league needs none of this. If a private league is read without them, the tool says so and how to fix it. On the command line they're deliberately *not* accepted as flags — a secret there shows up in `ps` and shell history.
 
 
 ## Usage
@@ -305,7 +310,6 @@ ESPN_LEAGUE_ID=123456789 python3 tools/derive_score_thresholds.py 2024 2025
 | Severity | Limitation | Detail |
 |---|---|---|
 | **High** | One platform so far | ESPN only. The engine is platform-agnostic; only stage 1 needs writing per provider |
-| **High** | Public leagues only | On ESPN, private leagues need `espn_s2` / `SWID` cookies, not yet supported |
 | **Low** | Duplicate team names get a tag | ESPN allows two teams to share a name. They're told apart by abbreviation — `Ringers (OVEN)` / `Ringers (SCHU)` — so the label differs slightly from what ESPN shows |
 | **Medium** | Future points are frozen | Tiebreaker maths assumes current point totals hold. The output always says when a verdict depends on this |
 | **Low** | Conditions cover next week only | Verdicts use the whole remaining season, but the printed conditions describe next week — "you need someone to lose in five weeks" isn't actionable |
@@ -315,7 +319,6 @@ ESPN_LEAGUE_ID=123456789 python3 tools/derive_score_thresholds.py 2024 2025
 
 - **More platforms** — Sleeper, Yahoo, NFL.com. Each needs one new stage 1 and nothing else
 - **Provider-neutral configuration** — rename `--league-id` / `ESPN_*` now that more than one platform is coming
-- **Private league support** via `espn_s2` / `SWID` from environment variables
 - **A projections mode** — use ESPN's own forecasts for future scoring, clearly labelled as a forecast rather than maths
 - **Smarter pruning** — rule out whole classes of outcome earlier
 - **Charts in the HTML report** — scoring trends over the season, drawn inline as SVG
