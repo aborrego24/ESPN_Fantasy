@@ -98,8 +98,14 @@ pip install -r requirements.txt
 ```
 
 
-> The default league id belongs to the author's own league. **Use `--league-id` with your own**, which is the number in your league's ESPN URL:
+> The repo ships with no league of its own, so you must point it at yours. Your league id is the number in your league's ESPN URL:
 > `https://fantasy.espn.com/football/league?leagueId=`**`123456789`**
+>
+> Supply it in any of three ways (checked in this order): the `--league-id` flag, the `ESPN_LEAGUE_ID` env var, or a `scenario_engine/local_config.py` file. For a value you always use, copy the template once:
+> ```bash
+> cp scenario_engine/local_config.example.py scenario_engine/local_config.py   # then edit it
+> ```
+> `local_config.py` is gitignored, so your league id never gets committed.
 
 > Only **public** leagues work right now. Private leagues need `espn_s2` and `SWID` cookies, which aren't wired up yet — see [future improvements](#limitations-and-future-improvements).
 
@@ -117,8 +123,8 @@ pip install -r requirements.txt
 
 | Option | What it does | Default |
 |---|---|---|
-| `--league-id <id>` | Which league to read | aborrego24's public league |
-| `--year <season>` | Which season | `2024` |
+| `--league-id <id>` | Which league to read | required (flag, `ESPN_LEAGUE_ID`, or `local_config.py`) |
+| `--year <season>` | Which season | required (flag, `ESPN_YEAR`, or `local_config.py`) |
 | `--test <path>` | Replay a saved payload instead of downloading | — |
 | `--html <path>` | Write an HTML report instead of printing | prints to the terminal |
 | `--dump <path>` | Also save the downloaded data, replayable with `--test` | — |

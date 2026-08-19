@@ -44,11 +44,17 @@ sys.path.insert(
     ),
 )
 
+import config
 import projections
 from espn_api.football import League
 from espn_api.football.constant import POSITION_MAP
 
-LEAGUE_ID = int(os.environ.get("ESPN_LEAGUE_ID", "123564885"))
+LEAGUE_ID = config.default_league_id()
+if LEAGUE_ID is None:
+    sys.exit(
+        "no league configured: set ESPN_LEAGUE_ID or copy "
+        "scenario_engine/local_config.example.py to local_config.py"
+    )
 SIGNAL_BAR = 0.2  # mean Pearson r at or above this is "there is a real signal"
 
 # Slots that never score, so never count toward a lineup.

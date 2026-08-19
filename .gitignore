@@ -6,3 +6,5 @@ __pycache__/
 # generated reports, whatever they get named
 *.html
 .DS_Store
+# real league ids -- copy local_config.example.py to this
+scenario_engine/local_config.py
