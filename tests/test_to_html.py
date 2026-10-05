@@ -123,6 +123,7 @@ def payload(
     logos=None,
     divisions=None,
     division_names=None,
+    managers=None,
     **league,
 ):
     """Build a stage-4 payload.
@@ -148,6 +149,7 @@ def payload(
             "logos": logos or {},
             "divisions": divisions,
             "division_names": division_names or {},
+            "managers": managers or {},
         },
         "scenarios": scenarios or [],
     }
@@ -433,8 +435,9 @@ def test_the_seed_race_is_a_selector_view_of_the_still_alive():
     seed = _view(document, "seed")
     assert "Alpha" in seed and "Bravo" in seed
     assert "Charlie" not in seed, "a team out of the #1-seed race is left out"
-    # a race view is not a dropdown any more
-    assert "<details" not in document
+    # a race view is not a dropdown any more. Checked past the stylesheet, since
+    # the all-time weight panel legitimately is a disclosure element.
+    assert "<details" not in document.split("</style>")[-1]
     assert_wellformed(document)
 
 
@@ -861,15 +864,18 @@ def test_the_chart_view_and_axis_pickers_are_present():
         )
     )
 
-    assert 'id="sos-view"' in doc, "no Table/Chart toggle"
+    # The same two-button segmented control the all-time pane uses, not a select.
+    assert 'id="sos-view-seg"' in doc, "no Table/Chart toggle"
+    assert '<button data-view="table" class="on">' in doc, "table is the default"
+    assert '<button data-view="chart">' in doc
     assert 'id="sos-x"' in doc and 'id="sos-y"' in doc, "no axis pickers"
     assert 'id="sos-chart"' in doc, "no chart svg"
     # every metric is offered on both axes
     for key, _ in to_html.CHART_METRICS:
         assert f'value="{key}"' in doc
     # default axes are the SOS/SOR quadrant
-    assert '<option value="sos" selected>' in doc
-    assert '<option value="sor" selected>' in doc
+    for key in ("sos", "sor"):
+        assert re.search(rf'<option value="{key}" data-gloss="[^"]*" selected>', doc), key
     assert_wellformed(doc)
 
 
@@ -888,9 +894,10 @@ def test_the_chart_and_its_axis_pickers_stay_hidden_in_table_view():
     assert "#sos-chart-view[hidden]" in doc
 
 
-def test_the_chart_labels_each_quadrant_from_the_chosen_axes():
-    """The scatter names its corners; the phrases are chosen live in the browser,
-    so what must be present is the phrase table, the joiner and the styling."""
+def test_each_axis_picker_explains_its_metric_on_a_question_mark():
+    """The plain-words labels at the axis ends are gone -- the ticks say where a
+    dot sits. What a metric *means* hangs off the `?` beside its picker, where it
+    can be a sentence instead of two words squeezed against the frame."""
     doc = to_html.render(
         payload(
             [team(n, 1, 1, 100.0, "alive") for n in ("Alpha", "Bravo", "Charlie")],
@@ -898,16 +905,71 @@ def test_the_chart_labels_each_quadrant_from_the_chosen_axes():
         )
     )
 
-    assert ".cquad" in doc, "no quadrant-label styling"
-    assert "quadLabel(" in doc, "corners are not labelled"
-    # every chart metric contributes a low/high phrase pair
-    for key, _ in to_html.CHART_METRICS:
-        assert f"{key}:" in doc, f"{key} has no quadrant phrase"
-    for phrase in ("tough schedule", "wins a lot", "overachieving", "strong opponents"):
-        assert phrase in doc
-    # count metrics render whole; both axes get a divider (mean where no fixed one)
-    assert "isCount(" in doc, "wins ticks are not forced to whole numbers"
+    assert 'id="sos-x-hint"' in doc and 'id="sos-y-hint"' in doc
+    # The gloss rides on the option, so the hint always matches the choice.
+    for key, _, gloss in to_html.SEASON_METRICS:
+        assert f'data-gloss="{gloss}"' in doc, key
+    # And the old axis-end phrasing is gone from both charts.
+    for dropped in ("tough schedule", "underachieving", "low scorer for its year"):
+        assert dropped not in doc
     assert "function mean(" in doc, "no average divider for metrics without a fixed one"
+
+
+def test_the_season_chart_dot_can_be_hovered_for_team_manager_and_record():
+    """A four-letter abbreviation cannot say whose team it is or how it is doing,
+    so the mark carries the three as data and a card shows them."""
+    names = ["Alpha", "Bravo"]
+    doc = to_html.render(
+        payload(
+            [team(n, 2, 1, 100.0, "alive") for n in names],
+            weekly_scores=weekly(names),
+            managers={"Alpha": ["Ann Lee", "Bo Roy"], "Bravo": ["Cy Dee"]},
+        )
+    )
+
+    assert 'id="sos-tip"' in doc, "no hover card"
+    assert 'class="cpt-mark"' in doc, "dots are not one hover target"
+    assert 'data-team="Alpha"' in doc
+    assert 'data-manager="Lee · Roy"' in doc, "co-managed shows surnames"
+    assert 'data-manager="Cy Dee"' in doc, "a lone manager keeps their full name"
+    assert 'data-record="2-1"' in doc
+
+
+def test_the_all_time_pickers_explain_their_metrics_too():
+    doc = to_html.render(BASIC, history=HISTORY)
+
+    assert 'id="at-x-hint"' in doc and 'id="at-y-hint"' in doc
+    for key, _, gloss in to_html.AT_METRICS:
+        assert f'data-gloss="{gloss}"' in doc, key
+
+
+def test_the_season_chart_numbers_and_grids_every_axis():
+    """Same treatment as the all-time chart: gridlines, a number per tick, and a
+    tick value that matches the column in the table beside it."""
+    js = to_html.STRENGTH_JS
+    table = js.split("var TICK = {")[1].split("\n  };")[0]
+
+    for key, _ in to_html.CHART_METRICS:
+        assert f"{key}: {{ step:" in table, f"{key} has no gridline spacing"
+    assert table.count("mode: 'abs'") == len(to_html.CHART_METRICS), (
+        "every season metric reads on sight, so all are labelled with their value"
+    )
+    assert "class=\"cref\"" in js, "no gridlines"
+    assert "class=\"atframe\"" in js, "no frame around the plot"
+
+
+def test_a_fixed_domain_keeps_the_tick_at_its_far_end():
+    """-0.3 / 0.1 is -2.9999999999999996, so a bare ceil() rounds up and drops the
+    -0.300 tick off the SOR axis. Both charts step their ticks with the epsilon."""
+    for js in (to_html.STRENGTH_JS, to_html.ALL_TIME_JS):
+        assert "/ t.step - 1e-9)" in js
+
+
+def test_an_absolute_tick_lands_on_a_round_number():
+    """Stepped out from the plotted mean, Points For read "259 309 359" and every
+    gridline sat a fraction away from the value its rounded label claimed."""
+    for js in (to_html.STRENGTH_JS, to_html.ALL_TIME_JS):
+        assert "Math.ceil((centre - half) / t.step - 1e-9) * t.step" in js
 
 
 def test_rows_carry_the_fixed_metrics_the_chart_plots():
@@ -1203,3 +1265,663 @@ def test_logos_survive_being_switched_off_with_the_stats_section():
         {"standings"},
     )
     assert_wellformed(document)
+
+
+# --- the all-time tab ---------------------------------------------------------
+
+
+def history_season(year, complete=True, finals=(1, 2), owners=("own-a", "own-b")):
+    """A three-team season in the shape tools/fetch_history.py writes.
+
+    Two of the three qualify, so the playoff scope has a real population that is
+    smaller than the league -- which is the thing that view has to get right.
+    """
+    scores = {"Alpha": [120.0, 110.0], "Bravo": [100.0, 105.0], "Charlie": [90.0, 95.0]}
+    order = list(scores)
+    records = {"Alpha": (2, 0), "Bravo": (1, 1), "Charlie": (0, 2)}
+    # Alpha and Bravo met in the final; Charlie missed the bracket entirely.
+    playoff = {"Alpha": 130.0, "Bravo": 115.0}
+    po_record = {"Alpha": (1, 0), "Bravo": (0, 1)}
+
+    def opponent(name, week):
+        return {"Alpha": "Bravo", "Bravo": "Alpha", "Charlie": None}[name]
+
+    return {
+        "year": year,
+        "name": "Test League",
+        "num_teams": 3,
+        "weeks_in_season": 2,
+        "weeks_played": 2,
+        "complete": complete,
+        "playoff_spots": 2,
+        "teams": [
+            {
+                "name": name,
+                "owner_id": owners[i] if i < len(owners) else f"own-{name}",
+                "owner": f"Manager {name}",
+                "wins": records[name][0],
+                "losses": records[name][1],
+                "ties": 0,
+                "points_for": sum(scores[name]),
+                "final_standing": finals[i] if i < len(finals) else 3,
+                "seed": i + 1,
+                "made_playoffs": name in playoff,
+                "playoff_wins": po_record.get(name, (0, 0))[0],
+                "playoff_losses": po_record.get(name, (0, 0))[1],
+                "playoff_ties": 0,
+                "playoff_points_for": playoff.get(name, 0.0),
+                "playoff_games": 1 if name in playoff else 0,
+            }
+            for i, name in enumerate(order)
+        ],
+        "weekly_scores": [
+            {
+                "name": name,
+                "weeks": [
+                    {
+                        "week": w + 1,
+                        "points": scores[name][w],
+                        "opponent": opponent(name, w),
+                    }
+                    for w in range(2)
+                ],
+            }
+            for name in order
+        ],
+        "playoff_weeks": [
+            {
+                "name": name,
+                "weeks": [
+                    {
+                        "week": 3,
+                        "points": playoff[name],
+                        "opponent": "Bravo" if name == "Alpha" else "Alpha",
+                    }
+                ],
+            }
+            for name in playoff
+        ],
+    }
+
+
+HISTORY = {"league_id": 1, "seasons": [history_season(2025), history_season(2024)]}
+
+
+def test_without_a_history_the_report_is_unchanged():
+    """--history is optional, so a report built without one must not grow a tab
+    bar, a second pane or a script it did not have before."""
+    document = to_html.render(BASIC)
+
+    # The stylesheet is one constant and always carries the tab rules; what must
+    # be absent is the markup that uses them.
+    assert '<nav class="tabs"' not in document
+    assert 'class="tabpane"' not in document
+    assert "All-Time" not in text_of(document)
+
+
+def test_a_history_adds_a_second_pane_defaulting_to_this_season():
+    document = to_html.render(BASIC, history=HISTORY)
+    assert_wellformed(document)
+
+    # Both panes ship in the page; exactly one of them is visible, and it is the
+    # season -- so with scripting off the current report still reads as before.
+    assert document.count('class="tabpane"') == 2
+    assert 'class="tabpane" data-tab="season"' in document
+    assert 'class="tabpane" data-tab="alltime" hidden' in document
+    # The season pane still holds the whole existing report.
+    season_pane = document.split('data-tab="season">')[1].split('data-tab="alltime"')[0]
+    assert "Standings" in season_pane
+    assert "Clinch Scenarios" in season_pane
+
+
+def test_the_all_time_pane_ranks_every_completed_team_season():
+    document = to_html.render(BASIC, history=HISTORY)
+    pane = document.split('data-tab="alltime"')[2]
+
+    assert "Best Team-Seasons" in pane
+    assert "Manager Careers" in pane
+    # Three scopes are rendered. The default one holds two seasons of three teams,
+    # so six ranked rows plus the three manager careers behind them.
+    default = at_view(pane, "both")
+    ranked = default.split('<tbody class="at-teams">')[1].split("</tbody>")[0]
+    managers = default.split('<tbody class="at-owners">')[1].split("</tbody>")[0]
+    assert ranked.count("at-rating") == 6
+    assert managers.count("at-rating") == 3
+
+
+def test_a_season_still_in_progress_is_simply_absent():
+    """It is not ranked and not explained: the counts line says which years are in,
+    which is all a reader needs."""
+    history = {
+        "seasons": [history_season(2026, complete=False), history_season(2025)],
+        "skipped": [],
+    }
+    pane = to_html.render(BASIC, history=history).split('data-tab="alltime"')[2]
+
+    assert "Seasons <b>1</b>" in pane
+    assert '<p class="note">' not in pane
+    ranked = pane.split('<tbody class="at-teams">')[1].split("</tbody>")[0]
+    assert "2026" not in ranked, "not ranked against finished years"
+    overlay = pane.split('<tbody class="at-current" hidden>')[1].split("</tbody>")[0]
+    assert "2026" in overlay, "but available to the chart's opt-in overlay"
+
+
+def test_a_season_espn_refused_is_reported_separately():
+    """Refused and unfinished are different reasons, and a reader told neither
+    will assume the league did not exist."""
+    history = {
+        "seasons": [history_season(2025)],
+        "skipped": [{"year": 2021, "reason": "access denied (no ESPN_S2 / SWID set)"}],
+    }
+    pane = to_html.render(BASIC, history=history).split('data-tab="alltime"')[2]
+
+    assert "2021" in pane
+    assert "could not be read" in pane
+
+
+def test_an_empty_history_says_so_rather_than_rendering_a_bare_heading():
+    history = {"seasons": [history_season(2026, complete=False)], "skipped": []}
+    document = to_html.render(BASIC, history=history)
+    pane = document.split('data-tab="alltime"')[2]
+
+    assert_wellformed(document)
+    assert "No completed season" in pane
+    assert "Best Team-Seasons" not in pane
+
+
+def test_all_time_team_names_are_escaped():
+    season = history_season(2025)
+    nasty = "Ben's \"<b>Team</b>\" & #2"
+    season["teams"][0]["name"] = nasty
+    season["weekly_scores"][0]["name"] = nasty
+    season["weekly_scores"][1]["weeks"] = [
+        {**w, "opponent": nasty} for w in season["weekly_scores"][1]["weeks"]
+    ]
+    document = to_html.render(BASIC, history={"seasons": [season]})
+
+    assert_wellformed(document)
+    assert "<b>Team</b>" not in text_of(document).replace(nasty, "")
+    assert nasty in text_of(document)
+
+
+def test_the_weights_are_adjustable_and_start_at_the_documented_defaults():
+    """The rating is a judgement call, so it has to be arguable from the page --
+    each component gets a slider, seeded with the weight the module documents."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+
+    for name, weight in to_html.all_time.WEIGHTS.items():
+        assert f'id="at-w-{name}"' in pane
+        assert f'value="{round(weight * 100)}"' in pane
+    # Accolades scale separately: they are added after the blend, not a share of it.
+    assert 'id="at-w-hardware"' in pane
+    assert 'id="at-reset"' in pane
+
+
+def test_every_row_carries_the_components_the_sliders_re_rank_from():
+    """Re-ranking happens in the page, so each row has to hold its own rates --
+    otherwise the sliders would need a round trip the report cannot make."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    row = pane.split('<tbody class="at-teams">')[1].split("</tr>")[0]
+
+    for attr in ("data-strength", "data-record", "data-scoring", "data-hardware"):
+        assert attr in row
+    assert "data-owner" in row, "the manager table averages these rows by owner"
+
+
+def test_a_manager_row_joins_to_its_seasons_by_the_same_key():
+    """The live average regroups the team rows by owner, so the two tables have to
+    spell the franchise key identically or a career silently splits."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    view = at_view(pane, "both")
+
+    ranked = view.split('<tbody class="at-teams">')[1].split("</tbody>")[0]
+    managers = view.split('<tbody class="at-owners">')[1].split("</tbody>")[0]
+    # A team row carries every manager it counts towards, pipe-separated.
+    team_keys = {
+        k
+        for attr in re.findall(r'<tr data-owner="([^"]+)"', ranked)
+        for k in attr.split("|")
+    }
+    owner_keys = set(re.findall(r'<tr data-owner="([^"]+)"', managers))
+    assert team_keys == owner_keys
+
+
+def test_a_co_managed_team_shows_surnames_but_searches_on_full_names():
+    """Two full names is 30-odd characters in a column beside eight others, and
+    nearly every team in one real league is co-managed. The filter still has to
+    match either half of either name."""
+    history = {"seasons": [history_season(2025)], "skipped": []}
+    history["seasons"][0]["teams"][0]["managers"] = ["Colton Peffer", "Luke Bernard"]
+    pane = to_html.render(BASIC, history=history).split('data-tab="alltime"')[2]
+    row = at_view(pane, "both").split('<tbody class="at-teams">')[1].split("</tr>")[0]
+
+    assert ">Peffer · Bernard<" in row, "the cell shows surnames only"
+    assert 'data-manager="Colton Peffer Luke Bernard"' in row, "both full names"
+
+
+def test_a_single_manager_keeps_their_full_name():
+    history = {"seasons": [history_season(2025)], "skipped": []}
+    history["seasons"][0]["teams"][0]["managers"] = ["Jake Redd"]
+    pane = to_html.render(BASIC, history=history).split('data-tab="alltime"')[2]
+    row = at_view(pane, "both").split('<tbody class="at-teams">')[1].split("</tr>")[0]
+
+    assert ">Jake Redd<" in row
+
+
+@pytest.mark.parametrize("scope", ["regular", "both", "playoffs"])
+def test_each_scope_is_a_view_in_the_page(scope):
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+
+    assert f'<button data-scope="{scope}"' in pane
+    assert f'class="at-view" data-scope="{scope}"' in pane
+
+
+def test_only_the_default_scope_is_visible():
+    """All three ship in the page and the selector swaps them, so with scripting
+    off one complete ranking still stands."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+
+    assert f'data-scope="{to_html.all_time.DEFAULT_SCOPE}">' in pane  # not hidden
+    hidden = re.findall(r'class="at-view" data-scope="(\w+)" hidden', pane)
+    assert set(hidden) == set(to_html.all_time.SCOPES) - {to_html.all_time.DEFAULT_SCOPE}
+
+
+def test_the_playoff_view_holds_only_the_teams_that_qualified():
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    playoffs = at_view(pane, "playoffs")
+    regular = at_view(pane, "regular")
+
+    teams_in = playoffs.split('<tbody class="at-teams">')[1].count("<tr")
+    teams_all = regular.split('<tbody class="at-teams">')[1].count("<tr")
+    assert 0 < teams_in < teams_all
+
+
+def test_the_regular_season_view_carries_no_accolade_points():
+    """The scope buttons say what each view is, so there is no prose to check --
+    but nothing in the regular-season view may carry accolade points."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    regular = at_view(pane, "regular")
+
+    assert re.findall(r'data-hardware="([\d.]+)"', regular) != []
+    assert set(re.findall(r'data-hardware="([\d.]+)"', regular)) == {"0.0"}
+
+
+def test_the_two_all_play_columns_say_that_is_what_they_are():
+    """Results duplicated the Record column, so it went. "Firepower", then
+    "Scoring", both hid that the number is an all-play rate against the season."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    head = pane.split("<thead>")[1].split("</thead>")[0]
+
+    assert ">Results<" not in head
+    assert ">Firepower<" not in head
+    assert ">All-Play Record<" in head
+    assert ">All-Play Scoring<" in head
+    assert ">Record<" in head, "the real win-loss column keeps the plain name"
+    assert 'id="at-w-record"' in pane, "the slider is renamed too"
+    assert 'id="at-w-results"' not in pane
+
+
+def test_one_vocabulary_drives_heads_axes_and_legend():
+    """A metric named three different ways in three places reads as three metrics."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+
+    for key, label, gloss in to_html.AT_METRICS:
+        assert f">{label}</option>" in pane, f"{key} axis option"
+        assert f"<dt>{label}</dt>" in pane, f"{key} legend entry"
+        assert gloss in pane, f"{key} gloss"
+
+
+def at_view(pane, scope):
+    """One scope's view out of the all-time pane.
+
+    Sliced to the next view rather than to the first `</div>`: the view now holds
+    nested divs for the table and the chart, so a naive split stops short.
+    """
+    chunk = pane.split(f'class="at-view" data-scope="{scope}"')[1]
+    nxt = chunk.find('class="at-view"')
+    return chunk if nxt == -1 else chunk[:nxt]
+
+
+def both_view(pane):
+    """The default scope's view, which is the one that shows bracket badges."""
+    return at_view(pane, "both")
+
+
+def test_accolades_are_one_line_and_abbreviated():
+    """A champion's four badges stacked made every row a different height."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    cell = both_view(pane).split('<td class="acc">')[1].split("</td>")[0]
+
+    assert "CHAMP" in cell, "abbreviated"
+    assert "flex-wrap: nowrap" in to_html.CSS
+    assert "white-space: nowrap" in to_html.CSS
+
+def test_the_accolade_hint_for_playoff_wins_is_just_the_count():
+    assert to_html._accolade_pill("2 playoff wins")[2] == "2 playoff wins"
+
+
+def test_a_playoff_win_pill_keeps_its_count():
+    cls, short, title = to_html._accolade_pill("2 playoff wins")
+    assert short == "2W"
+    assert "2 playoff wins" in title
+    assert to_html._accolade_pill("1 playoff win")[1] == "1W"
+
+
+@pytest.mark.parametrize(
+    "key", ["rating", "year", "team", "manager", "record", "ppg", "strength", "scoring"]
+)
+def test_every_column_but_accolades_is_sortable(key):
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    head = pane.split('<tbody class="at-teams">')[0].split("<thead>")[-1]
+
+    assert f'data-sort="{key}"' in head
+
+
+def test_the_accolades_heading_is_not_sortable():
+    """There is no order to sort a set of badges into."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    head = pane.split('<tbody class="at-teams">')[0].split("<thead>")[-1]
+    accolades = [c for c in head.split("<th") if "Accolades" in c]
+
+    assert len(accolades) == 1
+    assert "data-sort" not in accolades[0]
+
+
+def test_a_sortable_column_has_the_data_it_sorts_on():
+    """Headings name a data attribute rather than a column index, so a heading
+    cannot end up pointing at a different column's values."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    view = at_view(pane, "both")
+
+    for table in view.split("<table")[1:]:
+        keys = set(re.findall(r'data-sort="(\w+)"', table.split("</thead>")[0]))
+        row = table.split("<tbody")[1].split("</tr>")[0]
+        attrs = set(re.findall(r"data-(\w+)=", row))
+        # 'rating' is computed live and written onto the row by the script.
+        assert keys - {"rating"} <= attrs, keys - {"rating"} - attrs
+
+
+def test_the_manager_table_is_sortable_too():
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    owners = pane.split('<tbody class="at-owners">')[0].split("<thead>")[-1]
+
+    for key in ("manager", "seasons", "record", "titles", "berths", "best", "rating"):
+        assert f'data-sort="{key}"' in owners
+
+
+def test_the_weight_panel_is_collapsed_by_default():
+    """Four sliders were the wrong first impression, so the panel folds away and
+    the presets answer the question for most readers in one click."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    panel = pane.split('<details class="weights"')[1].split("</details>")[0]
+
+    assert "open" not in pane.split('<details class="weights"')[1][:20], "starts closed"
+    assert "<summary>" in panel
+    assert "Weights:" in panel
+
+
+def test_every_preset_is_offered_with_its_ratio_shown():
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    panel = pane.split('<details class="weights"')[1].split("</details>")[0]
+
+    for key, label, w, blurb in to_html.all_time.PRESETS:
+        assert f'value="{key}"' in panel
+        assert f"<b>{label}</b>" in panel
+        ratio = ",".join(str(w[n]) for n in ("strength", "record", "scoring"))
+        assert f'data-weights="{ratio}"' in panel
+    assert 'value="custom"' in panel, "and an escape hatch to the raw sliders"
+
+
+def test_the_default_preset_is_checked_and_named_in_the_summary():
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    panel = pane.split('<details class="weights"')[1].split("</details>")[0]
+    default = dict((k, l) for k, l, _, _ in to_html.all_time.PRESETS)[
+        to_html.all_time.DEFAULT_PRESET
+    ]
+
+    assert f'value="{to_html.all_time.DEFAULT_PRESET}" data-weights' in panel
+    assert " checked>" in panel
+    assert f'id="at-preset-name">{default}<' in panel
+
+
+def test_the_default_preset_matches_the_documented_weights():
+    """The panel must open on the same weighting the module rates with, or the
+    first render disagrees with itself."""
+    preset = dict((k, w) for k, _, w, _ in to_html.all_time.PRESETS)[
+        to_html.all_time.DEFAULT_PRESET
+    ]
+    for name, weight in to_html.all_time.WEIGHTS.items():
+        assert preset[name] == round(weight * 100)
+
+
+def test_the_raw_sliders_still_exist_but_start_hidden():
+    """A preset writes them, so they have to be in the page for the rating to be
+    computed -- just not on show until Custom is chosen."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+
+    assert 'id="at-custom" hidden' in pane
+    for name in ("strength", "record", "scoring"):
+        assert f'id="at-w-{name}"' in pane
+
+def test_the_playoff_view_drops_the_berth_badge():
+    """Every row in it qualified, so PO was on all of them."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    playoffs = at_view(pane, "playoffs")
+    body = playoffs.split('<tbody class="at-teams">')[1].split("</tbody>")[0]
+
+    assert ">PO<" not in body
+    assert "Made the playoffs" not in body
+
+
+def test_the_filter_box_is_present_and_searches_the_named_fields():
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+
+    assert 'id="at-find"' in pane
+    assert 'type="search"' in pane
+    row = pane.split('<tbody class="at-teams">')[1].split("</tr>")[0]
+    for field in ("data-year", "data-team", "data-manager", "data-accolades"):
+        assert field in row, field
+
+
+def test_the_filter_matches_both_the_word_and_the_badge_code():
+    """So "champion" typed from memory and "CHAMP" read off the screen both work."""
+    text = to_html._accolade_search_text(["Champion", "2 playoff wins", "#1 overall seed"])
+
+    assert "Champion" in text and "CHAMP" in text
+    assert "2 playoff wins" in text and "2W" in text
+    assert "#1 overall seed" in text and "#1" in text
+
+
+def test_the_weight_sliders_cannot_leak_past_the_hidden_attribute():
+    """`display: flex` on .controls outranks `hidden`, which had the sliders on
+    show while a named preset was selected. The SOS chart hit the same trap."""
+    assert "#at-custom[hidden] { display: none; }" in to_html.CSS
+
+
+def test_a_preset_explains_itself_on_hover_rather_than_printing_its_ratio():
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    panel = pane.split('<details class="weights"')[1].split("</details>")[0]
+
+    assert panel.count('class="hint"') == len(to_html.all_time.PRESETS) + 1  # +Custom
+    for _, _, w, blurb in to_html.all_time.PRESETS:
+        ratio = f'{w["strength"]} / {w["record"]} / {w["scoring"]}'
+        assert ratio in panel, "the ratio moved into the tooltip"
+        assert blurb.split(".")[0] in panel
+    # and is no longer sitting beside the label as a bare number
+    assert 'class="dim">45 / 30 / 25</span>' not in panel
+
+
+def test_there_is_no_legend_under_the_table():
+    """Dropped as clutter; the badges explain themselves on hover instead."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+
+    assert 'class="legend"' not in pane
+    assert not hasattr(to_html, "_accolade_legend")
+
+
+def test_the_runner_up_hint_is_just_the_words():
+    assert to_html.ACCOLADE_TITLE["2nd"] == "Runner-up"
+
+
+def test_the_filter_and_the_weights_share_one_thin_row():
+    """The controls were competing with the table for attention."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    tools = pane.split('<div class="at-tools">')[1].split("</details></div>")[0]
+
+    assert 'id="at-find"' in tools
+    assert 'id="at-weights"' in tools
+
+
+def test_opening_the_weights_does_not_push_the_table_down():
+    """The panel is a popover anchored to its own link, not a block in the flow."""
+    assert ".weights { margin-left: auto; position: relative; }" in to_html.CSS
+    body = to_html.CSS.split(".wbody {")[1].split("}")[0]
+    assert "position: absolute" in body
+    assert "right: 0" in body
+
+
+def test_the_all_time_pane_has_a_table_chart_toggle_and_axis_pickers():
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+
+    assert 'id="at-view-seg"' in pane
+    assert '<button data-view="table" class="on">' in pane, "table is the default"
+    assert '<button data-view="chart">' in pane
+    assert 'id="at-x"' in pane and 'id="at-y"' in pane
+    assert 'id="at-axes" hidden' in pane, "pickers only show in chart view"
+
+
+def test_the_axis_pickers_cannot_show_in_table_view():
+    """They live on the chart's axes, so nothing about them may be visible while
+    the table is up. Two rules carry that: the parking spot is display:none, and
+    the chart view -- a grid, whose display would otherwise beat the hidden
+    attribute -- is explicitly hidden. Same trap as #sos-chart-view."""
+    doc = to_html.render(BASIC, history=HISTORY)
+
+    assert ".at-axes { display: none; }" in doc
+    assert ".at-chart-view[hidden] { display: none; }" in doc
+
+
+def test_every_scope_gets_its_own_chart():
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+
+    for scope in to_html.all_time.SCOPES:
+        view = at_view(pane, scope)
+        assert 'svg class="at-chart"' in view
+        assert 'class="at-tip"' in view, "and its own hover card"
+        assert 'class="at-chart-view" hidden' in view
+
+
+def test_a_dot_carries_what_the_hover_card_shows():
+    """A two-letter dot cannot say which year or whose team it was."""
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    row = at_view(pane, "both").split('<tbody class="at-teams">')[1].split("</tr>")[0]
+
+    for attr in ("data-abbr", "data-colour", "data-year", "data-team", "data-manager"):
+        assert attr in row, attr
+
+
+def test_the_chart_is_centred_rather_than_fitted_to_the_data():
+    """Every metric here is positive and clustered, so a fitted domain put the whole
+    league in one corner and the quadrant labels described nothing."""
+    js = to_html.ALL_TIME_JS
+    assert "FIXED_CENTRE = { strength: 0.5, record: 0.5, scoring: 0.5 }" in js
+    assert "function span(k, vals, c)" in js, "symmetric domain about the centre"
+
+
+def test_a_bounded_metric_shows_its_whole_scale():
+    """A win percentage runs .000 to 1.000 whatever this league did, so the axis
+    shows that range instead of stretching the best and worst season to the edges."""
+    js = to_html.ALL_TIME_JS
+
+    assert "FIXED_SPAN = { record: 0.5 }" in js
+    assert "if (FIXED_SPAN[k] !== undefined) return FIXED_SPAN[k];" in js
+
+
+def test_every_axis_is_numbered_absolutely_or_relatively():
+    """Record and PPG read straight; the three rates only support a distance from
+    average, so they are numbered as a signed offset instead."""
+    js = to_html.ALL_TIME_JS
+    table = js.split("var TICK = {")[1].split("\n  };")[0]
+
+    for absolute in ("record", "ppg"):
+        assert f"{absolute}: {{ step:" in table
+        assert f"mode: 'abs' }}" in table
+    for relative in ("strength", "scoring", "rating"):
+        assert f"{relative}: {{ step:" in table
+    assert table.count("mode: 'rel'") == 3
+
+
+def test_no_chart_writes_words_at_its_axis_ends():
+    """Replaced by the `?` beside each picker; the helpers that drew them are gone
+    rather than left dangling."""
+    for js in (to_html.STRENGTH_JS, to_html.ALL_TIME_JS):
+        assert "var PHRASE" not in js
+        assert "function phrase(" not in js
+        assert "function ends(" not in js
+
+
+def test_the_season_chart_is_centred_too():
+    js = to_html.STRENGTH_JS
+
+    assert "function span(k, vals, c)" in js, "symmetric domain about the reference"
+    # SOS and SOR keep a fixed scale so the slider moves the dots, not the axis.
+    assert "FIXED_SPAN = { sos: 35, sor: 0.3 }" in js
+
+
+def test_this_season_is_an_opt_in_overlay_next_to_the_weights():
+    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
+    tools = pane.split('<div class="at-tools">')[1].split("</details></div>")[0]
+
+    assert 'id="at-live"' in tools
+    assert 'type="checkbox"' in tools
+    assert tools.index('id="at-live"') < tools.index('id="at-weights"')
+
+
+def test_an_overlay_row_has_no_rank():
+    """It was never ranked, which is the whole reason it is held apart."""
+    history = {
+        "seasons": [history_season(2026, complete=False), history_season(2025)],
+        "skipped": [],
+    }
+    pane = to_html.render(BASIC, history=history).split('data-tab="alltime"')[2]
+    overlay = pane.split('<tbody class="at-current" hidden>')[1].split("</tbody>")[0]
+
+    assert '<td class="num at-rank"></td>' in overlay
+
+
+def test_an_in_progress_season_does_not_overlay_the_playoff_chart():
+    """ESPN publishes a live playoff seed mid-season, so the playoff scope produced
+    six qualifiers with nothing played -- six identical dots at the origin.
+
+    The 2026 season here is shaped like a real one three weeks in: seeded, and so
+    apparently qualified, but with no bracket game behind any of it.
+    """
+    live = history_season(2026, complete=False)
+    for team in live["teams"]:
+        team["playoff_wins"] = team["playoff_losses"] = team["playoff_games"] = 0
+        team["playoff_points_for"] = 0.0
+    live["playoff_weeks"] = [
+        {"name": t["name"], "weeks": [{"week": 3, "points": 0.0, "opponent": None}]}
+        for t in live["teams"]
+        if t["made_playoffs"]
+    ]
+    history = {"seasons": [live, history_season(2025)], "skipped": []}
+    pane = to_html.render(BASIC, history=history).split('data-tab="alltime"')[2]
+    playoffs = at_view(pane, "playoffs")
+    overlay = playoffs.split('<tbody class="at-current" hidden>')[1].split("</tbody>")[0]
+
+    assert "2026" not in overlay
+    # but the regular-season chart may still show it
+    regular = at_view(pane, "regular")
+    assert "2026" in regular.split('<tbody class="at-current" hidden>')[1]
+
+
+def test_the_overlay_obeys_the_search_box_too():
+    """Overlay rows are never in the table, so `filter` never sets their hidden
+    flag -- the chart has to test them against the query itself, or searching one
+    manager still draws all of this year's teams beside the matches."""
+    doc = to_html.render(BASIC, history=HISTORY)
+    script = doc.split("</style>")[-1]
+
+    assert "function matches(tr)" in script, "one shared predicate"
+    assert ".filter(matches)" in script, "and the overlay runs through it"

@@ -111,3 +111,84 @@ def test_inline_all_drops_only_the_failures():
 
     assert set(out) == {"Good"}, "a team whose logo fails is simply absent"
     assert out["Good"].startswith("data:image/svg+xml;base64,")
+
+
+# --- espn_fetch: an uploaded photo needs the cookies, a stranger must not get them
+
+
+class FakeResponse:
+    """Just enough of an http.client.HTTPResponse for _read."""
+
+    def __init__(self):
+        self.headers = type("H", (), {"get_content_type": lambda self: "image/svg+xml"})()
+
+    def read(self):
+        return b"<svg/>"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def capture_requests(monkeypatch):
+    """Collect the urllib Requests logo would have sent, sending none."""
+    sent = []
+
+    def urlopen(request, timeout=None):
+        sent.append(request)
+        return FakeResponse()
+
+    monkeypatch.setattr(logo.urllib.request, "urlopen", urlopen)
+    return sent
+
+
+def test_an_espn_upload_is_fetched_with_the_league_cookies(monkeypatch):
+    """The whole point: mystique-api 401s anonymously, so a credentialed run
+    must authenticate or every uploaded photo silently becomes a monogram."""
+    sent = capture_requests(monkeypatch)
+
+    logo.espn_fetch("S2VALUE", "{SWID-VALUE}")(
+        "https://mystique-api.fantasy.espn.com/apis/v1/domains/lm/images/abc"
+    )
+
+    assert sent[0].get_header("Cookie") == "espn_s2=S2VALUE; SWID={SWID-VALUE}"
+
+
+def test_a_third_party_photo_host_is_never_sent_the_espn_session(monkeypatch):
+    """espn_s2 is a live credential and many team photos are self-hosted, so the
+    cookie is scoped to espn.com rather than attached to every logo request."""
+    sent = capture_requests(monkeypatch)
+    fetch = logo.espn_fetch("S2VALUE", "{SWID-VALUE}")
+
+    fetch("https://i.postimg.cc/vH6jBp6y/IMG-8279.jpg")
+    fetch("https://espn.com.evil.test/logo.svg")
+
+    assert sent[0].get_header("Cookie") is None
+    assert sent[1].get_header("Cookie") is None, "a lookalike host is not espn.com"
+
+
+def test_every_request_carries_a_browser_user_agent(monkeypatch):
+    """Wikimedia 403s urllib's default agent, and a real team hosts its photo
+    there -- so the header goes on every request, cookies or not."""
+    sent = capture_requests(monkeypatch)
+
+    logo._fetch("https://upload.wikimedia.org/x.jpg")
+    logo.espn_fetch("S2", "{SW}")("https://upload.wikimedia.org/y.jpg")
+
+    assert len(sent) == 2
+    for request in sent:
+        assert request.get_header("User-agent") == logo.USER_AGENT
+
+
+def test_espn_subdomains_and_the_bare_domain_both_count():
+    assert logo._is_espn("https://g.espncdn.com/x.svg") is False, "a different domain"
+    assert logo._is_espn("https://mystique-api.fantasy.espn.com/x") is True
+    assert logo._is_espn("https://espn.com/x") is True
+
+
+def test_without_cookies_espn_fetch_is_the_plain_anonymous_one():
+    """A public league passes None for both and must behave exactly as before."""
+    assert logo.espn_fetch(None, None) is logo._fetch
+    assert logo.espn_fetch("s2", None) is logo._fetch, "half a credential is none"

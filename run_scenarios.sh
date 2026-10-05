@@ -30,6 +30,7 @@ usage() {
   echo
   echo "Display flags are passed to the report and are all optional:"
   echo "  --html <path>    write an HTML report instead of printing to the terminal"
+  echo "  --history <path> add the All-Time tab from a tools/fetch_history.py file"
   echo "  --no-header      hide the summary line"
   echo "  --no-standings   hide the standings table"
   echo "  --no-matchups    hide next week's matchups"
@@ -56,13 +57,14 @@ DISPLAY_FLAGS=()
 LEAGUE_FLAGS=()
 HTML_OUT=""
 DUMP_OUT=""
+HISTORY_IN=""
 
 # Each of these takes a value. A missing value, or another flag in its place, is
 # an error -- otherwise '--html --no-stats' silently writes a file called
 # '--no-stats'.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --html|--league-id|--year|--dump)
+    --html|--league-id|--year|--dump|--history)
       option="$1"
       shift
       if [ $# -eq 0 ]; then
@@ -78,6 +80,16 @@ while [ $# -gt 0 ]; do
       case "$option" in
         --html) HTML_OUT="$1" ;;
         --dump) DUMP_OUT="$1" ;;
+        # The all-time tab is a feature of the HTML renderer, so the file is
+        # handed to stage 5 rather than to the download.
+        --history)
+          if [ ! -f "$1" ]; then
+            echo "Error: no such history file: $1" >&2
+            echo "Build one with: $PY tools/fetch_history.py --out $1" >&2
+            exit 1
+          fi
+          HISTORY_IN="$1"
+          ;;
         *)      LEAGUE_FLAGS+=("$option" "$1") ;;
       esac
       shift
@@ -108,7 +120,14 @@ fi
 
 if [ -n "$HTML_OUT" ]; then
   REPORT=("$PY" scenario_engine/to_html.py -o "$HTML_OUT")
+  if [ -n "$HISTORY_IN" ]; then
+    REPORT+=(--history "$HISTORY_IN")
+  fi
 else
+  if [ -n "$HISTORY_IN" ]; then
+    echo "Error: --history needs --html; the terminal report has no all-time tab" >&2
+    exit 1
+  fi
   REPORT=("$PY" scenario_engine/pretty_print.py)
 fi
 
