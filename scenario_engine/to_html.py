@@ -19,6 +19,7 @@ import html
 import json
 import sys
 
+import all_time
 import league_stats
 import margins
 import pretty_print
@@ -111,6 +112,17 @@ def record_text(tally):
     return f"{text}-{tally['ties']}" if tally["ties"] else text
 
 
+def _standings_record(team):
+    """`record_text` for a standings entry, which may carry no tie count at all."""
+    return record_text(
+        {
+            "wins": team.get("wins", 0),
+            "losses": team.get("losses", 0),
+            "ties": team.get("ties", 0),
+        }
+    )
+
+
 CSS = """
 :root {
   --ink: #14181d; --dim: #6b7684; --line: #dde3ea; --panel: #f6f8fa;
@@ -193,9 +205,12 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .worst { background: var(--bad-bg); color: var(--bad); font-weight: 700; }
 .grid th .mono { min-width: 0; margin-right: 0; padding: .1rem .25rem; }
 .grid td.name .mono { min-width: 2.6rem; }
+/* Round, not a rounded square: these are avatars -- a manager's uploaded photo or
+   an ESPN logo-pack mark -- and a hard-edged crop of a photo reads as a pasted-in
+   screenshot next to the text it labels. */
 .logo {
   display: inline-block; height: 1.5rem; width: 1.5rem; margin-right: .5rem;
-  border-radius: 4px; vertical-align: middle;
+  border-radius: 50%; vertical-align: middle;
   background-size: cover; background-position: center; background-repeat: no-repeat;
 }
 .grid td.name .logo { height: 1.3rem; width: 1.3rem; }
@@ -203,6 +218,10 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
 .better { background: var(--good-bg); color: var(--good); }
 .worse { background: var(--bad-bg); color: var(--bad); }
 .lede { color: var(--dim); font-size: .88rem; margin: 0 0 .75rem; max-width: 68ch; }
+/* The 68ch cap keeps prose readable beside the narrow season tables. The all-time
+   tables are far wider, so a lede capped there stops halfway across the page and
+   reads as broken rather than as a measure. */
+.lede.wide { max-width: none; }
 .controls { display: flex; flex-wrap: wrap; gap: 1.75rem; align-items: center; margin: 0 0 1rem; font-size: .85rem; }
 .controls label { display: flex; align-items: center; gap: .5rem; }
 .controls .dim { color: var(--dim); font-size: .8rem; }
@@ -222,6 +241,10 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
    X picker under the plot, the Y picker down the left -- rather than in the top
    controls, which is why they never show in the table view. */
 #sos-chart-view {
+  /* `relative` makes this the hover card's offset parent, which is what the card
+     measures itself against; without it the card anchors to some ancestor further
+     up and lands beside the dot instead of on it. */
+  position: relative;
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto;
   align-items: center; gap: .35rem .5rem; margin-top: .5rem;
 }
@@ -230,23 +253,230 @@ tr.cut td { border-bottom: 2px solid var(--ink); }
    outranks it and hides the chart until it is chosen. */
 #sos-chart-view[hidden] { display: none; }
 .chart-y { grid-column: 1; grid-row: 1; }
-#sos-chart { grid-column: 2; grid-row: 1; width: 100%; height: auto; font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-.chart-x { grid-column: 2; grid-row: 2; text-align: center; }
-.chart-x label, .chart-y label { display: inline-flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--dim); }
+/* Capped at the viewBox width so the drawing is never scaled up (see svg.at-chart
+   for what stretching it did), and centred in its column so the X picker -- which
+   centres on the column -- lines up with the middle of the plot. */
+#sos-chart {
+  grid-column: 2; grid-row: 1; margin: 0 auto;
+  width: 100%; max-width: 900px; height: auto;
+  font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.chart-x { grid-column: 2; grid-row: 2; justify-self: center; }
+/* The picker alone, no "X axis" caption -- it sits on the axis it controls. */
+.chart-x, .chart-y { display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem; color: var(--dim); }
 .cax { stroke: var(--dim); stroke-width: 1; }
 .cref { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
 .ctick { fill: var(--dim); font-size: 11px; }
 .clabel { fill: var(--ink); font-size: 12px; font-weight: 600; }
-.cpt { fill: #fff; font-size: 9px; font-weight: 700; }
+/* font-size is set per dot so a four-letter abbreviation still fits, as on the
+   all-time chart. */
+.cpt { fill: #fff; font-weight: 700; }
+.cpt-dot { stroke: #fff; stroke-width: 1; }
+/* An inlined team photo, cut to a circle with a hairline ring, so it sits among
+   the monogram dots as the same kind of mark rather than a pasted-in square. */
+.cpt-logo { clip-path: circle(50%); }
+.cpt-ring { fill: none; stroke: #fff; stroke-width: 1.5; }
+/* One hover target per team, so the card appears over the photo as readily as
+   over the abbreviation beneath it. */
+.cpt-mark { cursor: default; }
+.cpt-mark:hover .cpt-dot, .cpt-mark:hover .cpt-ring { stroke: var(--ink); stroke-width: 2; }
 /* Sits below a logo on the chart background, so it needs the dark ink fill the
    on-circle label (white on colour) must not use. */
 .cpt-lbl { fill: var(--ink); font-size: 9px; font-weight: 700; }
-/* Corner labels naming what each quadrant means for the chosen axes. A white
-   stroke drawn under the fill keeps them legible over gridlines and dots. */
+/* The plain-words label at each end of an axis, naming what more of that metric
+   means. A white stroke drawn under the fill keeps them legible over gridlines
+   and dots. Shared by both charts. */
 .cquad {
   fill: var(--dim); font-size: 11px; font-weight: 700;
   paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round;
 }
+/* Top-level tabs: this season's report, versus the league's whole history. Same
+   progressive-enhancement rule as the standings selector -- both panes are in the
+   page and the buttons only toggle which shows, so with scripting off the current
+   season still reads top to bottom. */
+.tabs { display: flex; margin: 0 0 .5rem; border-bottom: 1px solid var(--line); }
+.tabs button {
+  font: inherit; font-size: .92rem; font-weight: 600; line-height: 1.3;
+  padding: .5rem .9rem; border: none; background: none; color: var(--dim);
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tabs button.on { color: var(--ink); border-bottom-color: var(--ink); }
+/* The first heading in a pane has no preceding content to be spaced away from. */
+.tabpane > h2:first-child { margin-top: 1.25rem; }
+/* Accolades. Named for the achievement rather than reusing the verdict pills:
+   a champion is not "clinched", and a reader who learns the colours in one
+   section should not have them mean something else in another. */
+.pill.champ { background: var(--top-bg); color: var(--top); }
+.pill.runner { background: var(--bye-bg); color: var(--bye); }
+.pill.four { background: var(--good-bg); color: var(--good); }
+.pill.berth { background: var(--panel); color: var(--dim); }
+/* One line, never wrapping: a champion's four badges stacked made every row a
+   different height, and a table whose rows jump around is hard to scan down. */
+.pills { display: inline-flex; flex-wrap: nowrap; gap: .2rem; }
+td.acc, th.acc { white-space: nowrap; text-align: left; }
+/* A badge explains itself at once on hover or focus. A native `title` tooltip
+   needs the pointer held still for a second or two, which reads as broken. */
+.pills .pill { cursor: help; position: relative; outline: none; }
+.hintbox {
+  display: none; position: absolute; left: 50%; transform: translateX(-50%);
+  top: 1.55rem; z-index: 6; background: var(--ink); color: #fff;
+  padding: .3rem .55rem; border-radius: 6px; font-size: .72rem; font-weight: 400;
+  white-space: nowrap; letter-spacing: 0; text-transform: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .28);
+}
+.pills .pill:hover .hintbox, .pills .pill:focus .hintbox { display: block; }
+.pills .pill:focus { box-shadow: 0 0 0 2px var(--ink); }
+/* Spelled out once under the table, because nothing on screen advertises that a
+   badge can be hovered -- and no tooltip works in print or in an email client. */
+.legend { color: var(--dim); font-size: .74rem; margin: .5rem 0 0; line-height: 2; }
+.legend .pill { margin-right: .15rem; }
+/* Sortable headings. The arrow is drawn on the sorted column only, so the header
+   row stays quiet until something is actually sorted by hand. */
+th.sort { cursor: pointer; user-select: none; }
+th.sort:hover { color: var(--ink); }
+th.sort.sorted { color: var(--ink); }
+/* The non-breaking space keeps the arrow welded to the last word of the heading.
+   With an ordinary space it wrapped onto a line of its own under any two-word
+   heading, reading as a stray mark rather than a marker on the column. The
+   heading itself is still free to wrap. */
+th.sort.sorted[data-dir="desc"]::after { content: "\\00a0\\2193"; }
+th.sort.sorted[data-dir="asc"]::after { content: "\\00a0\\2191"; }
+/* One all-time view per scope; the selector swaps which is shown, and each
+   carries both its team table and its manager table so they cannot disagree. */
+.at-view[hidden] { display: none; }
+.at-view h3 { font-size: 1.05rem; margin: 2.25rem 0 .35rem; font-weight: 600; }
+/* The weight panel: folded away by default, because the presets answer the
+   question for almost everybody and four sliders were the wrong first impression.
+   A native disclosure element gives the collapse, the keyboard handling and the
+   no-JS fallback. */
+/* A quiet link, not a panel. It sits at the right of the tools row and opens as a
+   popover anchored to itself -- the controls were competing with the table for
+   attention, and reaching for them should not shove the table down the page. */
+.weights { margin-left: auto; position: relative; }
+.weights summary {
+  cursor: pointer; font-size: .78rem; font-weight: 600; color: var(--dim);
+  list-style: none; white-space: nowrap; padding: .25rem 0;
+}
+.weights summary:hover { color: var(--ink); }
+.weights summary::-webkit-details-marker { display: none; }
+.weights summary::before { content: "\\25B8 "; }
+.weights[open] summary::before { content: "\\25BE "; }
+.weights[open] summary { color: var(--ink); }
+.wbody {
+  position: absolute; right: 0; top: 1.7rem; z-index: 8; width: max-content;
+  max-width: min(46rem, 90vw); padding: .6rem .8rem .8rem; background: #fff;
+  border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .12);
+}
+.presets { display: flex; flex-wrap: wrap; gap: .15rem 1.25rem; margin: .5rem 0 .25rem; }
+.preset {
+  display: flex; align-items: baseline; gap: .4rem; font-size: .82rem;
+  cursor: pointer; white-space: nowrap;
+}
+.preset .dim { font-size: .76rem; }
+.wbody .controls { margin: .5rem 0 0; }
+/* `display: flex` on .controls outranks the `hidden` attribute's display:none, so
+   the weight sliders leaked into view while a named preset was selected. The
+   id+attribute selector wins it back. The SOS chart hit this same trap. */
+#at-custom[hidden] { display: none; }
+/* A small circled question mark, standing in for the ratio that used to be
+   printed beside every preset. */
+.hint {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1rem; height: 1rem; border-radius: 50%; border: 1px solid var(--line);
+  color: var(--dim); font-size: .62rem; font-weight: 700; cursor: help;
+  position: relative; outline: none; margin-left: .1rem;
+}
+.hint:hover, .hint:focus { border-color: var(--ink); color: var(--ink); }
+.hint:hover .hintbox, .hint:focus .hintbox { display: block; }
+.hint .hintbox { white-space: normal; width: 17rem; text-align: left; }
+.at-tools { display: flex; align-items: center; gap: .6rem; margin: 0 0 .6rem; }
+.at-tools input[type=search] {
+  font: inherit; font-size: .82rem; padding: .25rem .5rem; width: 20rem;
+  max-width: 100%; border: 1px solid var(--line); border-radius: 4px;
+  color: var(--ink); background: #fff;
+}
+.at-tools input[type=search]:focus { outline: none; border-color: var(--ink); }
+.at-tools > .dim { font-size: .76rem; }
+/* `hidden` has to beat the table display roles it would otherwise lose to. */
+tr[hidden], tbody[hidden] { display: none; }
+.at-chart-view[hidden], .at-table-view[hidden] { display: none; }
+/* A quiet checkbox tucked beside the weights link. */
+.at-live {
+  display: inline-flex; align-items: center; gap: .3rem; font-size: .78rem;
+  color: var(--dim); white-space: nowrap; cursor: pointer;
+}
+.at-live:hover { color: var(--ink); }
+/* The parking spot the pickers are moved out of; never shown itself. */
+.at-axes { display: none; }
+.at-pick {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .8rem; color: var(--dim);
+}
+.at-pick select { font: inherit; font-size: .8rem; }
+/* The scatter, laid out with the pickers ON its axes -- Y down the left, X
+   centred underneath -- the same arrangement the season chart uses. Positioned so
+   the hover card can be placed over it by hand. */
+.at-chart-view {
+  position: relative;
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto;
+  align-items: center; gap: .35rem .5rem;
+}
+/* display:grid outranks the hidden attribute; without this the chart and its
+   pickers would show in table view. Same trap as #sos-chart-view. */
+.at-chart-view[hidden] { display: none; }
+#at-pick-y { grid-column: 1; grid-row: 1; justify-self: end; }
+/* `justify-self`, not `text-align`: the picker is a flex box sized to its
+   contents, so centring its text does nothing -- the box itself has to be
+   centred in the column. */
+#at-pick-x { grid-column: 2; grid-row: 2; justify-self: center; }
+svg.at-chart {
+  /* Capped at the viewBox width so the drawing is never scaled up. `width: 100%`
+     alone stretched a 660-unit chart across a 1050px column, multiplying every
+     dot and label by 1.6 -- the dots read as a solid mass and the four-letter
+     abbreviations spilled out of them, which looked like the radius being wrong
+     rather than the whole canvas being magnified. */
+  /* Centred in its column so the X picker, which centres on the column, lines up
+     with the middle of the plot rather than sitting slightly off it. */
+  grid-column: 2; grid-row: 1; margin: 0 auto;
+  width: 100%; max-width: 900px; height: auto; display: block;
+  font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+/* A soft frame around the plot so the scatter reads as one figure. */
+.atframe { fill: none; stroke: var(--line); stroke-width: 1; }
+/* Column definitions, below the tables. Laid out in columns so five one-line
+   glosses read as a key rather than as prose the reader has to get past. */
+.at-legend {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: .3rem 1.5rem; margin: 1.25rem 0 0; padding-top: .75rem;
+  border-top: 1px solid var(--line); font-size: .78rem;
+}
+.at-legend dt { font-weight: 600; }
+.at-legend dd { margin: 0; color: var(--dim); }
+.atdot { cursor: default; }
+.atdot circle { stroke: #fff; stroke-width: 1; }
+.atdot:hover circle { stroke: var(--ink); stroke-width: 2; }
+/* An in-progress season is not rankable, so it is drawn as provisional. */
+.atdot-live circle { opacity: .55; stroke-dasharray: 2 2; stroke: var(--ink); }
+/* font-size is set per dot so a four-letter abbreviation still fits; see drawChart. */
+.atdot-lbl { fill: #fff; font-weight: 700; pointer-events: none; }
+.at-tip {
+  position: absolute; transform: translate(-50%, -100%); z-index: 7;
+  background: var(--ink); color: #fff; padding: .3rem .55rem; border-radius: 6px;
+  font-size: .74rem; line-height: 1.35; white-space: nowrap; pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .28);
+}
+.at-none { color: var(--dim); font-size: .82rem; margin: .4rem 0 0; }
+.wbody .controls .dim { min-width: 2.6rem; display: inline-block; }
+/* The accolade control has nothing to scale in the regular-season scope. */
+.wbody .controls label.off { opacity: .4; }
+.wbody button {
+  font: inherit; font-size: .78rem; padding: .15rem .6rem; cursor: pointer;
+  border: 1px solid var(--line); background: #fff; color: var(--dim);
+}
+/* The rating is the column the table exists for, so it is the only bold one. */
+td.rating { font-weight: 700; }
+td.owner { color: var(--dim); font-size: .8rem; white-space: nowrap; }
 footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 """
 
@@ -277,7 +507,7 @@ STRENGTH_JS = """
   var section = document.getElementById('sos-section');
   var blend = document.getElementById('sos-blend');
   var label = document.getElementById('sos-blend-label');
-  var view = document.getElementById('sos-view');
+  var viewSeg = document.getElementById('sos-view-seg');
   var xsel = document.getElementById('sos-x');
   var ysel = document.getElementById('sos-y');
   var svg = document.getElementById('sos-chart');
@@ -300,27 +530,45 @@ STRENGTH_JS = """
   function num(s) { var v = parseFloat(s); return isNaN(v) ? null : v; }
   function fmtSor(v) { return (v >= 0 ? '+' : '\\u2212') + Math.abs(v).toFixed(3); }
   function refOf(k) { return k === 'sos' ? SOS_CENTER : (k === 'sor' ? 0 : null); }
-  // SOS and SOR get a fixed axis so dragging the slider moves the dots, not the
-  // scale -- SOS is pinned 15..85 around 50, SOR 0.3..-0.3 around 0. The rest
-  // auto-scale to their data, since they do not move with the controls.
-  function fixedDomain(k) { return k === 'sos' ? [15, 85] : (k === 'sor' ? [-0.3, 0.3] : null); }
+  // SOS and SOR get a fixed half-span so dragging the slider moves the dots, not
+  // the scale -- SOS spans 15..85 about 50, SOR -0.3..0.3 about 0. The rest scale
+  // to their data, since they do not move with the controls.
+  var FIXED_SPAN = { sos: 35, sor: 0.3 };
 
-  // What a low / high value of each metric means, in plain words. A quadrant
-  // label joins the phrase for its X direction with the one for its Y direction,
-  // so "wins + tough schedule" names the top-right when those are the axes.
-  var PHRASE = {
-    sos: ['easy schedule', 'tough schedule'],
-    sor: ['underachieving', 'overachieving'],
-    wins: ['loses a lot', 'wins a lot'],
-    ppg: ['scores little', 'scores a lot'],
-    oppppg: ['weak opponents', 'strong opponents'],
-    pf: ['low total points', 'high total points']
+  // Gridline spacing per metric. Every one of these reads on sight, so all are
+  // labelled with their own value (`abs`) rather than a distance from average --
+  // and the number under a dot then matches the number in the table beside it.
+  var TICK = {
+    sos: { step: 10, mode: 'abs' },
+    sor: { step: 0.1, mode: 'abs' },
+    wins: { step: 1, mode: 'abs' },
+    ppg: { step: 5, mode: 'abs' },
+    oppppg: { step: 5, mode: 'abs' },
+    pf: { step: 50, mode: 'abs' }
   };
-  function quadLabel(xk, yk, xHigh, yHigh) {
-    var xp = PHRASE[xk] ? PHRASE[xk][xHigh ? 1 : 0] : '';
-    var yp = PHRASE[yk] ? PHRASE[yk][yHigh ? 1 : 0] : '';
-    if (xk === yk) return xp;          // same metric on both axes -> one phrase
-    return (xp && yp) ? xp + ' \\u00b7 ' + yp : (xp || yp);
+
+  function tickText(k, v) {
+    // Signed as the column shows it -- except at the reference itself, where a
+    // "+0.000" claims a direction the value does not have.
+    if (k === 'sor') return Math.abs(v) < 1e-9 ? '0.000' : fmtSor(v);
+    return String(Math.round(v));
+  }
+
+  // Ticks land on multiples of the step, not on offsets from wherever the plotted
+  // mean happens to fall -- otherwise Points For reads "259 309 359", and the
+  // gridline under a rounded label sits a fraction away from the value it claims.
+  //
+  // The epsilon is load-bearing: -0.3 / 0.1 is -2.9999999999999996 in binary
+  // floating point, so a bare ceil() rounds up and silently loses the tick at the
+  // far end of a fixed domain.
+  function ticksOf(k, centre, half) {
+    var t = TICK[k];
+    if (!t) return [];
+    var out = [], hi = centre + half;
+    for (var v = Math.ceil((centre - half) / t.step - 1e-9) * t.step; v <= hi + 1e-9; v += t.step) {
+      out.push(Math.round(v / t.step) * t.step);
+    }
+    return out;
   }
 
   // The value of any metric for a team. SOS is recomputed from the blend so it
@@ -358,18 +606,6 @@ STRENGTH_JS = """
       Math.round(w * 100) + '% points / ' + Math.round((1 - w) * 100) + '% record';
   }
 
-  function extent(vals) {
-    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-    if (lo === hi) { lo -= 1; hi += 1; }
-    var pad = (hi - lo) * 0.1;
-    return [lo - pad, hi + pad];
-  }
-  // Count metrics (wins) read as whole numbers; the rest keep one decimal.
-  function isCount(k) { return k === 'wins'; }
-  function fmtAxis(v, k) {
-    if (isCount(k)) return String(Math.round(v));
-    return Math.abs(v) >= 100 ? String(Math.round(v)) : v.toFixed(1);
-  }
   function mean(a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; }
 
   function drawChart() {
@@ -379,71 +615,194 @@ STRENGTH_JS = """
     rows.forEach(function (tr) {
       var x = metricVal(tr, xk, w), y = metricVal(tr, yk, w);
       if (x === null || y === null) return;
-      pts.push({ x: x, y: y, abbr: tr.getAttribute('data-abbr') || '', color: tr.getAttribute('data-color') || '#888', logo: tr._logo || '' });
+      pts.push({
+        x: x, y: y,
+        abbr: tr.getAttribute('data-abbr') || '',
+        color: tr.getAttribute('data-color') || '#888',
+        logo: tr._logo || '',
+        team: tr.getAttribute('data-team') || '',
+        manager: tr.getAttribute('data-manager') || '',
+        record: tr.getAttribute('data-record') || ''
+      });
     });
     if (!pts.length) { svg.innerHTML = ''; return; }
-    var W = 660, H = 430, mL = 52, mR = 24, mT = 18, mB = 30;
-    var xe = fixedDomain(xk) || extent(pts.map(function (p) { return p.x; }));
-    var ye = fixedDomain(yk) || extent(pts.map(function (p) { return p.y; }));
-    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-    function SX(v) { return clamp(mL + (v - xe[0]) / (xe[1] - xe[0]) * (W - mL - mR), mL, W - mR); }
-    function SY(v) { return clamp(H - mB - (v - ye[0]) / (ye[1] - ye[0]) * (H - mT - mB), mT, H - mB); }
-    var e = [];
-    // Both axes get a divider so the quadrants mean something: a fixed line where
-    // one exists (SOS at 50, SOR at 0), otherwise the average of the plotted teams.
-    var xr = refOf(xk); if (xr === null) xr = mean(pts.map(function (p) { return p.x; }));
-    var yr = refOf(yk); if (yr === null) yr = mean(pts.map(function (p) { return p.y; }));
-    if (xr > xe[0] && xr < xe[1]) e.push('<line x1="' + SX(xr) + '" y1="' + mT + '" x2="' + SX(xr) + '" y2="' + (H - mB) + '" class="cref"/>');
-    if (yr > ye[0] && yr < ye[1]) e.push('<line x1="' + mL + '" y1="' + SY(yr) + '" x2="' + (W - mR) + '" y2="' + SY(yr) + '" class="cref"/>');
-    e.push('<line x1="' + mL + '" y1="' + (H - mB) + '" x2="' + (W - mR) + '" y2="' + (H - mB) + '" class="cax"/>');
-    e.push('<line x1="' + mL + '" y1="' + mT + '" x2="' + mL + '" y2="' + (H - mB) + '" class="cax"/>');
-    // Axis tick numbers only -- the metric names live in the HTML selects on each
-    // axis, so they are not repeated here.
-    e.push('<text x="' + mL + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="start">' + fmtAxis(xe[0], xk) + '</text>');
-    e.push('<text x="' + (W - mR) + '" y="' + (H - mB + 16) + '" class="ctick" text-anchor="end">' + fmtAxis(xe[1], xk) + '</text>');
-    e.push('<text x="' + (mL - 8) + '" y="' + (H - mB) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[0], yk) + '</text>');
-    e.push('<text x="' + (mL - 8) + '" y="' + (mT + 10) + '" class="ctick" text-anchor="end">' + fmtAxis(ye[1], yk) + '</text>');
-    pts.forEach(function (p) {
-      var cx = SX(p.x), cy = SY(p.y);
-      if (p.logo) {
-        // --logos inlined this team's image: draw it in place of the circle,
-        // abbreviation just below.
-        var s = 26;
-        e.push('<image href="' + p.logo + '" x="' + (cx - s / 2) + '" y="' + (cy - s / 2) + '" width="' + s + '" height="' + s + '" preserveAspectRatio="xMidYMid slice"/>');
-        e.push('<text x="' + cx + '" y="' + (cy + s / 2 + 9) + '" class="cpt-lbl" text-anchor="middle">' + p.abbr + '</text>');
-      } else {
-        e.push('<circle cx="' + cx + '" cy="' + cy + '" r="13" fill="' + p.color + '"/>');
-        e.push('<text x="' + cx + '" y="' + (cy + 3) + '" class="cpt" text-anchor="middle">' + p.abbr + '</text>');
-      }
-    });
-    // Name each corner by what the chosen axes mean there -- top is high Y, right
-    // is high X -- so the reading changes with the selects.
-    function corner(x, y, anchor, xHigh, yHigh) {
-      var t = quadLabel(xk, yk, xHigh, yHigh);
-      if (t) e.push('<text x="' + x + '" y="' + y + '" class="cquad" text-anchor="' + anchor + '">' + t + '</text>');
+
+    // Centred on the reference rather than fitted to the data. Wins, PPG and the
+    // rest are all positive and tightly clustered, so a domain fitted to them
+    // pushed the whole league into one corner. SOS and SOR keep a fixed half-span
+    // so dragging the slider moves the dots, not the scale.
+    function centre(k, vals) {
+      var r = refOf(k);
+      if (r !== null) return r;
+      // Snapped to the nearest gridline. A rule drawn at the raw average sits
+      // between two ticks and reads as a third, unlabelled one -- at 119.6 PPG it
+      // looks like a value the chart never names. The span is measured *after*
+      // this, so moving the centre cannot push a dot outside the frame.
+      var m = mean(vals), t = TICK[k];
+      return t ? Math.round(m / t.step) * t.step : m;
     }
-    corner(mL + 6, mT + 14, 'start', false, true);       // top-left:  low X, high Y
-    corner(W - mR - 6, mT + 14, 'end', true, true);       // top-right: high X, high Y
-    corner(mL + 6, H - mB - 8, 'start', false, false);    // bottom-left:  low X, low Y
-    corner(W - mR - 6, H - mB - 8, 'end', true, false);   // bottom-right: high X, low Y
+    function span(k, vals, c) {
+      if (FIXED_SPAN[k] !== undefined) return FIXED_SPAN[k];
+      var m = 0;
+      vals.forEach(function (v) { m = Math.max(m, Math.abs(v - c)); });
+      if (!m) m = Math.abs(c) || 1;
+      return m * 1.15;
+    }
+    var xv = pts.map(function (p) { return p.x; });
+    var yv = pts.map(function (p) { return p.y; });
+    var cx0 = centre(xk, xv), cy0 = centre(yk, yv);
+    var xm = span(xk, xv, cx0), ym = span(yk, yv, cy0);
+
+    var xt = ticksOf(xk, cx0, xm), yt = ticksOf(yk, cy0, ym);
+    // mL clears the widest tick number ("-0.300", "1.000"); mB clears one line of
+    // them. Nothing else lives in the margins now the axis phrases are gone.
+    var W = 900, H = 450, mR = 14, mT = 14, mL = 44, mB = 22;
+    // The plotted area is inset from the frame by enough to hold a whole mark, so
+    // a team sitting exactly at the end of a fixed domain -- SOS and SOR have no
+    // padding by design, and a real league does reach their limits -- is drawn
+    // inside the box rather than hanging off it. The bottom inset is deeper
+    // because the abbreviation hangs below the dot.
+    var pX = 12, pT = 12, pB = 22;
+    // Clamped into that inset box, because a fixed domain can be overshot: SOR is
+    // pinned to -0.3..0.3 so the slider moves the dots and not the scale, and a
+    // real team has come in at +0.572. Without this it is drawn off the chart
+    // entirely -- a team good enough to leave the axis vanished from it.
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function SX(v) {
+      return clamp(mL + pX + ((v - cx0) + xm) / (2 * xm) * (W - mL - mR - 2 * pX),
+                   mL + pX, W - mR - pX);
+    }
+    function SY(v) {
+      return clamp(H - mB - pB - ((v - cy0) + ym) / (2 * ym) * (H - mT - mB - pT - pB),
+                   mT + pT, H - mB - pB);
+    }
+    var e = [];
+    e.push('<rect x="' + mL + '" y="' + mT + '" width="' + (W - mL - mR)
+      + '" height="' + (H - mT - mB) + '" rx="4" class="atframe"/>');
+    // Gridlines first, so the axis rules, the dots and the labels sit on top. A
+    // gridline is skipped where a line is already drawn -- down the centre and at
+    // the two ends -- since a dashed line over a solid one reads as a thicker rule.
+    function spare(pos, centrePos, lo, hi) {
+      return Math.abs(pos - centrePos) < 1 || pos - lo < 1 || hi - pos < 1;
+    }
+    xt.forEach(function (v) {
+      var x = SX(v);
+      if (!spare(x, SX(cx0), mL, W - mR)) {
+        e.push('<line x1="' + x + '" y1="' + mT + '" x2="' + x + '" y2="' + (H - mB) + '" class="cref"/>');
+      }
+      e.push('<text x="' + x + '" y="' + (H - mB + 13) + '" class="ctick" text-anchor="middle">'
+        + tickText(xk, v) + '</text>');
+    });
+    yt.forEach(function (v) {
+      var y = SY(v);
+      if (!spare(y, SY(cy0), mT, H - mB)) {
+        e.push('<line x1="' + mL + '" y1="' + y + '" x2="' + (W - mR) + '" y2="' + y + '" class="cref"/>');
+      }
+      e.push('<text x="' + (mL - 6) + '" y="' + (y + 4) + '" class="ctick" text-anchor="end">'
+        + tickText(yk, v) + '</text>');
+    });
+    // The two axis rules through the centre: average schedule, par record.
+    e.push('<line x1="' + SX(cx0) + '" y1="' + mT + '" x2="' + SX(cx0) + '" y2="' + (H - mB) + '" class="cax"/>');
+    e.push('<line x1="' + mL + '" y1="' + SY(cy0) + '" x2="' + (W - mR) + '" y2="' + SY(cy0) + '" class="cax"/>');
+    var R = 9;  // the all-time chart's radius, so the two scatters match
+    pts.forEach(function (p, i) {
+      var cx = SX(p.x), cy = SY(p.y);
+      // Same geometry as the all-time chart -- one radius, one ring, one label
+      // size -- so the two scatters read as the same kind of figure. A photo
+      // cannot carry legible text on top of it, so where one exists the
+      // abbreviation goes just below the dot instead of inside it.
+      // Grouped so the whole mark is one hover target, with its index to look the
+      // team up on. A four-letter dot cannot say whose team it is or its record.
+      e.push('<g class="cpt-mark" data-i="' + i + '">');
+      if (p.logo) {
+        // --logos inlined this team's image: it fills the dot, clipped round.
+        e.push('<image class="cpt-logo" href="' + p.logo + '" x="' + (cx - R) + '" y="' + (cy - R) + '" width="' + (2 * R) + '" height="' + (2 * R) + '" preserveAspectRatio="xMidYMid slice"/>');
+        e.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" class="cpt-ring"/>');
+        // The label is wider than the dot it sits under, so it is kept inside the
+        // frame on its own account -- a four-letter abbreviation ("BUTT") centred
+        // on a dot at the edge hangs out past the border even when the dot does
+        // not. Measured: uppercase at this weight and size runs ~7px a character,
+        // so half the string is 3.6 each, rounded up rather than down.
+        var half = p.abbr.length * 3.6;
+        e.push('<text x="' + clamp(cx, mL + half + 2, W - mR - half - 2) + '" y="' + (cy + R + 8) + '" class="cpt-lbl" text-anchor="middle">' + p.abbr + '</text>');
+      } else {
+        var fs = p.abbr.length > 3 ? 5.5 : p.abbr.length > 2 ? 7 : 8.5;
+        e.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="' + p.color + '" class="cpt-dot"/>');
+        e.push('<text x="' + cx + '" y="' + (cy + fs / 3) + '" class="cpt" font-size="' + fs + '" text-anchor="middle">' + p.abbr + '</text>');
+      }
+      e.push('</g>');
+    });
+    // No plain-words label at the axis ends: the numbers say where a dot sits, and
+    // what the metric means now lives on the `?` beside its picker, where it can
+    // be a sentence instead of two words squeezed against the frame.
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.innerHTML = e.join('');
+
+    // Hover gives the three things a four-letter dot cannot: the team's full name,
+    // who runs it, and its record. Positioned by hand rather than left to a native
+    // tooltip, which takes a second or two and reads as nothing happening.
+    var tip = document.getElementById('sos-tip');
+    if (!tip) return;
+    svg.querySelectorAll('g.cpt-mark').forEach(function (g) {
+      g.addEventListener('mouseenter', function () {
+        var p = pts[parseInt(g.getAttribute('data-i'), 10)];
+        tip.innerHTML = '<b>' + p.team + '</b><br>' + p.manager
+          + (p.record ? ' &middot; ' + p.record : '');
+        tip.hidden = false;
+        // Anchored on the dot, not the group: the group's box also covers the
+        // label below it, which is wider and -- when clamped away from the frame
+        // edge -- off to one side, so its centre is not the team's position.
+        var dot = g.querySelector('image, circle');
+        var box = (dot || g).getBoundingClientRect();
+        // Measured against the tip's own offset parent, not the svg, which is
+        // centred inside it (see the all-time chart for the same trap).
+        var host = (tip.offsetParent || svg).getBoundingClientRect();
+        tip.style.left = (box.left - host.left + box.width / 2) + 'px';
+        tip.style.top = (box.top - host.top - 6) + 'px';
+      });
+      g.addEventListener('mouseleave', function () { tip.hidden = true; });
+    });
+  }
+
+  function charting() {
+    var on = viewSeg && viewSeg.querySelector('button.on');
+    return !!on && on.getAttribute('data-view') === 'chart';
   }
 
   function showView() {
-    var chart = view && view.value === 'chart';
+    var chart = charting();
     if (section) section.className = chart ? 'charting' : '';
     if (tableView) tableView.hidden = chart;
     if (chartView) chartView.hidden = !chart;
     if (chart) drawChart();
   }
 
-  function update() { updateTable(); if (view && view.value === 'chart') drawChart(); }
+  function update() { updateTable(); if (charting()) drawChart(); }
+
+  // The `?` beside a picker explains whichever metric is chosen, read off that
+  // option's own gloss so the two can never disagree.
+  function describe(sel) {
+    if (!sel) return;
+    var hint = document.getElementById(sel.id + '-hint');
+    if (!hint) return;
+    var gloss = sel.options[sel.selectedIndex].getAttribute('data-gloss') || '';
+    hint.querySelector('.hintbox').textContent = gloss;
+    hint.setAttribute('aria-label', gloss);
+  }
 
   blend.addEventListener('input', update);
-  if (view) view.addEventListener('change', showView);
-  if (xsel) xsel.addEventListener('change', drawChart);
-  if (ysel) ysel.addEventListener('change', drawChart);
+  if (viewSeg) viewSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-view]');
+    if (!b) return;
+    viewSeg.querySelectorAll('button').forEach(function (x) {
+      if (x === b) x.classList.add('on'); else x.classList.remove('on');
+    });
+    showView();
+  });
+  if (xsel) xsel.addEventListener('change', function () { describe(xsel); drawChart(); });
+  if (ysel) ysel.addEventListener('change', function () { describe(ysel); drawChart(); });
+  describe(xsel);
+  describe(ysel);
   updateTable();
 })();
 """
@@ -463,6 +822,24 @@ STANDINGS_JS = """
     var want = b.getAttribute('data-view');
     views.forEach(function (el) { el.hidden = el.getAttribute('data-view') !== want; });
     seg.querySelectorAll('button').forEach(function (x) {
+      if (x === b) x.classList.add('on'); else x.classList.remove('on');
+    });
+  });
+})();
+"""
+
+
+TABS_JS = """
+(function () {
+  var bar = document.getElementById('tabs');
+  if (!bar) return;
+  var panes = document.querySelectorAll('.tabpane');
+  bar.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-tab]');
+    if (!b) return;
+    var want = b.getAttribute('data-tab');
+    panes.forEach(function (el) { el.hidden = el.getAttribute('data-tab') !== want; });
+    bar.querySelectorAll('button').forEach(function (x) {
       if (x === b) x.classList.add('on'); else x.classList.remove('on');
     });
   });
@@ -885,26 +1262,54 @@ def _to_come_cell(row, current_week, abbreviations):
 
 # Metrics the scatter's two axes can pick from. SOS is live (recomputed from the
 # slider); the rest are fixed per team, carried as row data.
-CHART_METRICS = [
-    ("sos", "SOS"),
-    ("sor", "SOR"),
-    ("wins", "Wins"),
-    ("ppg", "PPG"),
-    ("oppppg", "Opp PPG"),
-    ("pf", "Points For"),
+# Each axis metric with a one-line gloss, which rides on the <option> and is shown
+# by the `?` beside the picker. One table so the name and the explanation cannot
+# drift apart.
+SEASON_METRICS = [
+    ("sos", "SOS", "How hard a team&rsquo;s opponents have been &mdash; 50 is average"),
+    (
+        "sor",
+        "SOR",
+        "How its win rate compares with what an average team would manage "
+        "on the same schedule",
+    ),
+    ("wins", "Wins", "Games won so far"),
+    ("ppg", "PPG", "Its own points per game"),
+    ("oppppg", "Opp PPG", "Points per game its opponents average"),
+    ("pf", "Points For", "Total points scored so far"),
 ]
+CHART_METRICS = [(key, label) for key, label, _ in SEASON_METRICS]
+
+
+def _axis_options(metrics, selected):
+    """<option>s for an axis picker, each carrying its own one-line gloss.
+
+    The gloss travels on the option rather than sitting in a second table in the
+    script, so the `?` beside the picker always describes the metric actually
+    chosen and the two cannot drift apart.
+    """
+    return "".join(
+        f'<option value="{key}" data-gloss="{gloss}"'
+        f'{" selected" if key == selected else ""}>{label}</option>'
+        for key, label, gloss in metrics
+    )
+
+
+def _axis_hint(axis_id):
+    """The `?` beside an axis picker; its text is filled in by the chart script."""
+    return (
+        f'<span class="hint" id="{axis_id}-hint" tabindex="0">?'
+        f'<span class="hintbox"></span></span>'
+    )
 
 
 def _metric_options(selected):
-    return "".join(
-        f'<option value="{key}"{" selected" if key == selected else ""}>{label}</option>'
-        for key, label in CHART_METRICS
-    )
+    return _axis_options(SEASON_METRICS, selected)
 
 
 def render_strength(
     weekly_scores, remaining_matchups=None, abbreviations=None, current_week=0,
-    standings=None, logo_class=None
+    standings=None, logo_class=None, managers=None
 ):
     rows = strength.strength_table(weekly_scores, remaining_matchups)
     if not rows:
@@ -912,6 +1317,7 @@ def render_strength(
     any_remaining = any(row["sos_remaining"] is not None for row in rows)
     # Per-team season figures the chart's fixed axes need, keyed by name.
     stats = {team["team_name"]: team for team in (standings or [])}
+    managers = managers or {}
 
     body = []
     for position, row in enumerate(rows, 1):
@@ -937,7 +1343,12 @@ def render_strength(
             f' data-wins="{_attr(team.get("wins"))}" data-ppg="{_attr(own_ppg)}"'
             f' data-pf="{_attr(points_for)}" data-oppppg="{_attr(row["opp_ppg"])}"'
             f' data-abbr="{esc(monogram(row["name"], abbreviations))}"'
-            f' data-color="{monogram_colour(row["name"])}">'
+            f' data-color="{monogram_colour(row["name"])}"'
+            # For the chart's hover card, which has only a four-letter dot to
+            # work with. Full manager names, as in the all-time table.
+            f' data-team="{esc(row["name"])}"'
+            f' data-manager="{esc(_manager_label(managers.get(row["name"], [])))}"'
+            f' data-record="{_standings_record(team)}">'
             f'<td class="num sos-rank">{position}</td>'
             f'<td class="name">{team_mark(row["name"], abbreviations, logo_class)}'
             f'{esc(row["name"])}</td>'
@@ -960,9 +1371,7 @@ than its schedule would give that team, red worse. Drag the weighting to re-rank
 50/50 blend against an average team.</p>
 <div id="sos-section">
 <div class="controls">
-  <label>View
-    <select id="sos-view"><option value="table">Table</option><option value="chart">Chart</option></select>
-  </label>
+  <span class="seg" id="sos-view-seg"><button data-view="table" class="on">Table</button><button data-view="chart">Chart</button></span>
   <label>SOS weighting
     <span class="dim">record</span>
     <input type="range" id="sos-blend" min="0" max="100" value="50">
@@ -979,9 +1388,10 @@ than its schedule would give that team, red worse. Drag the weighting to re-rank
 </table>
 </div>
 <div id="sos-chart-view" hidden>
-<div class="chart-y"><label>Y&nbsp;axis <select id="sos-y">{_metric_options("sor")}</select></label></div>
+<div class="chart-y"><select id="sos-y" aria-label="Y axis metric">{_metric_options("sor")}</select>{_axis_hint("sos-y")}</div>
 <svg id="sos-chart" role="img" aria-label="Scatter of two chosen metrics per team"></svg>
-<div class="chart-x"><label>X&nbsp;axis <select id="sos-x">{_metric_options("sos")}</select></label></div>
+<div class="at-tip" id="sos-tip" hidden></div>
+<div class="chart-x"><select id="sos-x" aria-label="X axis metric">{_metric_options("sos")}</select>{_axis_hint("sos-x")}</div>
 </div>
 </div>
 <script>var SOS_CENTER={SOS_CENTER},SOS_GAIN={SOS_GAIN};{STRENGTH_JS}</script>"""
@@ -1028,7 +1438,1026 @@ week-by-week opponents.</p>
 </table>"""
 
 
-def render(payload, show=None):
+# Everything the all-time tab needs to re-rank is already on each row as a data
+# attribute, so the sliders and the scope selector work with no round trip and no
+# duplicated numbers. With scripting off, the default-scope tables stand exactly as
+# rendered -- which is the same rule the standings selector and the SOS slider follow.
+ALL_TIME_JS = """
+(function () {
+  var seg = document.getElementById('at-seg');
+  var weights_el = document.getElementById('at-weights');
+  if (!seg || !weights_el) return;
+  var presets = document.getElementById('at-presets');
+  var custom = document.getElementById('at-custom');
+  var presetName = document.getElementById('at-preset-name');
+  var views = Array.prototype.slice.call(document.querySelectorAll('.at-view'));
+  var KEYS = ['strength', 'record', 'scoring'];
+  var inputs = {};
+  KEYS.concat(['hardware']).forEach(function (k) {
+    inputs[k] = document.getElementById('at-w-' + k);
+  });
+  var defaults = {};
+  Object.keys(inputs).forEach(function (k) { defaults[k] = inputs[k].value; });
+
+  function num(el, attr) { return parseFloat(el.getAttribute(attr)) || 0; }
+
+  function weights() {
+    var raw = {}, total = 0;
+    KEYS.forEach(function (k) {
+      raw[k] = parseFloat(inputs[k].value) || 0;
+      total += raw[k];
+    });
+    // All three at zero would divide by zero and rank on accolades alone, which
+    // is a legitimate thing to ask for -- so the blend contributes nothing rather
+    // than producing NaN.
+    KEYS.forEach(function (k) { raw[k] = total ? raw[k] / total : 0; });
+    raw.hardware = (parseFloat(inputs.hardware.value) || 0) / 100;
+    raw._total = total;
+    return raw;
+  }
+
+  function ratingOf(tr, w) {
+    var base = 0;
+    KEYS.forEach(function (k) { base += w[k] * num(tr, 'data-' + k); });
+    return 100 * base + w.hardware * num(tr, 'data-hardware');
+  }
+
+  // Rank is always by rating, whatever the table is sorted by -- so sorting by
+  // PPG still tells you that the league's highest scorer was only the 5th best
+  // team. Renumbering on every sort would throw that away.
+  function rank(tbody, rows) {
+    rows.slice().sort(function (a, b) {
+      if (b._r !== a._r) return b._r - a._r;
+      return (b._y || 0) - (a._y || 0);
+    }).forEach(function (tr, i) {
+      var rk = tr.querySelector('.at-rank');
+      if (rk) rk.textContent = i + 1;
+    });
+  }
+
+  // Sort state lives on the table, so the two tables in a view sort independently
+  // and a scope switch or a slider drag does not silently reset either one.
+  function applySort(table, tbody, rows) {
+    var key = table._sortKey || 'rating';
+    var dir = table._sortDir || -1;
+    var text = table._sortText || false;
+    rows.sort(function (a, b) {
+      var av, bv;
+      if (key === 'rating') { av = a._r; bv = b._r; }
+      else if (text) {
+        av = (a.getAttribute('data-' + key) || '').toLowerCase();
+        bv = (b.getAttribute('data-' + key) || '').toLowerCase();
+        if (av !== bv) return (av < bv ? -1 : 1) * -dir;
+        av = a._r; bv = b._r;
+      } else { av = num(a, 'data-' + key); bv = num(b, 'data-' + key); }
+      if (av !== bv) return (av - bv) * dir;
+      // A total order, so equal values never shuffle between renders.
+      return (b._y || 0) - (a._y || 0);
+    });
+    rows.forEach(function (tr) { tbody.appendChild(tr); });
+    table.querySelectorAll('th[data-sort]').forEach(function (th) {
+      var on = th.getAttribute('data-sort') === key;
+      th.classList.toggle('sorted', on);
+      th.setAttribute('data-dir', on ? (dir < 0 ? 'desc' : 'asc') : '');
+    });
+  }
+
+  // Every term must match, so "2023 champion" narrows rather than widens, and
+  // "kobrossi playoffs" is a useful question. Rank is untouched by filtering: a
+  // manager's three rows keep their all-time numbers rather than becoming 1, 2, 3.
+  var find = document.getElementById('at-find');
+  var found = document.getElementById('at-found');
+  var FIELDS = ['year', 'team', 'manager', 'accolades'];
+
+  function haystack(tr) {
+    if (tr._hay === undefined) {
+      tr._hay = FIELDS.map(function (f) {
+        return tr.getAttribute('data-' + f) || '';
+      }).join(' ').toLowerCase();
+    }
+    return tr._hay;
+  }
+
+  function searchTerms() {
+    return (find && find.value || '').toLowerCase().split(/\\s+/)
+      .filter(function (t) { return t; });
+  }
+
+  // Shared by the table and the chart's overlay so one search box cannot mean two
+  // different things in the two views.
+  function matches(tr) {
+    var hay = haystack(tr);
+    return searchTerms().every(function (t) { return hay.indexOf(t) !== -1; });
+  }
+
+  function filter(rows) {
+    var terms = searchTerms();
+    var shown = 0;
+    rows.forEach(function (tr) {
+      var hit = matches(tr);
+      tr.hidden = !hit;
+      if (hit) shown++;
+    });
+    if (found) {
+      found.textContent = terms.length
+        ? shown + ' of ' + rows.length + (shown ? '' : ' \\u2014 nothing matched')
+        : '';
+    }
+  }
+
+  // --- the scatter -----------------------------------------------------------
+  //
+  // Centred on 0,0 rather than auto-scaled to the data. Every metric here is
+  // bounded and clustered above zero, so a domain fitted to the points put the
+  // whole league in one corner. Each axis is given a symmetric domain about its
+  // reference, so the middle of the chart is average by construction.
+  //
+  // Strength, record and scoring are defined so that .500 IS average, which is why
+  // those three get a fixed centre rather than the mean of whatever is plotted.
+  var viewSeg = document.getElementById('at-view-seg');
+  var axes = document.getElementById('at-axes');
+  var xsel = document.getElementById('at-x');
+  var ysel = document.getElementById('at-y');
+  var live = document.getElementById('at-live');
+  var FIXED_CENTRE = { strength: 0.5, record: 0.5, scoring: 0.5 };
+  // Every axis is numbered; what differs is whether the number is the metric's own
+  // value or its distance from the middle of the chart.
+  //   `abs`  -- read it straight: a win percentage, points per game.
+  //   `rel`  -- a signed distance from average, which is the only reading a
+  //             within-season rate supports. Strength and scoring are rates, so a
+  //             step of .05 is shown as the 5 percentage points it is; rating is
+  //             already on a 0-100 scale, so its own points are used.
+  var TICK = {
+    record: { step: 0.1, mode: 'abs' },
+    ppg: { step: 5, mode: 'abs' },
+    strength: { step: 0.05, mode: 'rel', scale: 100 },
+    scoring: { step: 0.05, mode: 'rel', scale: 100 },
+    rating: { step: 5, mode: 'rel', scale: 1 }
+  };
+
+  // A metric with real bounds gets them, instead of a domain fitted to whoever
+  // happens to be plotted. A win percentage runs 0 to 1 whatever this league did,
+  // so showing the whole range puts every season in its true place on the scale
+  // rather than stretching the best and worst of them to the edges.
+  var FIXED_SPAN = { record: 0.5 };
+
+  function tickText(k, v, centre) {
+    var t = TICK[k];
+    if (!t) return '';
+    if (t.mode === 'abs') {
+      // Win percentage in the form the sport writes it (.500); points per game as
+      // a whole number, since a tenth of a point never decides anything here.
+      return k === 'record' ? v.toFixed(3).replace(/^0\\./, '.') : String(Math.round(v));
+    }
+    var d = Math.round((v - centre) * t.scale);
+    return d === 0 ? '0' : (d > 0 ? '+' : '\\u2212') + Math.abs(d);
+  }
+
+  // Every step inside the axis domain, the centre included -- it carries a number
+  // like any other tick, and only its gridline is left out (see drawChart).
+  //
+  // The epsilon is load-bearing in both branches: -0.3 / 0.1 is
+  // -2.9999999999999996 in binary floating point, so a bare ceil() rounds up and
+  // silently loses the tick at the far end of a fixed domain.
+  function ticksOf(k, centre, half) {
+    var t = TICK[k];
+    if (!t) return [];
+    var out = [], hi = centre + half;
+    if (t.mode === 'abs') {
+      // Multiples of the step, so a gridline sits exactly on the round number its
+      // label claims rather than a fraction off it.
+      for (var v = Math.ceil((centre - half) / t.step - 1e-9) * t.step; v <= hi + 1e-9; v += t.step) {
+        out.push(Math.round(v / t.step) * t.step);
+      }
+      return out;
+    }
+    // Relative: stepped outward from the centre, which is what guarantees a tick
+    // at 0 and a symmetric ladder either side of it.
+    for (var n = Math.ceil(-half / t.step - 1e-9); n * t.step <= half + 1e-9; n++) {
+      out.push(centre + n * t.step);
+    }
+    return out;
+  }
+
+  function metric(tr, key) {
+    return key === 'rating' ? tr._r : num(tr, 'data-' + key);
+  }
+
+  function drawChart(view, teamRows) {
+    var svg = view.querySelector('svg.at-chart');
+    if (!svg) return;
+    var tip = view.querySelector('.at-tip');
+    var xk = xsel.value, yk = ysel.value;
+
+    var rows = teamRows.filter(function (tr) { return !tr.hidden; });
+    if (live && live.checked) {
+      var body = view.querySelector('tbody.at-current');
+      if (body) {
+        // The overlay obeys the search box too. These rows are never in the
+        // table, so `filter` never touches their hidden flag -- left unfiltered,
+        // searching one manager still drew all ten of this year's teams beside
+        // their matches.
+        rows = rows.concat(Array.prototype.slice.call(body.getElementsByTagName('tr'))
+          .filter(matches));
+      }
+    }
+    var pts = [];
+    rows.forEach(function (tr) {
+      var x = metric(tr, xk), y = metric(tr, yk);
+      if (x === null || y === null || isNaN(x) || isNaN(y)) return;
+      pts.push({
+        x: x, y: y,
+        abbr: tr.getAttribute('data-abbr') || '',
+        colour: tr.getAttribute('data-colour') || '#888',
+        team: tr.getAttribute('data-team') || '',
+        manager: tr.getAttribute('data-manager') || '',
+        year: tr.getAttribute('data-year') || '',
+        current: tr.hasAttribute('data-current')
+      });
+    });
+    if (!pts.length) { svg.innerHTML = ''; return; }
+
+    function centre(k, vals) {
+      if (FIXED_CENTRE[k] !== undefined) return FIXED_CENTRE[k];
+      var m = vals.reduce(function (s, v) { return s + v; }, 0) / vals.length;
+      // An absolutely-numbered axis snaps its rule to the nearest gridline: drawn
+      // at the raw average it sits between two ticks and reads as a third,
+      // unlabelled one. A relatively-numbered axis needs no snap -- its labels are
+      // offsets, so the rule is "0" wherever the average falls. The span is
+      // measured after this, so a snap cannot push a dot outside the frame.
+      var t = TICK[k];
+      return (t && t.mode === 'abs') ? Math.round(m / t.step) * t.step : m;
+    }
+    var cx0 = centre(xk, pts.map(function (p) { return p.x; }));
+    var cy0 = centre(yk, pts.map(function (p) { return p.y; }));
+    // Symmetric domain: the furthest deviation in either direction sets both ends,
+    // which is what pins 0,0 to the middle whatever the data does.
+    function span(k, vals, c) {
+      if (FIXED_SPAN[k] !== undefined) return FIXED_SPAN[k];
+      var m = 0;
+      vals.forEach(function (v) { m = Math.max(m, Math.abs(v - c)); });
+      return (m || 1) * 1.15;
+    }
+    var xm = span(xk, pts.map(function (p) { return p.x; }), cx0);
+    var ym = span(yk, pts.map(function (p) { return p.y; }), cy0);
+
+    // Left and bottom margins carry the tick numbers and, where the axis has
+    // them, the end phrases outboard of those.
+    var xt = ticksOf(xk, cx0, xm), yt = ticksOf(yk, cy0, ym);
+    // mL clears the widest tick number ("-0.300", "1.000"); mB clears one line of
+    // them. Nothing else lives in the margins now the axis phrases are gone.
+    var W = 900, H = 450, mR = 14, mT = 14, mL = 44, mB = 22;
+    // Inset from the frame by a mark's radius, so a dot at the end of a fixed
+    // domain (record runs the full .000-1.000) is drawn inside the box.
+    var pad = 12;
+    function SX(v) { return mL + pad + ((v - cx0) + xm) / (2 * xm) * (W - mL - mR - 2 * pad); }
+    function SY(v) { return H - mB - pad - ((v - cy0) + ym) / (2 * ym) * (H - mT - mB - 2 * pad); }
+    var e = [];
+    e.push('<rect x="' + mL + '" y="' + mT + '" width="' + (W - mL - mR)
+      + '" height="' + (H - mT - mB) + '" rx="4" class="atframe"/>');
+    // Gridlines first, so the axis rules, the dots and the labels all sit on top.
+    // Every tick is numbered, but a gridline is skipped where one is already
+    // drawn -- down the centre (the axis rule) and at the two ends (the frame) --
+    // since a dashed line on top of a solid one just reads as a thicker rule.
+    function spare(pos, centrePos, lo, hi) {
+      return Math.abs(pos - centrePos) < 1 || pos - lo < 1 || hi - pos < 1;
+    }
+    xt.forEach(function (v) {
+      var x = SX(v);
+      if (!spare(x, SX(cx0), mL, W - mR)) {
+        e.push('<line x1="' + x + '" y1="' + mT + '" x2="' + x + '" y2="' + (H - mB) + '" class="cref"/>');
+      }
+      e.push('<text x="' + x + '" y="' + (H - mB + 13) + '" class="ctick" text-anchor="middle">'
+        + tickText(xk, v, cx0) + '</text>');
+    });
+    yt.forEach(function (v) {
+      var y = SY(v);
+      if (!spare(y, SY(cy0), mT, H - mB)) {
+        e.push('<line x1="' + mL + '" y1="' + y + '" x2="' + (W - mR) + '" y2="' + y + '" class="cref"/>');
+      }
+      e.push('<text x="' + (mL - 6) + '" y="' + (y + 4) + '" class="ctick" text-anchor="end">'
+        + tickText(yk, v, cy0) + '</text>');
+    });
+    var zx = SX(cx0), zy = SY(cy0);
+    e.push('<line x1="' + zx + '" y1="' + mT + '" x2="' + zx + '" y2="' + (H - mB) + '" class="cax"/>');
+    e.push('<line x1="' + mL + '" y1="' + zy + '" x2="' + (W - mR) + '" y2="' + zy + '" class="cax"/>');
+
+    // Smaller than the season chart's: this one plots every team-season the league
+    // has played, not ten teams, so a 13px dot was a solid mass in the middle.
+    var R = 9;
+    pts.forEach(function (p, i) {
+      var x = SX(p.x), y = SY(p.y);
+      var cls = 'atdot' + (p.current ? ' atdot-live' : '');
+      // The dot stays one size -- varying it would read as encoding a third
+      // metric -- so a long abbreviation is fitted by shrinking its text
+      // instead. ESPN abbreviations run to four characters (ICLY, JHHW, ESOF),
+      // which at one size overflowed the circle and clipped.
+      var fs = p.abbr.length > 3 ? 5.5 : p.abbr.length > 2 ? 7 : 8.5;
+      e.push('<g class="' + cls + '" data-i="' + i + '">'
+        + '<circle cx="' + x + '" cy="' + y + '" r="' + R + '" fill="' + p.colour + '"/>'
+        + '<text x="' + x + '" y="' + (y + fs / 3) + '" class="atdot-lbl"'
+        + ' font-size="' + fs + '" text-anchor="middle">' + p.abbr + '</text>'
+        + '</g>');
+    });
+
+    // No plain-words label at the axis ends: the numbers say where a dot sits, and
+    // what the metric means now lives on the `?` beside its picker, where it can
+    // be a sentence instead of two words squeezed against the frame.
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.innerHTML = e.join('');
+
+    // Hover gives the three things a two-letter dot cannot: which year, whose team,
+    // and its name. Positioned by hand rather than left to a native tooltip, which
+    // takes a second or two to show and reads as nothing happening.
+    if (!tip) return;
+    svg.querySelectorAll('g.atdot').forEach(function (g) {
+      g.addEventListener('mouseenter', function () {
+        var p = pts[parseInt(g.getAttribute('data-i'), 10)];
+        tip.innerHTML = '<b>' + p.year + ' ' + p.team + '</b><br>' + p.manager
+          + (p.current ? '<br><i>in progress</i>' : '');
+        tip.hidden = false;
+        var box = g.querySelector('circle').getBoundingClientRect();
+        // Measured against the tip's own offset parent, not the svg: the svg is
+        // centred inside it, so using the svg's box left the card adrift by
+        // however much whitespace the centring added.
+        var host = (tip.offsetParent || svg).getBoundingClientRect();
+        tip.style.left = (box.left - host.left + box.width / 2) + 'px';
+        tip.style.top = (box.top - host.top - 6) + 'px';
+      });
+      g.addEventListener('mouseleave', function () { tip.hidden = true; });
+    });
+  }
+
+  function wireSorting(table, redraw) {
+    table.querySelectorAll('th[data-sort]').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var key = th.getAttribute('data-sort');
+        var isText = th.className.indexOf('num') === -1;
+        if (table._sortKey === key) {
+          table._sortDir = -(table._sortDir || -1);
+        } else {
+          table._sortKey = key;
+          table._sortText = isText;
+          // Numbers open high-to-low (the best first); names open A-to-Z.
+          table._sortDir = isText ? 1 : -1;
+        }
+        redraw();
+      });
+    });
+  }
+
+  function update() {
+    var w = weights();
+    KEYS.forEach(function (k) {
+      var out = document.getElementById('at-w-' + k + '-val');
+      if (out) out.textContent = Math.round(w[k] * 100) + '%';
+    });
+    var hw = document.getElementById('at-w-hardware-val');
+    if (hw) hw.textContent = w.hardware.toFixed(1) + '\\u00d7';
+
+    var view = views.filter(function (v) { return !v.hidden; })[0];
+    if (!view) return;
+
+    // Nothing in the regular-season scope carries accolade points, so the control
+    // for them is disabled rather than left live and inert.
+    var noHardware = view.getAttribute('data-scope') === 'regular';
+    inputs.hardware.disabled = noHardware;
+    inputs.hardware.closest('label').classList.toggle('off', noHardware);
+
+    var teamBody = view.querySelector('tbody.at-teams');
+    var teamTable = teamBody.closest('table');
+    var teamRows = Array.prototype.slice.call(teamBody.getElementsByTagName('tr'));
+    var byOwner = {};
+    teamRows.forEach(function (tr) {
+      tr._r = ratingOf(tr, w);
+      tr._y = num(tr, 'data-year');
+      var cell = tr.querySelector('.at-rating');
+      if (cell) cell.textContent = tr._r.toFixed(1);
+      // A co-managed season counts towards each of its managers, so one row can
+      // appear under several keys.
+      (tr.getAttribute('data-owner') || '').split('|').forEach(function (key) {
+        if (key) (byOwner[key] = byOwner[key] || []).push(tr);
+      });
+    });
+    rank(teamBody, teamRows);
+    applySort(teamTable, teamBody, teamRows);
+    filter(teamRows);
+
+    // The in-progress rows never rank or sort, but the chart reads their rating,
+    // so it still has to be computed from the current weights.
+    var liveBody = view.querySelector('tbody.at-current');
+    if (liveBody) {
+      Array.prototype.slice.call(liveBody.getElementsByTagName('tr')).forEach(function (tr) {
+        tr._r = ratingOf(tr, w);
+      });
+    }
+    if (charting()) drawChart(view, teamRows);
+
+    // The manager table is the same numbers averaged, so it is derived from the
+    // rows above rather than carrying its own copy of them -- one source of truth
+    // for a rating, whichever table is showing it.
+    var ownerBody = view.querySelector('tbody.at-owners');
+    if (!ownerBody) return;
+    var ownerTable = ownerBody.closest('table');
+    var ownerRows = Array.prototype.slice.call(ownerBody.getElementsByTagName('tr'));
+    ownerRows.forEach(function (tr) {
+      var seasons = byOwner[tr.getAttribute('data-owner')] || [];
+      var sum = 0, best = null;
+      seasons.forEach(function (s) {
+        sum += s._r;
+        if (!best || s._r > best._r) best = s;
+      });
+      tr._r = seasons.length ? sum / seasons.length : -Infinity;
+      tr._y = best ? num(best, 'data-year') : 0;
+      var cell = tr.querySelector('.at-rating');
+      if (cell) cell.textContent = seasons.length ? tr._r.toFixed(1) : '\\u2014';
+      var bestCell = tr.querySelector('.at-best');
+      if (bestCell && best) {
+        bestCell.textContent = best.getAttribute('data-year');
+        tr.setAttribute('data-best', best.getAttribute('data-year'));
+      }
+    });
+    rank(ownerBody, ownerRows);
+    applySort(ownerTable, ownerBody, ownerRows);
+  }
+
+  // Wired once per table, on every scope's tables, so a view that has never been
+  // shown still sorts the moment it is.
+  views.forEach(function (v) {
+    v.querySelectorAll('table.at-table').forEach(function (t) {
+      wireSorting(t, update);
+    });
+  });
+
+  seg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-scope]');
+    if (!b) return;
+    var want = b.getAttribute('data-scope');
+    views.forEach(function (v) { v.hidden = v.getAttribute('data-scope') !== want; });
+    seg.querySelectorAll('button').forEach(function (x) {
+      if (x === b) x.classList.add('on'); else x.classList.remove('on');
+    });
+    // Switching scope changes which chart is on screen, so the pickers have to
+    // follow it -- otherwise they stay parked on the chart that just got hidden.
+    showView();
+  });
+  // A preset writes the three sliders and then behaves exactly like having dragged
+  // them, so there is one path to a rating rather than two.
+  function choosePreset(radio) {
+    var spec = radio.getAttribute('data-weights');
+    if (spec) {
+      var parts = spec.split(',');
+      KEYS.forEach(function (k, i) { inputs[k].value = parts[i]; });
+    }
+    custom.hidden = !!spec;
+    if (presetName) {
+      presetName.textContent = radio.parentNode.querySelector('b').textContent;
+    }
+    update();
+  }
+
+  presets.addEventListener('change', function (e) {
+    var radio = e.target.closest('input[name="at-preset"]');
+    if (radio) choosePreset(radio);
+  });
+
+  // Dragging a weight is by definition a custom weighting, so the radio follows
+  // the slider rather than the two disagreeing about what is selected.
+  KEYS.forEach(function (k) {
+    inputs[k].addEventListener('input', function () {
+      var custom_radio = presets.querySelector('input[value="custom"]');
+      if (custom_radio && !custom_radio.checked) {
+        custom_radio.checked = true;
+        custom.hidden = false;
+        if (presetName) presetName.textContent = 'Custom';
+      }
+      update();
+    });
+  });
+  inputs.hardware.addEventListener('input', update);
+  if (find) find.addEventListener('input', update);
+
+  function charting() {
+    var on = viewSeg && viewSeg.querySelector('button.on');
+    return !!on && on.getAttribute('data-view') === 'chart';
+  }
+
+  // One pair of pickers for three charts: move them into whichever chart is
+  // showing, so they sit on that chart's own axes. Parking them back in #at-axes
+  // (which is display:none) is what hides them in table view.
+  function placePickers(host) {
+    var xp = document.getElementById('at-pick-x');
+    var yp = document.getElementById('at-pick-y');
+    if (!xp || !yp) return;
+    var to = host || axes;
+    if (!to) return;
+    to.appendChild(yp);
+    to.appendChild(xp);
+  }
+
+  function showView() {
+    var chart = charting();
+    var shown = null;
+    views.forEach(function (v) {
+      var tv = v.querySelector('.at-table-view');
+      var cv = v.querySelector('.at-chart-view');
+      if (tv) tv.hidden = chart;
+      if (cv) cv.hidden = !chart;
+      if (cv && chart && !v.hidden) shown = cv;
+    });
+    placePickers(shown);
+    update();
+  }
+
+  if (viewSeg) viewSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-view]');
+    if (!b) return;
+    viewSeg.querySelectorAll('button').forEach(function (x) {
+      if (x === b) x.classList.add('on'); else x.classList.remove('on');
+    });
+    showView();
+  });
+  // The `?` beside a picker explains whichever metric is chosen, read off that
+  // option's own gloss so the two can never disagree.
+  function describe(sel) {
+    if (!sel) return;
+    var hint = document.getElementById(sel.id + '-hint');
+    if (!hint) return;
+    var gloss = sel.options[sel.selectedIndex].getAttribute('data-gloss') || '';
+    hint.querySelector('.hintbox').textContent = gloss;
+    hint.setAttribute('aria-label', gloss);
+  }
+
+  if (xsel) xsel.addEventListener('change', function () { describe(xsel); update(); });
+  if (ysel) ysel.addEventListener('change', function () { describe(ysel); update(); });
+  if (live) live.addEventListener('change', update);
+  describe(xsel);
+  describe(ysel);
+
+  var reset = document.getElementById('at-reset');
+  if (reset) reset.addEventListener('click', function () {
+    Object.keys(inputs).forEach(function (k) { inputs[k].value = defaults[k]; });
+    var first = presets.querySelector('input[name="at-preset"]');
+    if (first) { first.checked = true; choosePreset(first); } else { update(); }
+  });
+  update();
+})();
+"""
+
+
+# (css class, short pill text) per accolade. Abbreviated because a champion's four
+# pills on separate lines made every row a different height, and a table whose rows
+# jump around is harder to scan down than one with a tight cell. The full wording
+# stays as the pill's title, so hovering still explains it.
+ACCOLADE_PILL = {
+    "Champion": ("champ", "CHAMP"),
+    "Runner-up": ("runner", "2nd"),
+    "Playoffs": ("berth", "PO"),
+    "Division winner": ("berth", "DW"),
+    "#1 overall seed": ("berth", "#1"),
+}
+
+ACCOLADE_TITLE = {
+    "CHAMP": "Champion — won the league",
+    "2nd": "Runner-up",
+    "PO": "Made the playoffs",
+    "DW": "Division winner",
+    "#1": "#1 overall seed",
+}
+
+
+def _accolade_pill(label):
+    """One short pill, with the full wording on hover.
+
+    A playoff-win label carries its own count ("2 playoff wins"), so it is matched
+    by shape rather than looked up -- otherwise every possible count would need an
+    entry of its own.
+    """
+    if "playoff win" in label:
+        count = label.split()[0]
+        return "four", f"{count}W", label
+    cls, short = ACCOLADE_PILL.get(label, ("berth", label))
+    return cls, short, ACCOLADE_TITLE.get(short, label)
+
+
+def _accolade_pills(labels):
+    """The row's badges, each explaining itself on hover or focus.
+
+    The wording is a styled box rather than a `title` attribute. A native tooltip
+    is technically correct and practically invisible -- it needs the pointer held
+    still for a second or two, which reads as nothing happening. This is the same
+    hover pattern the schedule tooltip already uses, so it appears at once.
+
+    `tabindex` so the explanation is reachable by keyboard too, and `aria-label`
+    so a screen reader gets the long form rather than "F4".
+    """
+    if not labels:
+        return '<span class="empty">&mdash;</span>'
+    pills = []
+    for label in labels:
+        cls, short, hint = _accolade_pill(label)
+        pills.append(
+            f'<span class="pill {cls}" tabindex="0" aria-label="{esc(hint)}">'
+            f'{esc(short)}<span class="hintbox">{esc(hint)}</span></span>'
+        )
+    return '<span class="pills">' + "".join(pills) + "</span>"
+
+
+def _manager_label(managers):
+    """The Manager cell: one full name, or surnames when a team is co-managed.
+
+    Two full names is 30-odd characters in a column beside eight others, and in a
+    league where nearly every team is co-managed that widened the table for no
+    gain -- the surnames identify the pair to anyone reading their own league.
+    The full names stay searchable (see data-manager).
+    """
+    # A literal dash rather than "&mdash;": this value also rides in a data
+    # attribute, where it goes through esc() and an entity would show as
+    # "&amp;mdash;" on the hover card.
+    if not managers:
+        return "—"
+    if len(managers) == 1:
+        return esc(managers[0])
+    return esc(" · ".join(name.split()[-1] for name in managers))
+
+
+def _accolade_search_text(labels):
+    """One string holding both the wording and the badge code of each accolade.
+
+    So a filter matches "champion" typed from memory as readily as "CHAMP" read
+    off the screen, without the filter itself needing to know the abbreviations.
+    """
+    parts = []
+    for label in labels:
+        _, short, _ = _accolade_pill(label)
+        parts.extend([label, short])
+    return " ".join(parts)
+
+
+def _all_time_row(row, current=False):
+    """One team-season. Monograms rather than logos on purpose.
+
+    The payload's logos are this season's, and a franchise's art changes between
+    years -- attaching the 2025 image to the same manager's 2023 team would label
+    it as something it never was. A monogram is derived from the name itself, so
+    it is always right about the row it sits on.
+
+    The rates, the accolade points and the searchable fields all ride along as
+    data attributes, which is what lets the sliders re-rank and the filter narrow
+    the table without a round trip -- the same trick the strength section uses.
+    """
+    return (
+        f'<tr data-owner="{esc("|".join(all_time.career_keys(row)))}"'
+        f' data-strength="{row["strength"]}" data-record="{row["record"]}"'
+        f' data-scoring="{row["scoring"]}" data-hardware="{row["hardware"]}"'
+        f' data-year="{row["year"]}" data-ppg="{row["ppg"]}"'
+        f' data-abbr="{esc(monogram(row["name"], None))}"'
+        f' data-colour="{monogram_colour(row["name"])}"'
+        + (' data-current="1"' if current else "")
+        # The searchable value is every manager's *full* name even when the cell
+        # shows surnames only, so a filter on either half of a name still hits.
+        + f' data-team="{esc(row["name"])}"'
+        + f' data-manager="{esc(" ".join(row["managers"]))}"'
+        # Both the words and the badge codes, so the filter matches "champion"
+        # typed from memory and "CHAMP" read off the screen.
+        f' data-accolades="{esc(_accolade_search_text(row["accolades"]))}">'
+        # An overlay row has no rank: it was never ranked, which is the whole
+        # reason it is held apart from the table.
+        f'<td class="num at-rank">{row.get("rank", "")}</td>'
+        f'<td class="num">{row["year"]}</td>'
+        f'<td class="name">{monogram_html(row["name"], None)}{esc(row["name"])}</td>'
+        f'<td class="owner">{_manager_label(row["managers"])}</td>'
+        f'<td class="num">{record_text(row)}</td>'
+        f'<td class="num">{row["ppg"]:.1f}</td>'
+        f'<td class="num">{_pct(row["strength"])}</td>'
+        f'<td class="num">{_pct(row["scoring"])}</td>'
+        f'<td class="acc">{_accolade_pills(row["accolades"])}</td>'
+        f'<td class="num rating at-rating">{row["rating"]:.1f}</td></tr>'
+    )
+
+
+def _win_pct_of(tally):
+    """A won-lost-tied dict as a win percentage, for sorting a Record column."""
+    played = tally["wins"] + tally["losses"] + tally["ties"]
+    if not played:
+        return 0.0
+    return round((tally["wins"] + 0.5 * tally["ties"]) / played, 4)
+
+
+def _sortable(label, key, numeric=True, title=None):
+    """A column heading that sorts the table by `key` when clicked.
+
+    `key` names the row's data attribute rather than a column index, so inserting
+    or removing a column cannot silently point a heading at the wrong values.
+    Accolades get no key, because there is no order to sort a set of badges into.
+    """
+    cls = "num sort" if numeric else "sort"
+    tip = f' title="{esc(title)}"' if title else ""
+    return f'<th class="{cls}" data-sort="{key}"{tip}>{label}</th>'
+
+
+# One vocabulary for every place a metric is named -- column head, axis picker,
+# legend -- so the page cannot call the same number two different things. The
+# gloss is deliberately one line: it is read once, to settle one column.
+AT_METRICS = [
+    ("strength", "All-Play Record", "Record against the entire league every week"),
+    ("record", "Record", "Real wins and losses, playoffs included when in scope"),
+    (
+        "scoring",
+        "All-Play Scoring",
+        "PPG measured against the league&rsquo;s average PPG that year",
+    ),
+    ("ppg", "PPG", "Points per game"),
+    ("rating", "Rating", "The three above, blended by the weights you set"),
+]
+# Chart axes offer the same metrics; the order puts the two rates first because
+# they are the pair the chart is normally read with.
+AT_CHART_METRICS = [(key, label) for key, label, _ in AT_METRICS]
+AT_LABEL = {key: label for key, label, _ in AT_METRICS}
+
+
+def _at_metric_options(selected):
+    return _axis_options(AT_METRICS, selected)
+
+
+def _all_time_legend():
+    """What each column is, after the tables rather than in front of them."""
+    items = "".join(
+        f"<div><dt>{label}</dt><dd>{gloss}</dd></div>" for _, label, gloss in AT_METRICS
+    )
+    return (
+        '\n<dl class="at-legend">'
+        + items
+        + "<div><dt>Accolades</dt><dd>What the season won &mdash; hover any badge"
+        " for the full name</dd></div>"
+        + "</dl>\n"
+    )
+
+
+def render_all_time_teams(rows, scope, current=()):
+    """The scope's table, plus the same rows as a scatter.
+
+    `current` is the in-progress season's team-seasons. They are kept in their own
+    tbody -- never ranked, never sorted, never shown in the table -- so the chart
+    can opt them in without the ranking having to pretend a three-week sample is
+    comparable to a finished year.
+    """
+    head = (
+        "<tr>"
+        + _sortable("#", "rating", title="Rank by rating")
+        + _sortable("Year", "year")
+        + _sortable("Team", "team", numeric=False)
+        + _sortable("Manager", "manager", numeric=False)
+        + _sortable("Record", "record", title="Sorted by win percentage")
+        + _sortable("PPG", "ppg")
+        + _sortable(AT_LABEL["strength"], "strength")
+        + _sortable(AT_LABEL["scoring"], "scoring")
+        + '<th class="acc">Accolades</th>'
+        + _sortable("Rating", "rating")
+        + "</tr>"
+    )
+    body = "".join(_all_time_row(row) for row in rows)
+    live = "".join(_all_time_row(row, current=True) for row in current)
+    return (
+        '<div class="at-table-view">'
+        f'<table class="grid at-table"><thead>{head}</thead>'
+        f'<tbody class="at-teams">{body}</tbody>'
+        f'<tbody class="at-current" hidden>{live}</tbody></table>'
+        "</div>"
+        '<div class="at-chart-view" hidden>'
+        '<svg class="at-chart" xmlns="http://www.w3.org/2000/svg"'
+        ' role="img" aria-label="Team-seasons plotted on two chosen metrics"></svg>'
+        '<div class="at-tip" hidden></div>'
+        "</div>"
+    )
+
+
+def render_all_time_owners(owners):
+    rows = "".join(
+        f'<tr data-owner="{esc(o["owner_id"])}"'
+        f' data-manager="{esc(o["owner"])}" data-seasons="{o["seasons"]}"'
+        f' data-record="{_win_pct_of(o)}" data-titles="{o["titles"]}"'
+        f' data-berths="{o["berths"]}" data-strength="{o["avg_strength"]}"'
+        f' data-best="{o["best_year"]}">'
+        f'<td class="num at-rank">{o["rank"]}</td>'
+        f'<td class="name">{monogram_html(o["owner"], None)}{esc(o["owner"])}</td>'
+        f'<td class="num">{o["seasons"]}</td>'
+        f'<td class="num">{record_text(o)}</td>'
+        f'<td class="num">{o["titles"]}</td>'
+        f'<td class="num">{o["berths"]}</td>'
+        f'<td class="num">{_pct(o["avg_strength"])}</td>'
+        f'<td class="num at-best">{o["best_year"]}</td>'
+        f'<td class="num rating at-rating">{o["avg_rating"]:.1f}</td></tr>'
+        for o in owners
+    )
+    head = (
+        "<tr>"
+        + _sortable("#", "rating", title="Rank by average rating")
+        + _sortable("Manager", "manager", numeric=False)
+        + _sortable("Seasons", "seasons")
+        + _sortable("Record", "record", title="Sorted by win percentage")
+        + _sortable("Titles", "titles")
+        + _sortable("Berths", "berths")
+        + _sortable(AT_LABEL["strength"], "strength")
+        + _sortable("Best", "best", title="The season with their highest rating")
+        + _sortable("Avg rating", "rating")
+        + "</tr>"
+    )
+    return (
+        # An h2, like Best Team-Seasons above it: the two tables are peers, and a
+        # smaller rule-less heading made the second read as a footnote to the first.
+        "<h2>Manager Careers</h2>\n"
+        '<p class="lede wide">The same rating averaged over every season a manager has '
+        "played, because a long career should not outrank a better short one. Seasons "
+        "played sits beside it: an average over two years is a weaker claim than an "
+        "average over five. A co-managed season counts for <b>both</b> managers, so a "
+        "shared title appears on both their records.</p>\n"
+        f'<table class="grid at-table"><thead>{head}</thead>'
+        f'<tbody class="at-owners">{rows}</tbody></table>'
+    )
+
+
+SCOPE_LABEL = {
+    "regular": "Regular Season",
+    "both": "Both",
+    "playoffs": "Playoffs",
+}
+
+
+def _all_time_controls():
+    """Named presets, folded away, with the raw sliders behind a Custom option.
+
+    Four drags to answer "who was best on merit" was the wrong shape for the
+    question: almost nobody wants an arbitrary blend, they want one of a handful of
+    readings. So the presets do the work and the sliders stay for the rest.
+
+    Built on `<details>` rather than a scripted panel, so it collapses with no
+    JavaScript at all and is keyboard- and screen-reader-navigable for free.
+
+    The weights are **normalised by their sum**, so only their ratio matters --
+    which is why a preset can be written 70/10/20 without totalling 100.
+    Accolades scale separately because they are not a rate: they are added after
+    the blend, so a multiplier is the honest control rather than a fourth share.
+    """
+    presets = "".join(
+        f'<label class="preset"><input type="radio" name="at-preset"'
+        f' value="{key}" data-weights="{",".join(str(w[n]) for n in ("strength", "record", "scoring"))}"'
+        f'{" checked" if key == all_time.DEFAULT_PRESET else ""}>'
+        f"<b>{esc(label)}</b>"
+        f'<span class="hint" tabindex="0" aria-label="{esc(blurb)}">?'
+        f'<span class="hintbox">{w["strength"]} / {w["record"]} / {w["scoring"]}'
+        f" &mdash; {esc(blurb)}</span></span>"
+        "</label>"
+        for key, label, w, blurb in all_time.PRESETS
+    )
+    sliders = "".join(
+        f'<label>{AT_LABEL[name]}'
+        f'<input type="range" id="at-w-{name}" min="0" max="100" step="5"'
+        f' value="{round(all_time.WEIGHTS[name] * 100)}">'
+        f'<span class="dim" id="at-w-{name}-val"></span></label>'
+        for name in ("strength", "record", "scoring")
+    )
+    default_label = next(
+        label for key, label, _, _ in all_time.PRESETS if key == all_time.DEFAULT_PRESET
+    )
+    return (
+        # One thin row of table controls: the filter on the left, the weights as a
+        # quiet link on the right. The panel opens as a popover anchored to that
+        # link, so reaching for it never pushes the table down the page.
+        '<div class="at-tools">'
+        '<input type="search" id="at-find"'
+        ' placeholder="Filter by year, team, manager or accolade">'
+        '<span class="dim" id="at-found"></span>'
+        '<span class="seg" id="at-view-seg">'
+        '<button data-view="table" class="on">Table</button>'
+        '<button data-view="chart">Chart</button></span>'
+        # Tucked in beside the weights: an in-progress season is not rankable, but
+        # there is no harm in seeing where it currently sits on a scatter.
+        '<label class="at-live" id="at-live-wrap">'
+        '<input type="checkbox" id="at-live"> this season</label>'
+        '<details class="weights" id="at-weights">'
+        f'<summary>Weights: <span id="at-preset-name">{esc(default_label)}</span>'
+        "</summary>"
+        '<div class="wbody">'
+        f'<div class="presets" id="at-presets">{presets}'
+        '<label class="preset"><input type="radio" name="at-preset" value="custom">'
+        '<b>Custom</b><span class="hint" tabindex="0"'
+        ' aria-label="Set the three weights yourself">?'
+        '<span class="hintbox">Set the three weights yourself</span>'
+        "</span></label></div>"
+        '<div class="controls" id="at-custom" hidden>'
+        f"{sliders}</div>"
+        '<div class="controls">'
+        '<label>Accolades<input type="range" id="at-w-hardware" min="0" max="200"'
+        ' step="10" value="100">'
+        '<span class="dim" id="at-w-hardware-val"></span></label>'
+        '<button type="button" id="at-reset">Reset</button>'
+        "</div></div></details></div>"
+        # The pickers start here, parked and hidden, and are moved onto the axes of
+        # whichever scope's chart is showing (see placePickers). There is one pair
+        # rather than one per scope so the two views cannot disagree about which
+        # metric is on which axis; parking them in the document is what lets a
+        # single pair serve all three charts.
+        '<div class="at-axes" id="at-axes" hidden>'
+        # No "X"/"Y" letter: the picker sits on the axis it controls, which says
+        # which one it is better than a label does.
+        f'<div class="at-pick" id="at-pick-y">'
+        f'<select id="at-y" aria-label="Y axis metric">'
+        f'{_at_metric_options("scoring")}</select>{_axis_hint("at-y")}</div>'
+        f'<div class="at-pick" id="at-pick-x">'
+        f'<select id="at-x" aria-label="X axis metric">'
+        f'{_at_metric_options("strength")}</select>{_axis_hint("at-x")}</div>'
+        "</div>"
+    )
+
+
+def render_all_time(history):
+    """The whole All-Time pane, or a note explaining why it is empty."""
+    rows = all_time.team_rows(history)
+    facts = all_time.summarise(history, rows)
+
+    # An in-progress season is simply absent; the counts line above already says
+    # which years are in, so there is nothing to explain. A season ESPN *refused*
+    # still gets a note -- that one usually means expired cookies, which is worth
+    # knowing about.
+    caveats = []
+    if facts["skipped"]:
+        years = ", ".join(str(s["year"]) for s in facts["skipped"])
+        caveats.append(
+            f"{years} could not be read from ESPN "
+            f"({esc(facts['skipped'][0]['reason'])})."
+        )
+    note = f'<p class="note">{" ".join(caveats)}</p>' if caveats else ""
+
+    if not rows:
+        return (
+            "<h2>All-Time</h2>\n"
+            '<p class="empty">No completed season could be read for this league.</p>'
+            f"{note}"
+        )
+
+    span = (
+        f"{facts['first_year']}&ndash;{facts['last_year']}"
+        if facts["first_year"] != facts["last_year"]
+        else str(facts["first_year"])
+    )
+    header = (
+        f'<p class="counts">Seasons <b>{facts["seasons"]}</b> ({span})'
+        f' &middot; Team-seasons ranked <b>{facts["team_seasons"]}</b>'
+        f' &middot; Managers <b>{len(all_time.owner_rows(rows))}</b></p>'
+    )
+
+    # One view per scope, all three in the page. Switching scope changes both the
+    # population and the tables, so the team and manager tables travel together.
+    # The seasons too young to rank. Their rows are built the same way and carried
+    # alongside, for the chart's optional "this season" overlay only.
+    in_progress = [s for s in (history.get("seasons") or []) if not s.get("complete")]
+
+    buttons, views = [], []
+    for scope in all_time.SCOPES:
+        scoped = all_time.team_rows(history, scope)
+        current = []
+        for season in in_progress:
+            for row in all_time.season_rows(season, scope):
+                # A season in progress has no bracket, but ESPN publishes a live
+                # playoff seed all the same -- so the playoff scope produced six
+                # qualifiers with nothing played, every rate zero, stacking six
+                # identical dots in a corner of the chart. A row only overlays if
+                # the scope it is drawn in has real games behind it.
+                if scope == "playoffs" and not row["playoff_games"]:
+                    continue
+                current.append(row)
+        on = " class=\"on\"" if scope == all_time.DEFAULT_SCOPE else ""
+        hidden = "" if scope == all_time.DEFAULT_SCOPE else " hidden"
+        buttons.append(
+            f'<button data-scope="{scope}"{on}>{SCOPE_LABEL[scope]}</button>'
+        )
+        views.append(
+            f'<div class="at-view" data-scope="{scope}"{hidden}>'
+            + render_all_time_teams(scoped, scope, current)
+            + "\n"
+            + render_all_time_owners(all_time.owner_rows(scoped))
+            + "</div>"
+        )
+
+    return (
+        header
+        + note
+        + "\n<h2>Best Team-Seasons "
+        + f'<span class="seg" id="at-seg">{"".join(buttons)}</span></h2>\n'
+        + _all_time_controls()
+        + "\n"
+        + "\n".join(views)
+        # The column definitions sit after the tables, not before them. Read in
+        # front they were a wall of text between the reader and the ranking they
+        # came for; read behind, they are there for the one column that puzzled
+        # them.
+        + _all_time_legend()
+        + f"<script>{ALL_TIME_JS}</script>"
+    )
+
+
+def render(payload, show=None, history=None):
     """The whole document. `show` names the sections to include."""
     show = show or {"header", "standings", "matchups", "scenarios", "stats"}
     base = payload["base_league_data"]
@@ -1072,6 +2501,7 @@ def render(payload, show=None):
                 league.get("current_week", 0),
                 standings,
                 logo_class,
+                base.get("managers") or {},
             )
         )
         parts.append(render_all_play(weekly_scores))
@@ -1085,6 +2515,21 @@ def render(payload, show=None):
         )
 
     played = league["current_week"]
+    body = chr(10).join(p for p in parts if p)
+
+    # With a history the report becomes two panes; without one it is exactly the
+    # document it has always been, down to the absence of a tab bar. That keeps
+    # --history genuinely optional rather than restyling every existing report.
+    if history:
+        body = (
+            '<nav class="tabs" id="tabs">'
+            '<button data-tab="season" class="on">This Season</button>'
+            '<button data-tab="alltime">All-Time</button></nav>\n'
+            f'<div class="tabpane" data-tab="season">{body}</div>\n'
+            f'<div class="tabpane" data-tab="alltime" hidden>{render_all_time(history)}</div>\n'
+            f"<script>{TABS_JS}</script>"
+        )
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1095,7 +2540,7 @@ def render(payload, show=None):
 {f"<style>{logo_css}</style>" if logo_css else ""}
 </head>
 <body>
-{chr(10).join(p for p in parts if p)}
+{body}
 <footer>Generated from results through week {played} of a
 {league['num_weeks']}-week regular season. Clinched and eliminated are exact over
 every remaining schedule; a verdict resting on a points gap the scoring could still
@@ -1126,6 +2571,11 @@ def parse_args(argv):
     parser.add_argument(
         "--no-stats", action="store_true", help="hide the season-review tables"
     )
+    parser.add_argument(
+        "--history",
+        metavar="PATH",
+        help="a history file from tools/fetch_history.py; adds the All-Time tab",
+    )
     return parser.parse_args(argv)
 
 
@@ -1139,7 +2589,13 @@ def sections(args):
 
 def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
-    document = render(json.load(sys.stdin), sections(args))
+
+    history = None
+    if args.history:
+        with open(args.history) as handle:
+            history = json.load(handle)
+
+    document = render(json.load(sys.stdin), sections(args), history)
 
     if args.output:
         with open(args.output, "w") as handle:

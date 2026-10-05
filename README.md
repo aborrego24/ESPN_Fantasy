@@ -137,6 +137,7 @@ pip install -r requirements.txt
 | `--no-standings` | Hide the standings table | shown |
 | `--no-matchups` | Hide next week's matchups | shown |
 | `--no-stats` | Hide the season-review tables (HTML only) | shown |
+| `--history <path>` | Add the All-Time tab from a saved history (HTML only) | — |
 
 Environment variables work too, which is handy if you always use the same league:
 
@@ -171,6 +172,135 @@ available to each team, which is the closest thing to a number for "how much did
 schedule cost me".
 
 Both read only completed weeks, so they take no part in any clinch verdict.
+
+### The All-Time tab
+
+With `--history`, the report grows a second tab ranking **every team-season the league
+has ever played** — the best teams of all time, and the managers behind them.
+
+```bash
+python3 tools/fetch_history.py --out history.json   # once per finished season
+./run_scenarios.sh --irl 14 --html report.html --history history.json
+```
+
+History is fetched separately and cached on purpose: it is one download per season,
+and a finished season never changes. That also means you can re-render the report, or
+re-weight the rating, with no network at all.
+
+> ⚠️ **Older seasons need cookies.** Only the current season and the one before it
+> answer unauthenticated — everything earlier returns 401 *even for a public league*.
+> Set `ESPN_S2` / `SWID` (see [Point it at a live league](#point-it-at-a-live-league))
+> or the history stops after two years. The fetcher says which years it had to skip.
+
+A season total cannot be compared across years — this league has run 9 teams over 15
+weeks and 10 over 14 — so every rate is measured **within its own season**:
+
+| Component | Default weight | What it is |
+|---|---|---|
+| Strength | 45% | All-play win% — the record against the whole league every week, not just the one team the schedule handed you |
+| Record | 30% | The real win% — what the standings actually said |
+| Scoring | 25% | PPG against that season's league average, where .500 is exactly average, so scoring eras cancel out |
+
+Strength and record overlap deliberately: the gap between them *is* schedule luck, so
+a lucky team is credited for its wins without being credited as though it earned them
+all. Every component is shown beside the rating, because a number nobody can audit is
+not worth having.
+
+**Record follows the scope**, so the won-lost shown is the record for whatever is being
+ranked. One real team went 12-1 and lost its first playoff game: that is `12-1` under
+Regular Season, `12-2` under Both, and `0-1` under Playoffs. Strength and Scoring stay on
+the regular season outside the Playoffs scope — all-play over playoff weeks would be
+meaningless, since only the surviving teams are still playing.
+
+Every column except Accolades sorts on click. The `#` column always shows the rating
+rank, whatever the table is sorted by, so sorting by PPG still tells you the league's
+highest scorer was only the 5th-best team.
+
+**Accolades** are added on top rather than blended in — a 14-week body of work should not
+be outweighed by one single-elimination bracket:
+
+| Accolade | Points |
+|---|---|
+| Champion | 10 |
+| #1 seed | 3 |
+| Playoff berth | 1.5 |
+| Per playoff win | 1 |
+
+The depth of a run is paid **per playoff win, not per placement**. Enumerating
+runner-up and final four separately left a hole: across eight completed seasons of two
+real leagues the runner-up went 2-1 or 1-1 *every time*, so a team that won two games and
+lost the final scored the same as one that lost in round one. Per-win credit fixes the
+ordering with no rule per round and scales to any bracket — this league has run both five
+and six playoff spots. It follows Bill James's [Hall of Fame
+Monitor](https://www.baseball-reference.com/about/leader_glossary.shtml), the same idea
+of points-per-honour, which credits a pennant winner who loses the World Series 5 against
+6 for winning it — not 0.
+
+The title is sized at roughly a tenth of a season's rating, and deliberately not more,
+because in this league a championship is mostly luck: over those eight seasons the top
+seed won it **twice**, the average champion was the **third** seed, and two champions were
+the 7th and 10th best teams of their own season on regular-season merit. Worth honouring;
+not evidence. If you disagree, that is what the Accolades slider is for.
+
+Those weights are **defaults, not verdicts** — the tab carries a slider for each, plus
+one that scales accolades, and the ranking re-sorts as you drag. Only the ratio between
+the three rates matters, so they are normalised by their sum and you never have to make
+them total 100. It all runs in the page from data already on each row, so there is no
+round trip and the file still works offline.
+
+#### Three ways to read a season
+
+A selector on the heading switches what is being ranked:
+
+| Scope | Population | Rating | Accolades shown |
+|---|---|---|---|
+| **Regular Season** | Every team | Regular-season rates, accolades excluded | `PO` and `#1` only |
+| **Both** (default) | Every team | Regular-season rates plus accolades | all |
+| **Playoffs** | Only teams that qualified | The bracket's own rates, plus accolades | all |
+
+Under Regular Season the bracket did not happen: it scores nothing, and it is not
+listed either. A `CHAMP` badge beside a rating that deliberately ignores the
+championship invites the reader to assume it counted. Qualifying and the top seed stay,
+because the record earned both.
+
+Regular Season is the fairest comparison — the largest sample, and the only view where
+everyone played the same number of games. Playoffs is the noisiest by far: one to three
+games, so it measures a hot fortnight rather than a good team, which is exactly why it
+is worth seeing on its own rather than blended in.
+
+> **On the bracket:** ESPN returns `playoffTierType: NONE` for every post-season
+> matchup in this league, so the *rounds* cannot be read — a semifinal is
+> indistinguishable from a fifth-place game. Three things are therefore excluded, and
+> what is left is the **championship path**:
+>
+> - **Consolation games between non-qualifiers.** Who qualified *is* reliable, and across
+>   eight seasons the qualifying teams play only each other after the regular season — so
+>   a game is bracket football only if both sides made it.
+> - **Anything after a team's first loss.** The path is single elimination, so a win that
+>   comes after elimination is a fifth-place game even when both sides qualified. This
+>   caught real cases: 2025 Klorgon lost in round one, won twice on the ladder, and read
+>   as 1-2 with credit for a playoff win it never had. Fourteen team-seasons in the
+>   12-team league were affected. The losing game itself is kept — the team was alive when
+>   it played it.
+> - **Byes.** A top seed skipping round one contested nothing, and ESPN is not even
+>   consistent about the score (one real bye carries 165 points, another 0).
+>
+> The result has a property worth checking: every playoff team ends either unbeaten
+> (the champion) or with exactly one loss. More than one means consolation games leaked
+> back in.
+
+Two kinds of year go missing, and the tab distinguishes them: a season **still in
+progress** is excluded rather than discounted (a 3-0 start sits further from its league
+average on every rate at once, and would otherwise rank near the top), and a season
+**ESPN refused** is reported with its reason.
+
+Manager careers are grouped by **manager name**, not by team name (names do not survive
+a season) and not by ESPN owner id, which turns out to be no more durable: in one real
+league a manager appears under two different SWIDs, and ESPN flipped the listed order of
+a co-managed pair mid-history, so keying on the id or on "the first owner" split one
+continuous franchise across two people. A **co-managed season counts for every manager
+of that team**, which double-counts a shared title on purpose — both of them won it.
+Careers are averaged rather than summed, so a long one does not beat a better short one.
 
 ---
 
@@ -253,6 +383,12 @@ Stage 5 is where `--html` swaps one renderer for the other. Both read the same p
 and the wording lives in `pretty_print.py` so the two cannot describe a verdict
 differently. `league_stats.py` sits alongside them, computing the season-review tables
 from the weekly history stage 1 records.
+
+The All-Time tab hangs off a **stage 0** that is deliberately not in the pipe:
+`tools/fetch_history.py` writes every accessible season to a file via `history_data.py`,
+and `all_time.py` ranks it when stage 5 is handed that file with `--history`. It is kept
+off the live path because it is one download per season, none of it changes once a
+season is finished, and no clinch verdict depends on any of it.
 
 Because each stage just reads JSON and writes JSON, you can stop anywhere and look:
 

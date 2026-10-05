@@ -14,6 +14,33 @@ def load_league_data(file_path):
         return json.load(file)
 
 
+def owner_names(team):
+    """Every manager's display name for this team, in ESPN's own order.
+
+    **All of them, not just the first.** Co-management is the norm in some
+    leagues -- 11 of 12 teams in one real league -- and two facts measured there
+    make the first owner useless as an identity:
+
+      ESPN'S OWNER ORDER IS NOT STABLE. One pair comes back as (Peffer, Bernard)
+      for 2022-23 and (Bernard, Peffer) from 2024 on. Crediting `owners[0]` split
+      that one continuous franchise across two managers mid-history, and neither
+      resulting career was real.
+
+      A MANAGER CAN HAVE TWO SWIDS. The same person appears as
+      {F7CFB7CB-...} through 2023 and {75F49BF8-...} afterwards, so the SWID is
+      not a durable key either -- he came out as two separate managers.
+
+    The display name is therefore the identity. A nameless owner is dropped rather
+    than kept as an empty string, which would group every such team together.
+    """
+    names = []
+    for owner in getattr(team, "owners", None) or []:
+        name = f"{owner.get('firstName', '')} {owner.get('lastName', '')}".strip()
+        if name:
+            names.append(name)
+    return names
+
+
 def sides_of(matchup):
     """Both teams in a matchup, or (None, None) on a bye.
 
@@ -268,7 +295,7 @@ def weekly_history(team, weeks, names):
     return history
 
 
-def build_payload(league, current_week, inline_logos=False):
+def build_payload(league, current_week, inline_logos=False, espn_s2=None, swid=None):
     """Shape a League into the stage-1 payload.
 
     `current_week` is the number of weeks already played, so the next week to be
@@ -276,7 +303,10 @@ def build_payload(league, current_week, inline_logos=False):
     unplayed matchup (schedule is 0-indexed by matchup period).
 
     `inline_logos` (the --logos flag) fetches each team's logo and inlines it as
-    a data URI; off by default so the report stays lean and asset-free.
+    a data URI; off by default so the report stays lean and asset-free. The
+    cookies are passed along with it because an uploaded team photo is served
+    from an endpoint that 401s anonymously (see logo.espn_fetch); they are only
+    ever sent to espn.com.
 
     Kept separate from argument handling so the ESPN-facing logic can be tested
     against a fake league with no network access.
@@ -354,6 +384,13 @@ def build_payload(league, current_week, inline_logos=False):
         # unless a live league can supply rosters and projections; low-confidence
         # by nature (see projected_ppg).
         "projected_ppg": projected_ppg(league, names),
+        # {name: [manager, ...]} so the report can name whoever runs a team. Kept
+        # top-level and name-keyed like the maps around it, because the later
+        # stages rebuild their team dicts from a fixed field list and would drop a
+        # new per-team key.
+        "managers": {
+            names[team.team_id]: owner_names(team) for team in league.teams
+        },
         # ESPN's own short code per team, for the report to label a row with.
         # Keyed by the unique name because that is what the later stages carry;
         # only teams that actually have one appear.
@@ -371,7 +408,8 @@ def build_payload(league, current_week, inline_logos=False):
                 names[team.team_id]: team.logo_url
                 for team in league.teams
                 if getattr(team, "logo_url", None)
-            }
+            },
+            fetch=logo.espn_fetch(espn_s2, swid),
         )
         if inline_logos
         else {},
@@ -472,7 +510,18 @@ def main(argv=None):
             f"cannot build standings through week {args.week}"
         )
 
-    print(json.dumps(build_payload(league, args.week, inline_logos=args.logos), indent=2))
+    print(
+        json.dumps(
+            build_payload(
+                league,
+                args.week,
+                inline_logos=args.logos,
+                espn_s2=espn_s2,
+                swid=swid,
+            ),
+            indent=2,
+        )
+    )
     return 0
 
 

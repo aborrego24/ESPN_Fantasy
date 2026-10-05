@@ -8,3 +8,5 @@ __pycache__/
 .DS_Store
 # real league ids -- copy local_config.example.py to this
 scenario_engine/local_config.py
+# fetched league history: a real league id plus every manager's real name
+*history*.json

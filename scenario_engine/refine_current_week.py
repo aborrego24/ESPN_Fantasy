@@ -156,6 +156,9 @@ if __name__ == "__main__":
         # Preseason projected PPG per team, passed straight through for the
         # projection-based SOS the renderer shows before any game is played.
         "projected_ppg": league_data.get("projected_ppg", {}),
+        # {name: [manager, ...]}, for the chart's hover card. Name-keyed like the
+        # maps above so re-sorting the standings cannot shuffle it.
+        "managers": league_data.get("managers", {}),
     }
     print(json.dumps(combined, indent=2))
 

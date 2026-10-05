@@ -131,6 +131,7 @@ def test_payload_has_the_shape_stage_two_expects():
         "divisions",
         "division_names",
         "projected_ppg",
+        "managers",
     }
     assert payload["league_settings"] == {
         "num_teams": 4,
@@ -160,7 +161,7 @@ def test_logos_are_inlined_only_when_asked(monkeypatch):
     monkeypatch.setattr(
         league_data.logo,
         "inline_all",
-        lambda urls: {name: f"inlined:{url}" for name, url in urls.items()},
+        lambda urls, fetch=None: {name: f"inlined:{url}" for name, url in urls.items()},
     )
 
     off = league_data.build_payload(league, current_week=2)
@@ -169,6 +170,28 @@ def test_logos_are_inlined_only_when_asked(monkeypatch):
     assert off["logos"] == {}, "no --logos means no logos, not even the URLs"
     assert on["logos"]["Alpha"] == "inlined:http://logos/Alpha.svg"
     assert set(on["logos"]) == {"Alpha", "Bravo", "Charlie", "Delta"}
+
+
+def test_the_league_cookies_reach_the_logo_fetch(monkeypatch):
+    """An uploaded team photo 401s without them, so stage 1 has to hand them on
+    -- holding the credentials and not passing them drew monograms for every
+    manager who had uploaded a picture."""
+    league = four_team_league()
+    for team in league.teams:
+        team.logo_url = f"http://logos/{team.team_name}.svg"
+    seen = {}
+    monkeypatch.setattr(
+        league_data.logo,
+        "espn_fetch",
+        lambda s2, swid: seen.setdefault("creds", (s2, swid)),
+    )
+    monkeypatch.setattr(league_data.logo, "inline_all", lambda urls, fetch=None: {})
+
+    league_data.build_payload(
+        league, current_week=2, inline_logos=True, espn_s2="S2", swid="SW"
+    )
+
+    assert seen["creds"] == ("S2", "SW")
 
 
 def test_division_names_come_from_the_settings_map():
