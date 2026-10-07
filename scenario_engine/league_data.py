@@ -459,9 +459,6 @@ def main(argv=None):
         print(json.dumps(load_league_data(args.test), indent=2))
         return 0
 
-    if args.week is None:
-        parser.error("give a week number, or --test <path_to_file.json>")
-
     if args.league_id is None:
         parser.error(
             "no league configured: pass --league-id, set ESPN_LEAGUE_ID, or copy "
@@ -498,23 +495,26 @@ def main(argv=None):
         )
 
     weeks_in_season = league.settings.reg_season_count
-    if not 0 <= args.week <= weeks_in_season:
-        parser.error(
-            f"week must be between 0 and {weeks_in_season} for this league, got {args.week}"
-        )
-
     scored = played_weeks(league)
-    if args.week > scored:
+    # No week given -> the current week, i.e. the latest one already scored. This
+    # is what the web path always wants (external callers never choose a week), and
+    # a sensible CLI default; an explicitly given week is still validated below.
+    week = args.week if args.week is not None else scored
+    if not 0 <= week <= weeks_in_season:
+        parser.error(
+            f"week must be between 0 and {weeks_in_season} for this league, got {week}"
+        )
+    if week > scored:
         parser.error(
             f"only {scored} week(s) have been scored in {args.year}; "
-            f"cannot build standings through week {args.week}"
+            f"cannot build standings through week {week}"
         )
 
     print(
         json.dumps(
             build_payload(
                 league,
-                args.week,
+                week,
                 inline_logos=args.logos,
                 espn_s2=espn_s2,
                 swid=swid,
