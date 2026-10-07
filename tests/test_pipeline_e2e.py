@@ -28,6 +28,7 @@ def test_stage2_emits_the_documented_wire_format(stage1_json, run_stages, name):
 
     payload = json.loads(out)
     assert set(payload) == {
+        "league_name",
         "league_data",
         "next_week_matchups",
         "remaining_matchups",

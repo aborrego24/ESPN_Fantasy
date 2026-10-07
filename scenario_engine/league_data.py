@@ -353,6 +353,9 @@ def build_payload(league, current_week, inline_logos=False, espn_s2=None, swid=N
             )
 
     return {
+        # The league's display name, for the report title. Kept top-level so the
+        # refine stages can pass it straight through to base_league_data.
+        "league_name": league.settings.name,
         "league_settings": {
             "num_teams": len(league.teams),
             "playoff_spots": league.settings.playoff_team_count,

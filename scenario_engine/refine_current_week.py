@@ -138,6 +138,8 @@ if __name__ == "__main__":
         with_division_winner=True,
     )
     combined = {
+        # League display name for the report title; optional for older payloads.
+        "league_name": league_data.get("league_name", ""),
         "league_data": metadata[0],
         "next_week_matchups": next_week_matchups[0],
         "remaining_matchups": remaining_matchups,

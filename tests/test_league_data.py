@@ -23,6 +23,7 @@ class FakeSettings:
     def __init__(self, weeks, playoff_spots):
         self.reg_season_count = weeks
         self.playoff_team_count = playoff_spots
+        self.name = "Test League"
 
 
 class FakeTeam:
@@ -122,6 +123,7 @@ def test_payload_has_the_shape_stage_two_expects():
     payload = league_data.build_payload(four_team_league(), current_week=2)
 
     assert set(payload) == {
+        "league_name",
         "league_settings",
         "teams",
         "next_week_matchups",
