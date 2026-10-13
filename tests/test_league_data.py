@@ -427,6 +427,25 @@ def test_private_league_with_bad_cookies_says_so(monkeypatch, capsys):
     assert "wrong or expired" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("error", ["ESPNInvalidLeague", "ESPNUnknownError"])
+def test_a_league_that_does_not_exist_is_a_clear_error(monkeypatch, capsys, error):
+    """An unknown id (or a malformed one ESPN rejects with a 400) is one clean line,
+    not a traceback."""
+    from espn_api.requests import espn_requests
+
+    monkeypatch.setattr(config, "_local", types.SimpleNamespace(LEAGUE_ID=1, YEAR=2024))
+
+    def missing(**kwargs):
+        raise getattr(espn_requests, error)("nope")
+
+    monkeypatch.setattr("espn_api.football.League", missing)
+
+    with pytest.raises(SystemExit):
+        league_data.main(["5"])
+
+    assert "does not exist for 2024" in capsys.readouterr().err
+
+
 def test_no_arguments_at_all_is_an_error():
     with pytest.raises(SystemExit):
         league_data.main([])

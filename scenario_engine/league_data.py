@@ -509,7 +509,9 @@ def main(argv=None):
 
     # Imported here so --test mode works without espn_api installed
     from espn_api.football import League
-    from espn_api.requests.espn_requests import ESPNAccessDenied
+    from espn_api.requests.espn_requests import (
+        ESPNAccessDenied, ESPNInvalidLeague, ESPNUnknownError,
+    )
 
     # Cookies are optional: only private leagues need them. A public league
     # passes None for both and is unaffected.
@@ -530,6 +532,12 @@ def main(argv=None):
             f"access to league {args.league_id} was denied even with credentials; "
             f"your ESPN_S2 / SWID may be wrong or expired."
         )
+    except (ESPNInvalidLeague, ESPNUnknownError):
+        # No such league for that season. ESPN says so for an id that was never a
+        # league (or did not exist that year) and answers a malformed one with a
+        # bare 400; both mean the same thing to the caller, and a traceback helps
+        # nobody.
+        parser.error(f"league {args.league_id} does not exist for {args.year}")
 
     weeks_in_season = league.settings.reg_season_count
     scored = played_weeks(league)
