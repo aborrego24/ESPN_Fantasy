@@ -119,12 +119,13 @@ DEFAULT_PRESET = "balanced"
 # games are excluded upstream in `history_data.postseason`, including the ones
 # played between two teams that both qualified -- see the Klorgon case there.
 #
-# Sizing: the title is worth roughly a tenth of a season's rating. Deliberately
-# not more, because a championship is mostly luck here -- measured over those
+# Sizing: the title is worth roughly a seventh of a season's rating (raised from
+# 10 to 15 -- at 10 a title read as too small a bump). Deliberately not more,
+# because a championship is mostly luck here -- measured over those
 # eight seasons the top seed won it twice, the average champion was the third
 # seed, and two champions were the 7th and 10th best teams of their season by
 # regular-season rating. The trophy is worth honouring; it is not evidence.
-CHAMPION = 10.0
+CHAMPION = 15.0
 TOP_SEED = 3.0
 DIVISION_WINNER = 2.0
 PLAYOFF_BERTH = 1.5
