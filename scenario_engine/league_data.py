@@ -416,6 +416,14 @@ def build_payload(league, current_week, inline_logos=False, espn_s2=None, swid=N
         )
         if inline_logos
         else {},
+        # The same logos as plain URLs, always captured (no fetch), for a browser
+        # to load directly. ESPN custom uploads need a login, so a consumer must
+        # expect some of these to fail and fall back.
+        "logo_urls": {
+            names[team.team_id]: team.logo_url
+            for team in league.teams
+            if getattr(team, "logo_url", None)
+        },
     }
 
 

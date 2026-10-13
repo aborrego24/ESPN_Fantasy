@@ -151,6 +151,8 @@ if __name__ == "__main__":
         # Logo URLs captured for a future image-capable report; drawn only once
         # the auth work that resolves custom uploads lands. Optional all the way.
         "logos": league_data.get("logos", {}),
+        # Raw logo URLs for a browser to load; optional for older payloads.
+        "logo_urls": league_data.get("logo_urls", {}),
         # Name-keyed, so it stays correct however the standings get re-sorted
         "divisions": league_data.get("divisions"),
         # {division_id: name}, to title the per-division standings tables.

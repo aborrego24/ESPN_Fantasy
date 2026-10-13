@@ -130,6 +130,7 @@ def test_payload_has_the_shape_stage_two_expects():
         "weekly_scores",
         "abbreviations",
         "logos",
+        "logo_urls",
         "divisions",
         "division_names",
         "projected_ppg",
@@ -172,6 +173,27 @@ def test_logos_are_inlined_only_when_asked(monkeypatch):
     assert off["logos"] == {}, "no --logos means no logos, not even the URLs"
     assert on["logos"]["Alpha"] == "inlined:http://logos/Alpha.svg"
     assert set(on["logos"]) == {"Alpha", "Bravo", "Charlie", "Delta"}
+
+
+def test_logo_urls_are_always_captured_without_fetching(monkeypatch):
+    """logo_urls carries the raw URLs for a browser, with or without --logos,
+    and never triggers an image fetch; a team with no logo is simply absent."""
+    league = four_team_league()
+    for team in league.teams:
+        team.logo_url = f"http://logos/{team.team_name}.svg"
+    league.teams[3].logo_url = None
+
+    def no_fetch(*_a, **_k):
+        raise AssertionError("logo_urls must not fetch")
+
+    monkeypatch.setattr(league_data.logo, "inline_all", no_fetch)
+    payload = league_data.build_payload(league, current_week=2)
+
+    assert payload["logo_urls"] == {
+        "Alpha": "http://logos/Alpha.svg",
+        "Bravo": "http://logos/Bravo.svg",
+        "Charlie": "http://logos/Charlie.svg",
+    }
 
 
 def test_the_league_cookies_reach_the_logo_fetch(monkeypatch):
