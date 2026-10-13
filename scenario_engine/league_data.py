@@ -41,6 +41,29 @@ def owner_names(team):
     return names
 
 
+def primary_managers(league, names):
+    """{team name: display name of its primary owner}, for labelling a row.
+
+    ESPN marks one owner of each team primary (`primaryOwner`, a SWID) and leads
+    with them in its own app; espn_api drops the field, so it is read from the
+    raw league response. Display-only: `owner_names` stays the identity, since
+    owner order is not stable (see there). Guarded like `starting_slots` -- a
+    league without the raw response (a test double) yields {}.
+    """
+    try:
+        raw = {t["id"]: t.get("primaryOwner") for t in league.espn_request.get_league()["teams"]}
+    except Exception:
+        return {}
+    primary = {}
+    for team in league.teams:
+        for owner in getattr(team, "owners", None) or []:
+            if owner.get("id") == raw.get(team.team_id):
+                name = f"{owner.get('firstName', '')} {owner.get('lastName', '')}".strip()
+                if name:
+                    primary[names[team.team_id]] = name
+    return primary
+
+
 def sides_of(matchup):
     """Both teams in a matchup, or (None, None) on a bye.
 
@@ -394,6 +417,9 @@ def build_payload(league, current_week, inline_logos=False, espn_s2=None, swid=N
         "managers": {
             names[team.team_id]: owner_names(team) for team in league.teams
         },
+        # {name: primary owner's name}, so a co-managed row can lead with whoever
+        # ESPN itself lists first. Empty when the raw response is unavailable.
+        "primary_managers": primary_managers(league, names),
         # ESPN's own short code per team, for the report to label a row with.
         # Keyed by the unique name because that is what the later stages carry;
         # only teams that actually have one appear.

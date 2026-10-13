@@ -135,6 +135,7 @@ def test_payload_has_the_shape_stage_two_expects():
         "division_names",
         "projected_ppg",
         "managers",
+        "primary_managers",
     }
     assert payload["league_settings"] == {
         "num_teams": 4,
@@ -647,3 +648,24 @@ def test_starting_slots_drops_bench_and_ir():
     league = FakeProjLeague([], {"0": 1, "2": 2, "20": 5, "21": 1})
 
     assert league_data.starting_slots(league) == {"QB": 1, "RB": 2}
+
+
+def test_primary_managers_names_espns_primary_owner():
+    """The primary owner comes from the raw response's primaryOwner SWID, not from
+    the (unstable) order of team.owners; without a raw response it is just {}."""
+    league = four_team_league()
+    alpha = league.teams[0]
+    alpha.owners = [
+        {"id": "{A}", "firstName": "JT", "lastName": "Dahmer"},
+        {"id": "{B}", "firstName": "Ben", "lastName": "Stevens"},
+    ]
+    names = {t.team_id: t.team_name for t in league.teams}
+
+    assert league_data.primary_managers(league, names) == {}
+
+    class Raw:
+        def get_league(self):
+            return {"teams": [{"id": alpha.team_id, "primaryOwner": "{B}"}]}
+
+    league.espn_request = Raw()
+    assert league_data.primary_managers(league, names) == {"Alpha": "Ben Stevens"}

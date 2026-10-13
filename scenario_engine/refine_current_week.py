@@ -151,6 +151,8 @@ if __name__ == "__main__":
         # Logo URLs captured for a future image-capable report; drawn only once
         # the auth work that resolves custom uploads lands. Optional all the way.
         "logos": league_data.get("logos", {}),
+        # {name: primary owner}, to order a co-managed team's names; optional.
+        "primary_managers": league_data.get("primary_managers", {}),
         # Raw logo URLs for a browser to load; optional for older payloads.
         "logo_urls": league_data.get("logo_urls", {}),
         # Name-keyed, so it stays correct however the standings get re-sorted
