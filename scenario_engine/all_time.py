@@ -534,3 +534,37 @@ def summarise(history, rows):
         "skipped": history.get("skipped") or [],
         "excluded": excluded,
     }
+
+
+def web_payload(history):
+    """Everything the All-Time view needs, as plain JSON, for a renderer that is
+    not to_html (the web frontend). The same numbers to_html draws: per scope the
+    ranked team-seasons (each with its career keys, so careers can be re-averaged
+    under new weights), the in-progress season's rows for an overlay, and the
+    manager careers; plus the summary line and the weighting presets.
+    """
+    in_progress = [s for s in (history.get("seasons") or []) if not s.get("complete")]
+    scopes = {}
+    for scope in SCOPES:
+        teams = team_rows(history, scope)
+        current = [
+            row
+            for season in in_progress
+            for row in season_rows(season, scope)
+            # Mid-season ESPN publishes a live playoff seed with nothing played;
+            # only rows with real games behind them may overlay (see to_html).
+            if not (scope == "playoffs" and not row["playoff_games"])
+        ]
+        for row in teams + current:
+            row["career_keys"] = career_keys(row)
+        scopes[scope] = {"teams": teams, "current": current, "owners": owner_rows(teams)}
+    return {
+        "facts": summarise(history, team_rows(history)),
+        "scopes": scopes,
+        "default_scope": DEFAULT_SCOPE,
+        "presets": [
+            {"key": key, "label": label, "weights": weights, "blurb": blurb}
+            for key, label, weights, blurb in PRESETS
+        ],
+        "default_preset": DEFAULT_PRESET,
+    }
