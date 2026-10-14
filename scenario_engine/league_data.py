@@ -14,21 +14,28 @@ def load_league_data(file_path):
         return json.load(file)
 
 
-# One person, two ESPN names. A manager who renames their ESPN account becomes a
-# second manager everywhere identity is read from: two half-careers in All-Time,
-# both ratings wrong. It cannot be detected from what ESPN gives us -- the SWID is
-# not stable per person either (see owner_names), so neither field can arbitrate --
-# so the few real cases are simply listed. alias (lower case) -> the name to keep.
+# One person, two ESPN accounts. Whoever comes back on a new login is a second
+# manager everywhere identity is read from: two half-careers in All-Time, both
+# ratings wrong, and the older self reads as having left the league.
+#
+# Nothing ESPN gives us can arbitrate it. Measured on one real manager, every
+# field changed at once between 2025 and 2026 -- SWID {DEA55EDE-...} to
+# {AEAC2798-...}, name "Cam T" to "Cam Tagavi", handle cct102901 to
+# ESPNFAN8696163622 -- so there is no key to join them on, only this list.
+#
+# alias (lower case) -> the name to keep, which should be the name the CURRENT
+# season uses: that is the one the live league agrees with, so the manager still
+# counts as active and this season's rows still mark as theirs.
 #
 # Not scoped by league: the map is tiny and a clash would need two leagues to
 # share a spelling. Add a league key here if that ever happens.
 MANAGER_ALIASES = {
-    "cam t": "Tagavi",
+    "cam t": "Cam Tagavi",
 }
 
 
 def canonical_manager(name):
-    """The one name a manager is known by, collapsing a renamed ESPN account."""
+    """The one name a manager is known by, across a rename or a second account."""
     return MANAGER_ALIASES.get(name.strip().lower(), name)
 
 
@@ -49,7 +56,7 @@ def owner_names(team):
       not a durable key either -- he came out as two separate managers.
 
     The display name is therefore the identity, put through MANAGER_ALIASES so a
-    rename does not read as a new person. A nameless owner is dropped rather than
+    second account does not read as a second person. A nameless owner is dropped rather than
     kept as an empty string, which would group every such team together.
     """
     names = []

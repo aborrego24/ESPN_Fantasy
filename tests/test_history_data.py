@@ -206,19 +206,19 @@ def test_every_manager_of_a_team_is_recorded():
     assert history_data.owner_names(orphan) == []
 
 
-def test_a_renamed_manager_keeps_one_identity(monkeypatch):
-    """Renaming an ESPN account otherwise makes a second manager: two half
-    careers in All-Time, both ratings wrong. Neither ESPN field can arbitrate
-    (the SWID is not stable per person either), so the cases are listed."""
+def test_a_manager_on_a_second_account_keeps_one_identity(monkeypatch):
+    """A new login otherwise makes a second manager: two half careers in
+    All-Time, both ratings wrong. Nothing can arbitrate it -- on the real case
+    the SWID, the name and the handle all changed at once -- so it is listed."""
     monkeypatch.setitem(league_data.MANAGER_ALIASES, "old name", "New Name")
     team = FakeTeam("T", [100.0], owners=[{"id": "swid-1", "firstName": "Old", "lastName": "Name"}])
 
     assert history_data.owner_names(team) == ["New Name"]
 
 
-def test_both_spellings_on_one_team_are_still_one_manager(monkeypatch):
-    """A transition season (or ESPN listing the account twice) would otherwise
-    count that season towards the same career twice."""
+def test_both_accounts_on_one_team_are_still_one_manager(monkeypatch):
+    """A handover season with both logins on the team would otherwise count that
+    season towards the same career twice."""
     monkeypatch.setitem(league_data.MANAGER_ALIASES, "old name", "New Name")
     team = FakeTeam(
         "T",
