@@ -83,6 +83,11 @@ def profile(name):
     return next(m for m in payload()["managers"] if m["manager"] == name)
 
 
+def scoped(name, scope="both"):
+    """One scope's game-derived figures. `both` is the page's default."""
+    return profile(name)["scopes"][scope]
+
+
 def pairing(a, b):
     key = sorted((a, b))
     return next(p for p in payload()["pairings"] if [p["a"], p["b"]] == key)
@@ -93,10 +98,10 @@ def test_every_manager_gets_a_page_including_a_co_manager():
 
 
 def test_a_record_counts_each_game_once_from_each_side():
-    assert profile("Ann")["regular"]["wins"] == 2      # 2025 wk1, 2024 wk1
-    assert profile("Ann")["regular"]["losses"] == 1    # 2025 wk2
-    assert profile("Ann")["regular"]["games"] == 3
-    assert profile("Ed")["regular"] == {
+    assert scoped("Ann", "regular")["record"]["wins"] == 2      # 2025 wk1, 2024 wk1
+    assert scoped("Ann", "regular")["record"]["losses"] == 1    # 2025 wk2
+    assert scoped("Ann", "regular")["record"]["games"] == 3
+    assert scoped("Ed", "regular")["record"] == {
         "wins": 0, "losses": 2, "ties": 0, "games": 2,
         "points_for": 190.0, "points_against": 205.0, "ppg": 95.0, "papg": 102.5,
     }
@@ -104,8 +109,8 @@ def test_a_record_counts_each_game_once_from_each_side():
 
 def test_co_managers_each_get_the_whole_team_season():
     """Both of them played those games, which is how the careers read it too."""
-    assert profile("Cy")["regular"] == profile("Dee")["regular"]
-    assert profile("Cy")["regular"]["wins"] == 2
+    assert scoped("Cy", "regular")["record"] == scoped("Dee", "regular")["record"]
+    assert scoped("Cy", "regular")["record"]["wins"] == 2
 
 
 def test_co_managers_never_face_each_other():
@@ -132,17 +137,17 @@ def test_every_meeting_is_listed_in_time_order_with_the_bracket_last():
 
 def test_an_unplayed_week_is_not_a_result_and_a_bye_is_not_a_game():
     """Week 3 is 0.0 both sides for A, B and D, and a bye for C."""
-    assert profile("Ann")["regular"]["games"] == 3    # not 4
-    assert profile("Cy")["regular"]["games"] == 2     # the bye is not one
+    assert scoped("Ann", "regular")["record"]["games"] == 3    # not 4
+    assert scoped("Cy", "regular")["record"]["games"] == 2     # the bye is not one
 
 
 def test_playoff_games_are_kept_apart_from_the_regular_season():
-    assert profile("Ann")["playoffs"] == {
+    assert scoped("Ann", "playoffs")["record"] == {
         "wins": 1, "losses": 0, "ties": 0, "games": 1,
         "points_for": 130.0, "points_against": 125.0, "ppg": 130.0, "papg": 125.0,
     }
     # ...and never counted into the regular-season rates.
-    assert profile("Ann")["regular"]["points_for"] == 280.0
+    assert scoped("Ann", "regular")["record"]["points_for"] == 280.0
 
 
 def test_accolades_come_off_the_final_standing():
@@ -156,30 +161,30 @@ def test_accolades_come_off_the_final_standing():
 
 def test_expected_wins_say_what_the_schedule_was_worth():
     """All-play: 2025 week 1 A beats only B, week 2 A beats nobody; 2024 A beats B."""
-    assert profile("Ann")["expected"] == {"wins": 2, "losses": 5, "ties": 0}
-    assert profile("Cy")["expected"] == {"wins": 6, "losses": 0, "ties": 0}
+    assert scoped("Ann", "regular")["expected"] == {"wins": 2, "losses": 5, "ties": 0}
+    assert scoped("Cy", "regular")["expected"] == {"wins": 6, "losses": 0, "ties": 0}
     # 3 games at an all-play 2-5 is 0.857 wins; she actually won 2, so the draw
     # was worth a bit over a win to her.
-    assert profile("Ann")["expected_wins"] == 0.9
-    assert profile("Cy")["expected_wins"] == 2.0
+    assert scoped("Ann", "regular")["expected_wins"] == 0.9
+    assert scoped("Cy", "regular")["expected_wins"] == 2.0
 
 
 def test_a_close_game_is_decided_by_less_than_the_threshold():
     """C-D was 5 apart and counts; A-B was exactly 10 and does not."""
     assert head_to_head.CLOSE_GAME == 10.0
-    assert profile("Cy")["close"] == {"wins": 1, "losses": 0, "ties": 0}
-    assert profile("Ann")["close"] == {"wins": 0, "losses": 0, "ties": 0}
-    assert profile("Ed")["close"] == {"wins": 0, "losses": 1, "ties": 0}
+    assert scoped("Cy", "regular")["close"] == {"wins": 1, "losses": 0, "ties": 0}
+    assert scoped("Ann", "regular")["close"] == {"wins": 0, "losses": 0, "ties": 0}
+    assert scoped("Ed", "regular")["close"] == {"wins": 0, "losses": 1, "ties": 0}
 
 
 def test_a_streak_carries_across_seasons():
     """Ann won 2024 week 1 and 2025 week 1 before losing: a streak of two."""
-    assert profile("Ann")["streaks"] == {"win": 2, "loss": 1}
-    assert profile("Ed")["streaks"] == {"win": 0, "loss": 2}
+    assert scoped("Ann", "regular")["streaks"] == {"win": 2, "loss": 1}
+    assert scoped("Ed", "regular")["streaks"] == {"win": 0, "loss": 2}
 
 
 def test_scoring_reports_the_spread_not_just_the_average():
-    scoring = profile("Ann")["scoring"]
+    scoring = scoped("Ann", "regular")["scoring"]
     assert scoring["ppg"] == round((100 + 80 + 100) / 3, 2)
     # She hit 100 twice; a tie reports the first time she did it.
     assert scoring["high"] == {"points": 100.0, "year": 2024, "week": 1}
@@ -188,31 +193,58 @@ def test_scoring_reports_the_spread_not_just_the_average():
 
 
 def test_margins_separate_a_blowout_from_a_nailbiter():
-    assert profile("Ann")["margins"] == {"avg_win": 10.0, "avg_loss": 40.0}
-    assert profile("Cy")["margins"]["avg_win"] == 22.5    # 5 and 40
+    assert scoped("Ann", "regular")["margins"] == {"avg_win": 10.0, "avg_loss": 40.0}
+    assert scoped("Cy", "regular")["margins"]["avg_win"] == 22.5    # 5 and 40
 
 
 def test_top_scorer_weeks_count_the_leagues_high_score():
     """C posted the week's best in both 2025 weeks; A did in 2024. C's week-3 bye
     scored 99 with nobody else playing, and crowning that would invent a week."""
-    assert profile("Cy")["top_scorer_weeks"] == 2
-    assert profile("Dee")["top_scorer_weeks"] == 2
-    assert profile("Ann")["top_scorer_weeks"] == 1
+    assert scoped("Cy", "regular")["top_scorer_weeks"] == 2
+    assert scoped("Dee", "regular")["top_scorer_weeks"] == 2
+    assert scoped("Ann", "regular")["top_scorer_weeks"] == 1
 
 
 def test_the_record_against_teams_that_made_the_playoffs():
     """Ann's only game against a qualifier was the one she lost to C."""
-    assert profile("Ann")["vs_playoff_teams"] == {"wins": 0, "losses": 1, "ties": 0}
+    assert scoped("Ann", "regular")["vs_playoff_teams"] == {"wins": 0, "losses": 1, "ties": 0}
 
 
-def test_a_season_row_carries_the_finish_beside_the_scoring_rank():
+def test_a_season_row_carries_the_finish_beside_the_ppg_rank():
     rows = profile("Ann")["season_rows"]
     assert [row["year"] for row in rows] == [2024, 2025]
     assert rows[1] == {
-        "year": 2025, "team": "A", "wins": 1, "losses": 1, "ties": 0,
-        "points_for": 180.0, "ppg": 90.0, "scoring_rank": 4, "finish": 1,
+        "year": 2025, "team": "A", "complete": True, "teams": 4,
+        "wins": 1, "losses": 1, "ties": 0,
+        "points_for": 180.0, "ppg": 90.0, "ppg_rank": 4, "finish": 1,
         "seed": 2, "made_playoffs": True, "division_winner": False, "playoff_wins": 1,
     }
+
+
+def test_rank_is_on_points_per_game_not_the_total():
+    """With an unfinished season folded in, teams have played different numbers
+    of weeks, and a total would rank on games played as much as on scoring."""
+    hist = history()
+    # Give D a third game nobody else played: the most points, the worst average.
+    season = hist["seasons"][0]
+    for entry in season["weekly_scores"]:
+        if entry["name"] == "D":
+            entry["weeks"].append({"week": 4, "points": 60.0, "opponent": "C"})
+        elif entry["name"] == "C":
+            entry["weeks"].append({"week": 4, "points": 50.0, "opponent": "D"})
+    for team in season["teams"]:
+        if team["name"] == "D":
+            team["wins"], team["losses"], team["points_for"] = 1, 2, 250.0
+        elif team["name"] == "C":
+            team["wins"], team["losses"], team["points_for"] = 2, 1, 280.0
+    out = head_to_head.web_payload(hist)
+    ranks = {
+        row["team"]: row["ppg_rank"]
+        for m in out["managers"] for row in m["season_rows"] if row["year"] == 2025
+    }
+    # D scored the most points of anyone and still ranks last on PPG (83.3).
+    assert ranks["D"] == 4
+    assert ranks["C"] == 1
 
 
 def test_co_managers_are_named_with_the_years_they_shared():
@@ -220,12 +252,43 @@ def test_co_managers_are_named_with_the_years_they_shared():
     assert profile("Ann")["co_managers"] == []
 
 
-def test_an_in_progress_season_is_left_out():
-    """The same population the all-time tables rank, so a career cannot mean two
-    things depending on which tab it is read from."""
+def test_an_in_progress_season_still_counts_its_games():
+    """A game that has been played is a result whether or not its season has
+    finished, so the record counts it."""
     hist = history()
     hist["seasons"][0]["complete"] = False
     out = head_to_head.web_payload(hist)
     ann = next(m for m in out["managers"] if m["manager"] == "Ann")
-    assert ann["years"] == [2024]
-    assert ann["regular"]["games"] == 1
+    assert ann["years"] == [2024, 2025]
+    assert ann["scopes"]["regular"]["record"]["games"] == 3
+    assert ann["season_rows"][1]["complete"] is False
+
+
+def test_an_in_progress_season_hands_out_no_hardware():
+    """Mid-season ESPN publishes a live seed and standing. Counting them would
+    award a title, a berth and a #1 seed nobody has earned."""
+    hist = history()
+    hist["seasons"][0]["complete"] = False
+    out = head_to_head.web_payload(hist)
+    ann = next(m for m in out["managers"] if m["manager"] == "Ann")
+    # 2025 had her champion, in the playoffs, with a bracket win: all dropped.
+    # 2024 is still finished, and its #1 seed still counts.
+    assert ann["accolades"] == {
+        "championships": 0, "berths": 0, "division_titles": 0,
+        "top_seeds": 1, "playoff_wins": 0,
+    }
+    # ...and her games against a live "qualifier" are not credited as such.
+    assert ann["scopes"]["regular"]["vs_playoff_teams"] == {"wins": 0, "losses": 0, "ties": 0}
+
+
+def test_the_scopes_are_the_all_time_ones_and_both_is_the_sum():
+    """`both` has to be the two added up, or the toggle would change the facts
+    rather than the view of them."""
+    out = payload()
+    assert out["scopes"] == ["regular", "both", "playoffs"]
+    assert out["default_scope"] == "both"
+    s = profile("Ann")["scopes"]
+    for part in ("wins", "losses", "ties", "games"):
+        assert s["both"]["record"][part] == s["regular"]["record"][part] + s["playoffs"]["record"][part]
+    assert s["both"]["record"]["points_for"] == round(
+        s["regular"]["record"]["points_for"] + s["playoffs"]["record"]["points_for"], 2)

@@ -37,6 +37,11 @@ MIN_MEETINGS = 3
 
 REGULAR = "regular"
 PLAYOFFS = "playoffs"
+BOTH = "both"
+# Same three the all-time tables offer, and in the same order, so one mental
+# model covers both pages. `both` is the default: a career is the whole of it.
+SCOPES = (REGULAR, BOTH, PLAYOFFS)
+DEFAULT_SCOPE = BOTH
 
 
 def _played(score):
@@ -106,14 +111,18 @@ def manager_games(history):
     """Every game every manager played, keyed by manager, in time order.
 
     One entry per manager per game, so a co-managed team puts the same game in
-    both managers' lists. Completed seasons only -- the same population the
-    all-time tables rank, so a career cannot mean two different things depending
-    on which tab it is read from.
+    both managers' lists.
+
+    **Every season, including the one in progress.** A game that has been played
+    is a result whether or not the season it belongs to has finished, so a record
+    here counts it. What the unfinished season must *not* contribute is anything
+    read off a standing: mid-season ESPN publishes a live seed, so `made_playoffs`
+    there claims a berth nobody has earned and is ignored (see `_accolades`).
     """
-    seasons, _ = all_time.ranked_seasons(history)
     by_manager = {}
-    for season in seasons:
+    for season in history.get("seasons") or []:
         year = season["year"]
+        complete = bool(season.get("complete"))
         teams = {team["name"]: team for team in season["teams"]}
         managers = {name: all_time.career_keys(team) for name, team in teams.items()}
         for kind in (REGULAR, PLAYOFFS):
@@ -134,7 +143,9 @@ def manager_games(history):
                         # Every manager on the other side, so one game can count
                         # against each of a co-managed pair.
                         "opponents": managers.get(foe_name, []),
-                        "opponent_made_playoffs": bool(foe.get("made_playoffs")),
+                        # Only once the bracket has settled does qualifying mean
+                        # anything; before that the seed is a live guess.
+                        "opponent_made_playoffs": complete and bool(foe.get("made_playoffs")),
                     }
                     for manager in managers.get(own_name, []):
                         by_manager.setdefault(manager, []).append(game)
@@ -159,82 +170,152 @@ def _streak(games, won):
     return best
 
 
+def _entries(season, kind):
+    key = "playoff_weeks" if kind == PLAYOFFS else "weekly_scores"
+    return season.get(key) or []
+
+
 def _expected_and_ranks(seasons):
-    """Per (year, team): the all-play record, the points-for rank, and the weeks
-    the team was the league's top scorer.
+    """Per (year, team, scope): the all-play record and the weeks the team was
+    the scope's top scorer. Plus the PPG rank per (year, team).
 
     All-play is what the record would be if every team played the whole league
     every week, so the gap between it and the real record is what the schedule
-    was worth. Computed per season by the same code the season report uses.
+    was worth. Computed by the same code the season report uses, once over the
+    regular season and once over the bracket; `both` is the two added up.
+
+    Rank is on points **per game**, not total: with the in-progress season folded
+    in, a team that has played fewer weeks would otherwise rank below one that
+    has simply played more.
     """
     expected, ranks, top_weeks = {}, {}, {}
     for season in seasons:
         year = season["year"]
-        weekly = season.get("weekly_scores") or []
-        for row in league_stats.all_play_records(weekly):
-            expected[(year, row["name"])] = row["total"]
-        # Points-for rank within the season, so "scored 2nd, finished 6th" can be
-        # said at all.
-        ordered = sorted(season["teams"], key=lambda t: -t["points_for"])
-        for position, team in enumerate(ordered, 1):
+        for kind in (REGULAR, PLAYOFFS):
+            entries = _entries(season, kind)
+            for row in league_stats.all_play_records(entries):
+                expected[(year, row["name"], kind)] = row["total"]
+                for part in row["total"]:
+                    key = (year, row["name"], BOTH)
+                    expected.setdefault(key, _tally())[part] += row["total"][part]
+            # The scope's high score, counted per team. Only teams with a game
+            # that week are eligible: a bye carries a real score, and crowning it
+            # would make a week nobody contested somebody's best.
+            scores = {}
+            for entry in entries:
+                for week in entry["weeks"]:
+                    if _played(week["points"]) and week["opponent"]:
+                        scores.setdefault(week["week"], []).append((week["points"], entry["name"]))
+            for pairs in scores.values():
+                best = max(points for points, _ in pairs)
+                for points, name in pairs:
+                    if points == best:
+                        for scope in (kind, BOTH):
+                            top_weeks[(year, name, scope)] = top_weeks.get((year, name, scope), 0) + 1
+
+        def ppg(team):
+            played = team["wins"] + team["losses"] + team["ties"]
+            return team["points_for"] / played if played else 0.0
+
+        for position, team in enumerate(sorted(season["teams"], key=lambda t: -ppg(t)), 1):
             ranks[(year, team["name"])] = position
-        # The week's high score, counted per team. Only teams with a game that
-        # week are eligible: a bye carries a real score, and crowning it would
-        # make a week nobody contested somebody's best.
-        scores = {}
-        for entry in weekly:
-            for week in entry["weeks"]:
-                if _played(week["points"]) and week["opponent"]:
-                    scores.setdefault(week["week"], []).append((week["points"], entry["name"]))
-        for week, pairs in scores.items():
-            best = max(points for points, _ in pairs)
-            for points, name in pairs:
-                if points == best:
-                    top_weeks[(year, name)] = top_weeks.get((year, name), 0) + 1
     return expected, ranks, top_weeks
 
 
-def _profile(manager, games, team_seasons, expected, ranks, top_weeks):
-    """One manager's career, as the page reads it top to bottom."""
-    regular = [g for g in games if g["kind"] == REGULAR]
-    playoffs = [g for g in games if g["kind"] == PLAYOFFS]
+def _moment(game):
+    """A single score worth naming, with when it happened. Games arrive in time
+    order, so a tied best or worst reports the first time they managed it."""
+    if game is None:
+        return None
+    return {"points": game["points"], "year": game["year"], "week": game["week"]}
 
-    def side(subset):
-        tally = _tally()
-        for game in subset:
-            _add(tally, game["points"], game["opponent_points"])
-        points = [g["points"] for g in subset]
-        against = [g["opponent_points"] for g in subset]
-        return {
-            **tally,
-            "games": len(subset),
-            "points_for": round(sum(points), 2),
-            "points_against": round(sum(against), 2),
-            "ppg": round(statistics.fmean(points), 2) if points else None,
-            "papg": round(statistics.fmean(against), 2) if against else None,
-        }
 
+def _scoped(games, team_seasons, expected, top_weeks, scope):
+    """Every game-derived figure, over one scope's games.
+
+    Scoped rather than computed once because the three scopes answer different
+    questions: a bracket PPG over three games says something a career PPG does
+    not, and averaging them together would hide both.
+    """
+    tally = _tally()
     close, versus_playoff_teams = _tally(), _tally()
-    for game in regular:
-        margin = game["points"] - game["opponent_points"]
-        if abs(margin) < CLOSE_GAME:
+    for game in games:
+        _add(tally, game["points"], game["opponent_points"])
+        if abs(game["points"] - game["opponent_points"]) < CLOSE_GAME:
             _add(close, game["points"], game["opponent_points"])
         if game["opponent_made_playoffs"]:
             _add(versus_playoff_teams, game["points"], game["opponent_points"])
 
-    wins = [g["points"] - g["opponent_points"] for g in regular if g["points"] > g["opponent_points"]]
-    losses = [g["opponent_points"] - g["points"] for g in regular if g["points"] < g["opponent_points"]]
+    points = [g["points"] for g in games]
+    against = [g["opponent_points"] for g in games]
+    wins = [g["points"] - g["opponent_points"] for g in games if g["points"] > g["opponent_points"]]
+    losses = [g["opponent_points"] - g["points"] for g in games if g["points"] < g["opponent_points"]]
 
-    # The career all-play record: what the seasons would have produced against
-    # the whole league every week.
+    # The career all-play record over this scope: what the seasons would have
+    # produced against the whole league every week.
     expect = _tally()
-    rows, co_managers = [], {}
-    # By year only: a team dict is not orderable, and a manager has one team a season.
-    for year, team in sorted(team_seasons, key=lambda pair: pair[0]):
-        entry = expected.get((year, team["name"]))
+    for year, team in team_seasons:
+        entry = expected.get((year, team["name"], scope))
         if entry:
             for part in expect:
                 expect[part] += entry[part]
+
+    return {
+        "record": {
+            **tally,
+            "games": len(games),
+            "points_for": round(sum(points), 2),
+            "points_against": round(sum(against), 2),
+            "ppg": round(statistics.fmean(points), 2) if points else None,
+            "papg": round(statistics.fmean(against), 2) if against else None,
+        },
+        # All-play, as the tally and as the wins it comes to over the games
+        # actually played. The second is the number a reader wants -- "you are
+        # 8-6, you earned 5.9" -- and deriving it here keeps one definition of
+        # what the schedule was worth.
+        "expected": expect,
+        "expected_wins": _expected_wins(expect, len(games)),
+        "close": close,
+        "vs_playoff_teams": versus_playoff_teams,
+        "scoring": {
+            "ppg": round(statistics.fmean(points), 2) if points else None,
+            # Population deviation: these are all the games played, not a sample
+            # of them. Two managers on the same PPG can be wildly different.
+            "stdev": round(statistics.pstdev(points), 2) if len(points) > 1 else None,
+            "high": _moment(max(games, key=lambda g: g["points"], default=None)),
+            "low": _moment(min(games, key=lambda g: g["points"], default=None)),
+        },
+        "margins": {
+            "avg_win": round(statistics.fmean(wins), 2) if wins else None,
+            "avg_loss": round(statistics.fmean(losses), 2) if losses else None,
+        },
+        "streaks": {"win": _streak(games, True), "loss": _streak(games, False)},
+        "top_scorer_weeks": sum(top_weeks.get((year, t["name"], scope), 0) for year, t in team_seasons),
+    }
+
+
+def _accolades(rows):
+    """Hardware, from finished seasons only.
+
+    Mid-season ESPN publishes a live seed and a live standing, so an unfinished
+    season would hand out a berth, a division and a #1 seed nobody has earned.
+    Games played are real and counted; a standing is not one until it settles.
+    """
+    done = [row for row in rows if row["complete"]]
+    return {
+        "championships": sum(1 for r in done if r["finish"] == 1),
+        "berths": sum(1 for r in done if r["made_playoffs"]),
+        "division_titles": sum(1 for r in done if r["division_winner"]),
+        "top_seeds": sum(1 for r in done if r["seed"] == 1),
+        "playoff_wins": sum(r["playoff_wins"] for r in done),
+    }
+
+
+def _profile(manager, games, team_seasons, expected, ranks, top_weeks):
+    """One manager's career, as the page reads it top to bottom."""
+    rows, co_managers = [], {}
+    # By year only: a team dict is not orderable, and a manager has one team a season.
+    for year, team in sorted(team_seasons, key=lambda pair: pair[0]):
         for other in team.get("managers") or []:
             if other != manager:
                 co_managers.setdefault(other, []).append(year)
@@ -242,12 +323,15 @@ def _profile(manager, games, team_seasons, expected, ranks, top_weeks):
         rows.append({
             "year": year,
             "team": team["name"],
+            "complete": bool(team["complete"]),
+            # How many teams were in that season, so last place can be named.
+            "teams": team["num_teams"],
             "wins": team["wins"],
             "losses": team["losses"],
             "ties": team["ties"],
             "points_for": team["points_for"],
             "ppg": round(team["points_for"] / played, 2) if played else None,
-            "scoring_rank": ranks.get((year, team["name"])),
+            "ppg_rank": ranks.get((year, team["name"])),
             # rankCalculatedFinal: 1 is the champion, 0 an unsettled season.
             "finish": team["final_standing"],
             "seed": team["seed"],
@@ -256,54 +340,24 @@ def _profile(manager, games, team_seasons, expected, ranks, top_weeks):
             "playoff_wins": team["playoff_wins"],
         })
 
-    points = [g["points"] for g in regular]
-
-    def moment(game):
-        """A single score worth naming, with when it happened. `games` is in time
-        order, so a tied best or worst reports the first time they managed it."""
-        if game is None:
-            return None
-        return {"points": game["points"], "year": game["year"], "week": game["week"]}
-
+    by_scope = {
+        REGULAR: [g for g in games if g["kind"] == REGULAR],
+        PLAYOFFS: [g for g in games if g["kind"] == PLAYOFFS],
+        BOTH: games,
+    }
     return {
         "manager": manager,
         "seasons": len(rows),
         "years": [row["year"] for row in rows],
-        "regular": side(regular),
-        "playoffs": side(playoffs),
-        "accolades": {
-            "championships": sum(1 for r in rows if r["finish"] == 1),
-            "berths": sum(1 for r in rows if r["made_playoffs"]),
-            "division_titles": sum(1 for r in rows if r["division_winner"]),
-            "top_seeds": sum(1 for r in rows if r["seed"] == 1),
-            "playoff_wins": sum(r["playoff_wins"] for r in rows),
-        },
-        # All-play, as the tally and as the wins it comes to over the games
-        # actually played. The second is the number a reader wants -- "you are
-        # 8-6, you earned 5.9" -- and deriving it here keeps one definition of
-        # what the schedule was worth.
-        "expected": expect,
-        "expected_wins": _expected_wins(expect, len(regular)),
-        "close": close,
-        "vs_playoff_teams": versus_playoff_teams,
-        "scoring": {
-            "ppg": round(statistics.fmean(points), 2) if points else None,
-            # Population deviation: these are all the games played, not a sample
-            # of them. Two managers on the same PPG can be wildly different.
-            "stdev": round(statistics.pstdev(points), 2) if len(points) > 1 else None,
-            "high": moment(max(regular, key=lambda g: g["points"], default=None)),
-            "low": moment(min(regular, key=lambda g: g["points"], default=None)),
-        },
-        "margins": {
-            "avg_win": round(statistics.fmean(wins), 2) if wins else None,
-            "avg_loss": round(statistics.fmean(losses), 2) if losses else None,
-        },
-        "streaks": {"win": _streak(games, True), "loss": _streak(games, False)},
-        "top_scorer_weeks": sum(top_weeks.get((year, t["name"]), 0) for year, t in team_seasons),
+        "accolades": _accolades(rows),
         "co_managers": [
             {"manager": name, "years": years} for name, years in sorted(co_managers.items())
         ],
         "season_rows": rows,
+        "scopes": {
+            scope: _scoped(by_scope[scope], team_seasons, expected, top_weeks, scope)
+            for scope in SCOPES
+        },
     }
 
 
@@ -353,15 +407,19 @@ def web_payload(history):
     re-derive: the figures are a few KB where the scores are tens of them, and
     the all-time careers already set the precedent that this math has one home.
     """
-    seasons, _ = all_time.ranked_seasons(history)
+    seasons = history.get("seasons") or []
     expected, ranks, top_weeks = _expected_and_ranks(seasons)
 
     # Which team-seasons belong to each manager, by the same rule as the careers.
+    # The season's own facts ride along on the team: a row has to be able to say
+    # whether the season finished and how many teams it had.
     seasons_for = {}
     for season in seasons:
         for team in season["teams"]:
+            entry = {**team, "complete": bool(season.get("complete")),
+                     "num_teams": season.get("num_teams") or len(season["teams"])}
             for manager in all_time.career_keys(team):
-                seasons_for.setdefault(manager, []).append((season["year"], team))
+                seasons_for.setdefault(manager, []).append((season["year"], entry))
 
     by_manager = manager_games(history)
     managers = [
@@ -371,6 +429,8 @@ def web_payload(history):
     return {
         "managers": managers,
         "pairings": pairings(by_manager),
+        "scopes": list(SCOPES),
+        "default_scope": DEFAULT_SCOPE,
         "close_game": CLOSE_GAME,
         "min_meetings": MIN_MEETINGS,
     }
