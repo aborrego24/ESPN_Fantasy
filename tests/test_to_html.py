@@ -1649,11 +1649,16 @@ def test_the_rating_has_no_adjustable_weighting():
     assert f"var AT_WEIGHTS={weights};" in document
 
 
-def test_the_rating_gloss_states_the_weighting_it_cannot_be_asked_about():
-    """With no panel to read the weights off, the legend has to carry them."""
+def test_the_rating_gloss_does_not_advertise_the_exact_weighting():
+    """The split is a judgement call to argue with in all_time.WEIGHTS, not a
+    figure to quote at a reader settling one column. The gloss says what the
+    rating is made of and leaves the shares out of it."""
     gloss = dict((k, g) for k, _, g in to_html.AT_METRICS)["rating"]
+    assert "%" not in gloss
     for name in ("strength", "record", "scoring"):
-        assert f"{round(to_html.all_time.WEIGHTS[name] * 100)}%" in gloss
+        assert str(round(to_html.all_time.WEIGHTS[name] * 100)) not in gloss
+    # It still has to say what the number is: the rates, blended, plus accolades.
+    assert "rates" in gloss and "accolades" in gloss
 
 
 def test_the_default_preset_matches_the_documented_weights():

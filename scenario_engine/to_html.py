@@ -1778,6 +1778,10 @@ ALL_TIME_JS = """
     if (!ownerBody) return;
     var ownerTable = ownerBody.closest('table');
     var ownerRows = Array.prototype.slice.call(ownerBody.getElementsByTagName('tr'));
+    // What a padded season is worth: the average team-season in this scope, the
+    // same population all_time.owner_rows pads against.
+    var meanRating = teamRows.reduce(function (s, tr) { return s + tr._r; }, 0)
+      / (teamRows.length || 1);
     ownerRows.forEach(function (tr) {
       var seasons = byOwner[tr.getAttribute('data-owner')] || [];
       var sum = 0, best = null;
@@ -1785,7 +1789,11 @@ ALL_TIME_JS = """
         sum += s._r;
         if (!best || s._r > best._r) best = s;
       });
-      tr._r = seasons.length ? sum / seasons.length : -Infinity;
+      // A career under AT_CAREER_MIN seasons is topped up to it with average
+      // ones, as the engine does, so the table it rendered and the table this
+      // rebuilds cannot disagree about a career.
+      var pad = Math.max(0, AT_CAREER_MIN - seasons.length);
+      tr._r = seasons.length ? (sum + pad * meanRating) / (seasons.length + pad) : -Infinity;
       tr._y = best ? num(best, 'data-year') : 0;
       var cell = tr.querySelector('.at-rating');
       if (cell) cell.textContent = seasons.length ? tr._r.toFixed(1) : '\\u2014';
@@ -2046,12 +2054,12 @@ AT_METRICS = [
         "PPG measured against the league&rsquo;s average PPG that year",
     ),
     ("ppg", "PPG", "Points per game"),
+    # Deliberately vague about the split: the exact percentages are a judgement
+    # call best argued with in all_time.WEIGHTS, not advertised in a column tip.
     (
         "rating",
         "Rating",
-        "All-Play {}%, Record {}% and Scoring {}%, plus points for what the season won".format(
-            *(round(all_time.WEIGHTS[k] * 100) for k in ("strength", "record", "scoring"))
-        ),
+        "A weighted blend of the rates shown, plus credit for the season&rsquo;s accolades",
     ),
 ]
 # Chart axes offer the same metrics; the order puts the two rates first because
@@ -2144,18 +2152,19 @@ def render_all_time_owners(owners):
         + _sortable("Berths", "berths")
         + _sortable(AT_LABEL["strength"], "strength")
         + _sortable("Best", "best", title="The season with their highest rating")
-        + _sortable("Avg rating", "rating")
+        + _sortable("Career rating", "rating")
         + "</tr>"
     )
     return (
         # An h2, like Best Team-Seasons above it: the two tables are peers, and a
         # smaller rule-less heading made the second read as a footnote to the first.
         "<h2>Manager Careers</h2>\n"
+        # How a short career is handled is not worth a reader's attention here --
+        # it is in owner_rows, where the rule lives.
         '<p class="lede wide">The same rating averaged over every season a manager has '
-        "played, because a long career should not outrank a better short one. Seasons "
-        "played sits beside it: an average over two years is a weaker claim than an "
-        "average over five. A co-managed season counts for <b>both</b> managers, so a "
-        "shared title appears on both their records.</p>\n"
+        "played, because a long career should not outrank a better short one. A "
+        "co-managed season counts for <b>both</b> managers, so a shared title appears "
+        "on both their records.</p>\n"
         f'<table class="grid at-table"><thead>{head}</thead>'
         f'<tbody class="at-owners">{rows}</tbody></table>'
     )
@@ -2288,9 +2297,10 @@ def render_all_time(history):
         # came for; read behind, they are there for the one column that puzzled
         # them.
         + _all_time_legend()
-        # The one weighting, injected so the script and the server-rendered
-        # ratings cannot disagree about it.
-        + f"<script>var AT_WEIGHTS={json.dumps(all_time.WEIGHTS)};{ALL_TIME_JS}</script>"
+        # The one weighting and the career-padding length, injected so the script
+        # and the server-rendered ratings cannot disagree about either.
+        + f"<script>var AT_WEIGHTS={json.dumps(all_time.WEIGHTS)};"
+        f"var AT_CAREER_MIN={all_time.CAREER_MIN_SEASONS};{ALL_TIME_JS}</script>"
     )
 
 

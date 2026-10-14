@@ -19,6 +19,8 @@ score halved. A rating that changes between the two is reading raw points, which
 is the whole thing this module exists to avoid.
 """
 
+import statistics
+
 import pytest
 
 import all_time
@@ -278,8 +280,10 @@ def test_managers_are_grouped_across_renamed_teams():
 
 
 def test_a_career_is_averaged_so_longevity_alone_does_not_win():
-    """A manager with one great season should outrank one with three mediocre
-    ones, which summing the ratings would get backwards."""
+    """A manager with one great season should still outrank one with a pile of
+    mediocre ones, which summing the ratings would get backwards. The padding
+    below only pulls a short career towards the league average -- it does not
+    hand the list to whoever played the most."""
     good = season(year=2025, owners={n: f"own-{n}" for n in SCORES})
     weak = [
         season(year=y, owners={n: "own-Delta" for n in SCORES}) for y in (2022, 2023)
@@ -289,6 +293,43 @@ def test_a_career_is_averaged_so_longevity_alone_does_not_win():
 
     assert ranked["own-Alpha"]["seasons"] == 1
     assert ranked["own-Alpha"]["avg_rating"] > ranked["own-Delta"]["avg_rating"]
+
+
+def test_a_short_career_is_padded_towards_the_league_average():
+    """One brilliant season must not outrank five good ones, so a career under
+    CAREER_MIN_SEASONS is averaged as though the years it has not played were
+    league-average: the one-season manager below rates (115.30 + 2 x 57.75) / 3
+    rather than 115.30. A career of three or more real seasons is padded by
+    nothing and keeps its plain average, and the rank follows whichever number
+    is printed beside it."""
+    def owners_for(year, keep):
+        # Unique owners per year, so only the managers named here have a career
+        # spanning more than the one season they appear in.
+        return {name: keep.get(name, f"own-{name}-{year}") for name in SCORES}
+
+    seasons = [
+        season(year=2025, owners=owners_for(2025, {"Alpha": "Rookie", "Charlie": "Vet"})),
+        season(year=2024, owners=owners_for(2024, {"Charlie": "Vet"})),
+        season(year=2023, owners=owners_for(2023, {"Charlie": "Vet"})),
+    ]
+    rows = all_time.team_rows({"seasons": seasons})
+    mean = statistics.fmean(row["rating"] for row in rows)
+    careers = {o["owner"]: o for o in all_time.owner_rows(rows)}
+
+    rookie, vet = careers["Rookie"], careers["Vet"]
+    assert rookie["seasons"] == 1 and vet["seasons"] == 3
+    assert rookie["best_rating"] == 115.30
+    assert rookie["avg_rating"] == round((115.30 + 2 * mean) / 3, 2) == 76.93
+    # Padded towards the average season, never past it.
+    assert mean < rookie["avg_rating"] < rookie["best_rating"]
+    # Three real seasons: the plain average, untouched.
+    assert vet["avg_rating"] == round(
+        statistics.fmean([row["rating"] for row in rows if "Vet" in row["managers"]]), 2
+    )
+
+    assert [o["avg_rating"] for o in all_time.owner_rows(rows)] == sorted(
+        (o["avg_rating"] for o in all_time.owner_rows(rows)), reverse=True
+    )
 
 
 def test_an_empty_history_reports_nothing_rather_than_failing():

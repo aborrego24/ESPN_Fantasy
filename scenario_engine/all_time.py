@@ -162,6 +162,19 @@ DEFAULT_SCOPE = "both"
 # cannot compress everyone else into the middle.
 Z_RANGE = 6.0
 
+# A career shorter than this is topped up to this many seasons with league-average
+# ones before it is averaged, so a single year cannot win the careers list. An
+# average over one season is not a weaker version of an average over five, it is a
+# different quantity: a short sample sits further from its league's mean on every
+# rate at once and has had no chance to regress towards it, so the manager who
+# played once and played well is the likeliest row in the table to be luck.
+# Padding towards the mean of the team-seasons being ranked states what is
+# actually known -- one good season, and nothing yet about the rest -- and costs a
+# genuinely great career only the seasons it has not played. Three, because by
+# then the sample is its own evidence: a career that long is padded by nothing at
+# all and keeps its plain average.
+CAREER_MIN_SEASONS = 3
+
 
 def _scaled_z(value, mean, sigma):
     """A z-score mapped onto 0-1, with 0.5 as the league average.
@@ -473,22 +486,33 @@ def career_keys(row):
 
 
 def owner_rows(rows):
-    """One row per manager, best average rating first.
+    """One row per manager, best career rating first.
 
     Averaged rather than summed: a manager who played five seasons should not
     outrank a better one who played three. Seasons played is shown beside it,
     because an average over two years is a different claim from an average over
     five.
 
+    A career of fewer than CAREER_MIN_SEASONS seasons is averaged as though the
+    years it has not played were league-average ones, so one brilliant season
+    cannot outrank five good ones. The rank follows that padded average rather
+    than the plain one: a ranking that disagreed with the number printed beside
+    it would be worse than either rule on its own.
     """
     groups = {}
     for row in rows:
         for key in career_keys(row):
             groups.setdefault(key, []).append(row)
 
+    # What a padded season is worth: the mean of the team-seasons being ranked,
+    # not of all history, so each scope tops a short career up with an average
+    # season *of that scope* rather than a number from somewhere else.
+    mean = statistics.fmean([row["rating"] for row in rows]) if rows else 0.0
+
     owners = []
     for key, seasons in groups.items():
         ratings = [s["rating"] for s in seasons]
+        pad = max(0, CAREER_MIN_SEASONS - len(ratings))
         best = max(seasons, key=lambda s: s["rating"])
         owners.append(
             {
@@ -499,7 +523,9 @@ def owner_rows(rows):
                 # keyed by its own name.
                 "owner": seasons[0]["name"] if key.startswith("__team__") else key,
                 "seasons": len(seasons),
-                "avg_rating": round(statistics.fmean(ratings), 2),
+                "avg_rating": round(
+                    (sum(ratings) + pad * mean) / (len(ratings) + pad), 2
+                ),
                 "best_rating": best["rating"],
                 "best_year": best["year"],
                 "best_team": best["name"],
@@ -544,9 +570,10 @@ def summarise(history, rows):
 def web_payload(history):
     """Everything the All-Time view needs, as plain JSON, for a renderer that is
     not to_html (the web frontend). The same numbers to_html draws: per scope the
-    ranked team-seasons (each with its career keys, so careers can be re-averaged
-    under new weights), the in-progress season's rows for an overlay, and the
-    manager careers; plus the summary line and the weighting presets.
+    ranked team-seasons (each with its career keys, so a renderer can tell whose
+    seasons they are), the in-progress season's rows for an overlay, and the
+    manager careers already rated and ranked; plus the summary line and the
+    weighting presets.
     """
     in_progress = [s for s in (history.get("seasons") or []) if not s.get("complete")]
     scopes = {}
