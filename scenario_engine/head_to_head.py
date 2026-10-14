@@ -155,18 +155,24 @@ def manager_games(history):
 
 
 def _streak(games, won):
-    """The longest run of wins (or of losses) across a whole career.
+    """The longest run of wins (or of losses) across a whole career, and when.
 
     Deliberately not reset between seasons: carrying a streak into next year is
     the version anyone actually argues about. A tie breaks a streak without
     starting one of the other kind.
+
+    The endpoints come back with it, because "six straight" invites "when?" and
+    the answer is not recoverable from a length. Ties on length keep the first
+    run: `games` is in time order, so that is the earliest one.
     """
-    best = run = 0
+    best = {"length": 0, "start": None, "end": None}
+    run = []
     for game in games:
         own, opp = game["points"], game["opponent_points"]
         hit = own > opp if won else own < opp
-        run = run + 1 if hit else 0
-        best = max(best, run)
+        run = [*run, game] if hit else []
+        if len(run) > best["length"]:
+            best = {"length": len(run), "start": _when(run[0]), "end": _when(run[-1])}
     return best
 
 
@@ -220,6 +226,11 @@ def _expected_and_ranks(seasons):
         for position, team in enumerate(sorted(season["teams"], key=lambda t: -ppg(t)), 1):
             ranks[(year, team["name"])] = position
     return expected, ranks, top_weeks
+
+
+def _when(game):
+    """Which week of which season, for naming the ends of a run."""
+    return {"year": game["year"], "week": game["week"]}
 
 
 def _moment(game):

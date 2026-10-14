@@ -178,9 +178,22 @@ def test_a_close_game_is_decided_by_less_than_the_threshold():
 
 
 def test_a_streak_carries_across_seasons():
-    """Ann won 2024 week 1 and 2025 week 1 before losing: a streak of two."""
-    assert scoped("Ann", "regular")["streaks"] == {"win": 2, "loss": 1}
-    assert scoped("Ed", "regular")["streaks"] == {"win": 0, "loss": 2}
+    """Ann won 2024 week 1 and 2025 week 1 before losing: a streak of two, and
+    one that only exists if seasons are not treated as separate careers."""
+    win = scoped("Ann", "regular")["streaks"]["win"]
+    assert win["length"] == 2
+    assert win["start"] == {"year": 2024, "week": 1}
+    assert win["end"] == {"year": 2025, "week": 1}
+    assert scoped("Ann", "regular")["streaks"]["loss"]["length"] == 1
+
+
+def test_a_streak_reports_where_it_began_and_ended():
+    """"Six straight" invites "when?", and a length cannot answer it."""
+    ed = scoped("Ed", "regular")["streaks"]
+    assert ed["win"] == {"length": 0, "start": None, "end": None}
+    assert ed["loss"] == {
+        "length": 2, "start": {"year": 2025, "week": 1}, "end": {"year": 2025, "week": 2},
+    }
 
 
 def test_scoring_reports_the_spread_not_just_the_average():
