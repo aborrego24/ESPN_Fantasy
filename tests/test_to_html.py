@@ -986,7 +986,7 @@ def test_rows_carry_the_fixed_metrics_the_chart_plots():
     assert 'data-abbr="' in row and 'data-color="hsl(' in row
 
 
-def test_the_slider_and_benchmark_controls_are_present():
+def test_the_view_toggle_is_present_and_the_weighting_is_fixed():
     names = ["Alpha", "Bravo", "Charlie", "Delta"]
     document = to_html.render(
         payload(
@@ -995,8 +995,9 @@ def test_the_slider_and_benchmark_controls_are_present():
         )
     )
 
-    assert 'id="sos-blend"' in document, "no weighting slider"
+    assert 'id="sos-blend"' not in document, "the weighting slider was removed"
     assert 'id="sos-bench"' not in document, "the benchmark toggle was removed"
+    assert "POINTS_WEIGHT=0.5" in document, "the one weighting must reach the script"
     assert "addEventListener" in document, "no enhancing script"
     assert_wellformed(document)
 
@@ -1444,19 +1445,6 @@ def test_all_time_team_names_are_escaped():
     assert nasty in text_of(document)
 
 
-def test_the_weights_are_adjustable_and_start_at_the_documented_defaults():
-    """The rating is a judgement call, so it has to be arguable from the page --
-    each component gets a slider, seeded with the weight the module documents."""
-    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
-
-    for name, weight in to_html.all_time.WEIGHTS.items():
-        assert f'id="at-w-{name}"' in pane
-        assert f'value="{round(weight * 100)}"' in pane
-    # Accolades scale separately: they are added after the blend, not a share of it.
-    assert 'id="at-w-hardware"' in pane
-    assert 'id="at-reset"' in pane
-
-
 def test_every_row_carries_the_components_the_sliders_re_rank_from():
     """Re-ranking happens in the page, so each row has to hold its own rates --
     otherwise the sliders would need a round trip the report cannot make."""
@@ -1557,8 +1545,6 @@ def test_the_two_all_play_columns_say_that_is_what_they_are():
     assert ">All-Play Record<" in head
     assert ">All-Play Scoring<" in head
     assert ">Record<" in head, "the real win-loss column keeps the plain name"
-    assert 'id="at-w-record"' in pane, "the slider is renamed too"
-    assert 'id="at-w-results"' not in pane
 
 
 def test_one_vocabulary_drives_heads_axes_and_legend():
@@ -1649,39 +1635,25 @@ def test_the_manager_table_is_sortable_too():
         assert f'data-sort="{key}"' in owners
 
 
-def test_the_weight_panel_is_collapsed_by_default():
-    """Four sliders were the wrong first impression, so the panel folds away and
-    the presets answer the question for most readers in one click."""
-    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
-    panel = pane.split('<details class="weights"')[1].split("</details>")[0]
+def test_the_rating_has_no_adjustable_weighting():
+    """Four presets, three sliders and an accolade multiplier made a ranking read
+    as negotiable. The one weighting reaches the script instead, so the rendered
+    ratings and the ones it recomputes cannot disagree."""
+    document = to_html.render(BASIC, history=HISTORY)
 
-    assert "open" not in pane.split('<details class="weights"')[1][:20], "starts closed"
-    assert "<summary>" in panel
-    assert "Weights:" in panel
-
-
-def test_every_preset_is_offered_with_its_ratio_shown():
-    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
-    panel = pane.split('<details class="weights"')[1].split("</details>")[0]
-
-    for key, label, w, blurb in to_html.all_time.PRESETS:
-        assert f'value="{key}"' in panel
-        assert f"<b>{label}</b>" in panel
-        ratio = ",".join(str(w[n]) for n in ("strength", "record", "scoring"))
-        assert f'data-weights="{ratio}"' in panel
-    assert 'value="custom"' in panel, "and an escape hatch to the raw sliders"
+    for gone in ('id="at-weights"', 'id="at-presets"', 'id="at-custom"',
+                 'id="at-reset"', 'id="at-w-strength"', 'id="at-w-hardware"',
+                 'name="at-preset"'):
+        assert gone not in document, f"{gone} is a weighting control"
+    weights = json.dumps(to_html.all_time.WEIGHTS)
+    assert f"var AT_WEIGHTS={weights};" in document
 
 
-def test_the_default_preset_is_checked_and_named_in_the_summary():
-    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
-    panel = pane.split('<details class="weights"')[1].split("</details>")[0]
-    default = dict((k, l) for k, l, _, _ in to_html.all_time.PRESETS)[
-        to_html.all_time.DEFAULT_PRESET
-    ]
-
-    assert f'value="{to_html.all_time.DEFAULT_PRESET}" data-weights' in panel
-    assert " checked>" in panel
-    assert f'id="at-preset-name">{default}<' in panel
+def test_the_rating_gloss_states_the_weighting_it_cannot_be_asked_about():
+    """With no panel to read the weights off, the legend has to carry them."""
+    gloss = dict((k, g) for k, _, g in to_html.AT_METRICS)["rating"]
+    for name in ("strength", "record", "scoring"):
+        assert f"{round(to_html.all_time.WEIGHTS[name] * 100)}%" in gloss
 
 
 def test_the_default_preset_matches_the_documented_weights():
@@ -1693,15 +1665,6 @@ def test_the_default_preset_matches_the_documented_weights():
     for name, weight in to_html.all_time.WEIGHTS.items():
         assert preset[name] == round(weight * 100)
 
-
-def test_the_raw_sliders_still_exist_but_start_hidden():
-    """A preset writes them, so they have to be in the page for the rating to be
-    computed -- just not on show until Custom is chosen."""
-    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
-
-    assert 'id="at-custom" hidden' in pane
-    for name in ("strength", "record", "scoring"):
-        assert f'id="at-w-{name}"' in pane
 
 def test_the_playoff_view_drops_the_berth_badge():
     """Every row in it qualified, so PO was on all of them."""
@@ -1732,25 +1695,6 @@ def test_the_filter_matches_both_the_word_and_the_badge_code():
     assert "#1 overall seed" in text and "#1" in text
 
 
-def test_the_weight_sliders_cannot_leak_past_the_hidden_attribute():
-    """`display: flex` on .controls outranks `hidden`, which had the sliders on
-    show while a named preset was selected. The SOS chart hit the same trap."""
-    assert "#at-custom[hidden] { display: none; }" in to_html.CSS
-
-
-def test_a_preset_explains_itself_on_hover_rather_than_printing_its_ratio():
-    pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
-    panel = pane.split('<details class="weights"')[1].split("</details>")[0]
-
-    assert panel.count('class="hint"') == len(to_html.all_time.PRESETS) + 1  # +Custom
-    for _, _, w, blurb in to_html.all_time.PRESETS:
-        ratio = f'{w["strength"]} / {w["record"]} / {w["scoring"]}'
-        assert ratio in panel, "the ratio moved into the tooltip"
-        assert blurb.split(".")[0] in panel
-    # and is no longer sitting beside the label as a bare number
-    assert 'class="dim">45 / 30 / 25</span>' not in panel
-
-
 def test_there_is_no_legend_under_the_table():
     """Dropped as clutter; the badges explain themselves on hover instead."""
     pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
@@ -1763,21 +1707,13 @@ def test_the_runner_up_hint_is_just_the_words():
     assert to_html.ACCOLADE_TITLE["2nd"] == "Runner-up"
 
 
-def test_the_filter_and_the_weights_share_one_thin_row():
+def test_the_filter_and_the_view_toggle_share_one_thin_row():
     """The controls were competing with the table for attention."""
     pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
-    tools = pane.split('<div class="at-tools">')[1].split("</details></div>")[0]
+    tools = pane.split('<div class="at-tools">')[1].split("</div>")[0]
 
     assert 'id="at-find"' in tools
-    assert 'id="at-weights"' in tools
-
-
-def test_opening_the_weights_does_not_push_the_table_down():
-    """The panel is a popover anchored to its own link, not a block in the flow."""
-    assert ".weights { margin-left: auto; position: relative; }" in to_html.CSS
-    body = to_html.CSS.split(".wbody {")[1].split("}")[0]
-    assert "position: absolute" in body
-    assert "right: 0" in body
+    assert 'id="at-view-seg"' in tools
 
 
 def test_the_all_time_pane_has_a_table_chart_toggle_and_axis_pickers():
@@ -1868,13 +1804,12 @@ def test_the_season_chart_is_centred_too():
     assert "FIXED_SPAN = { sos: 35, sor: 0.3 }" in js
 
 
-def test_this_season_is_an_opt_in_overlay_next_to_the_weights():
+def test_this_season_is_an_opt_in_overlay_in_the_tools_row():
     pane = to_html.render(BASIC, history=HISTORY).split('data-tab="alltime"')[2]
-    tools = pane.split('<div class="at-tools">')[1].split("</details></div>")[0]
+    tools = pane.split('<div class="at-tools">')[1].split("</div>")[0]
 
     assert 'id="at-live"' in tools
     assert 'type="checkbox"' in tools
-    assert tools.index('id="at-live"') < tools.index('id="at-weights"')
 
 
 def test_an_overlay_row_has_no_rank():

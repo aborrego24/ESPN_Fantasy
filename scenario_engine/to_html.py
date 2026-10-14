@@ -349,36 +349,6 @@ th.sort.sorted[data-dir="asc"]::after { content: "\\00a0\\2191"; }
    question for almost everybody and four sliders were the wrong first impression.
    A native disclosure element gives the collapse, the keyboard handling and the
    no-JS fallback. */
-/* A quiet link, not a panel. It sits at the right of the tools row and opens as a
-   popover anchored to itself -- the controls were competing with the table for
-   attention, and reaching for them should not shove the table down the page. */
-.weights { margin-left: auto; position: relative; }
-.weights summary {
-  cursor: pointer; font-size: .78rem; font-weight: 600; color: var(--dim);
-  list-style: none; white-space: nowrap; padding: .25rem 0;
-}
-.weights summary:hover { color: var(--ink); }
-.weights summary::-webkit-details-marker { display: none; }
-.weights summary::before { content: "\\25B8 "; }
-.weights[open] summary::before { content: "\\25BE "; }
-.weights[open] summary { color: var(--ink); }
-.wbody {
-  position: absolute; right: 0; top: 1.7rem; z-index: 8; width: max-content;
-  max-width: min(46rem, 90vw); padding: .6rem .8rem .8rem; background: #fff;
-  border: 1px solid var(--line); border-radius: 6px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .12);
-}
-.presets { display: flex; flex-wrap: wrap; gap: .15rem 1.25rem; margin: .5rem 0 .25rem; }
-.preset {
-  display: flex; align-items: baseline; gap: .4rem; font-size: .82rem;
-  cursor: pointer; white-space: nowrap;
-}
-.preset .dim { font-size: .76rem; }
-.wbody .controls { margin: .5rem 0 0; }
-/* `display: flex` on .controls outranks the `hidden` attribute's display:none, so
-   the weight sliders leaked into view while a named preset was selected. The
-   id+attribute selector wins it back. The SOS chart hit this same trap. */
-#at-custom[hidden] { display: none; }
 /* A small circled question mark, standing in for the ratio that used to be
    printed beside every preset. */
 .hint {
@@ -467,13 +437,6 @@ svg.at-chart {
   box-shadow: 0 4px 16px rgba(0, 0, 0, .28);
 }
 .at-none { color: var(--dim); font-size: .82rem; margin: .4rem 0 0; }
-.wbody .controls .dim { min-width: 2.6rem; display: inline-block; }
-/* The accolade control has nothing to scale in the regular-season scope. */
-.wbody .controls label.off { opacity: .4; }
-.wbody button {
-  font: inherit; font-size: .78rem; padding: .15rem .6rem; cursor: pointer;
-  border: 1px solid var(--line); background: #fff; color: var(--dim);
-}
 /* The rating is the column the table exists for, so it is the only bold one. */
 td.rating { font-weight: 700; }
 td.owner { color: var(--dim); font-size: .8rem; white-space: nowrap; }
@@ -489,6 +452,10 @@ footer { margin-top: 3rem; color: var(--dim); font-size: .78rem; }
 # static and live numbers cannot disagree.
 SOS_CENTER = 50
 SOS_GAIN = 400
+# How much of SOS is "how hard the opponents score" versus "how often they win".
+# Half and half, and not a thing to tune: a ranking you can re-weight reads as
+# negotiable. The static table and the script share this constant.
+POINTS_WEIGHT = 0.5
 
 
 def _sos_display(ratio):
@@ -496,8 +463,8 @@ def _sos_display(ratio):
 
 
 # Progressive enhancement for the strength section, all from data already on each
-# row -- no round-trip, no assets. The slider re-blends SOS, and a Table/Chart
-# toggle draws an inline-SVG scatter whose axes pick any metric. SOS on an axis
+# row -- no round-trip, no assets. A Table/Chart toggle draws an inline-SVG
+# scatter whose axes pick any metric. SOS on an axis
 # stays live with the slider; the rest are fixed per team. With scripting off the
 # static table stands.
 STRENGTH_JS = """
@@ -505,8 +472,6 @@ STRENGTH_JS = """
   var body = document.getElementById('sos-body');
   if (!body) return;
   var section = document.getElementById('sos-section');
-  var blend = document.getElementById('sos-blend');
-  var label = document.getElementById('sos-blend-label');
   var viewSeg = document.getElementById('sos-view-seg');
   var xsel = document.getElementById('sos-x');
   var ysel = document.getElementById('sos-y');
@@ -583,7 +548,7 @@ STRENGTH_JS = """
   }
 
   function updateTable() {
-    var w = parseInt(blend.value, 10) / 100;
+    var w = POINTS_WEIGHT;
     rows.forEach(function (tr) {
       var sos = metricVal(tr, 'sos', w);
       tr._s = (sos === null) ? -Infinity : sos;
@@ -602,15 +567,13 @@ STRENGTH_JS = """
       var rk = tr.querySelector('.sos-rank');
       if (rk) rk.textContent = i + 1;
     });
-    if (label) label.textContent =
-      Math.round(w * 100) + '% points / ' + Math.round((1 - w) * 100) + '% record';
   }
 
   function mean(a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; }
 
   function drawChart() {
     if (!svg) return;
-    var w = parseInt(blend.value, 10) / 100;
+    var w = POINTS_WEIGHT;
     var xk = xsel.value, yk = ysel.value, pts = [];
     rows.forEach(function (tr) {
       var x = metricVal(tr, xk, w), y = metricVal(tr, yk, w);
@@ -790,7 +753,6 @@ STRENGTH_JS = """
     hint.setAttribute('aria-label', gloss);
   }
 
-  blend.addEventListener('input', update);
   if (viewSeg) viewSeg.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-view]');
     if (!b) return;
@@ -1366,18 +1328,11 @@ average: <strong>50 is an average schedule</strong>, above it tougher and below 
 blending how much those opponents score with how often they win{" (and the 'to&nbsp;come' column is how hard the schedule still ahead is)" if any_remaining else ""}.
 <strong>SOR</strong> is strength of record: how a team's own win rate compares with what an
 average league team would manage against the same schedule &mdash; green means it has done better
-than its schedule would give that team, red worse. Drag the weighting to re-rank; switch to
-<strong>Chart</strong> for a scatter of any two metrics. With no browser the table shows a
-50/50 blend against an average team.</p>
+than its schedule would give that team, red worse. Switch to <strong>Chart</strong> for a
+scatter of any two metrics.</p>
 <div id="sos-section">
 <div class="controls">
   <span class="seg" id="sos-view-seg"><button data-view="table" class="on">Table</button><button data-view="chart">Chart</button></span>
-  <label>SOS weighting
-    <span class="dim">record</span>
-    <input type="range" id="sos-blend" min="0" max="100" value="50">
-    <span class="dim">points</span>
-    <span id="sos-blend-label" class="dim">50% points / 50% record</span>
-  </label>
 </div>
 <div id="sos-table-view">
 <table class="grid">
@@ -1394,7 +1349,7 @@ than its schedule would give that team, red worse. Drag the weighting to re-rank
 <div class="chart-x"><select id="sos-x" aria-label="X axis metric">{_metric_options("sos")}</select>{_axis_hint("sos-x")}</div>
 </div>
 </div>
-<script>var SOS_CENTER={SOS_CENTER},SOS_GAIN={SOS_GAIN};{STRENGTH_JS}</script>"""
+<script>var SOS_CENTER={SOS_CENTER},SOS_GAIN={SOS_GAIN},POINTS_WEIGHT={POINTS_WEIGHT};{STRENGTH_JS}</script>"""
 
 
 def render_preseason_strength(projected_ppg, matchups, abbreviations=None, logo_class=None):
@@ -1445,41 +1400,18 @@ week-by-week opponents.</p>
 ALL_TIME_JS = """
 (function () {
   var seg = document.getElementById('at-seg');
-  var weights_el = document.getElementById('at-weights');
-  if (!seg || !weights_el) return;
-  var presets = document.getElementById('at-presets');
-  var custom = document.getElementById('at-custom');
-  var presetName = document.getElementById('at-preset-name');
+  if (!seg) return;
   var views = Array.prototype.slice.call(document.querySelectorAll('.at-view'));
   var KEYS = ['strength', 'record', 'scoring'];
-  var inputs = {};
-  KEYS.concat(['hardware']).forEach(function (k) {
-    inputs[k] = document.getElementById('at-w-' + k);
-  });
-  var defaults = {};
-  Object.keys(inputs).forEach(function (k) { defaults[k] = inputs[k].value; });
 
   function num(el, attr) { return parseFloat(el.getAttribute(attr)) || 0; }
 
-  function weights() {
-    var raw = {}, total = 0;
-    KEYS.forEach(function (k) {
-      raw[k] = parseFloat(inputs[k].value) || 0;
-      total += raw[k];
-    });
-    // All three at zero would divide by zero and rank on accolades alone, which
-    // is a legitimate thing to ask for -- so the blend contributes nothing rather
-    // than producing NaN.
-    KEYS.forEach(function (k) { raw[k] = total ? raw[k] / total : 0; });
-    raw.hardware = (parseFloat(inputs.hardware.value) || 0) / 100;
-    raw._total = total;
-    return raw;
-  }
-
-  function ratingOf(tr, w) {
+  // One weighting, the engine's (AT_WEIGHTS, injected below), and no control to
+  // tune it: a ranking you can re-weight reads as negotiable.
+  function ratingOf(tr) {
     var base = 0;
-    KEYS.forEach(function (k) { base += w[k] * num(tr, 'data-' + k); });
-    return 100 * base + w.hardware * num(tr, 'data-hardware');
+    KEYS.forEach(function (k) { base += AT_WEIGHTS[k] * num(tr, 'data-' + k); });
+    return 100 * base + num(tr, 'data-hardware');
   }
 
   // Rank is always by rating, whatever the table is sorted by -- so sorting by
@@ -1807,29 +1739,15 @@ ALL_TIME_JS = """
   }
 
   function update() {
-    var w = weights();
-    KEYS.forEach(function (k) {
-      var out = document.getElementById('at-w-' + k + '-val');
-      if (out) out.textContent = Math.round(w[k] * 100) + '%';
-    });
-    var hw = document.getElementById('at-w-hardware-val');
-    if (hw) hw.textContent = w.hardware.toFixed(1) + '\\u00d7';
-
     var view = views.filter(function (v) { return !v.hidden; })[0];
     if (!view) return;
-
-    // Nothing in the regular-season scope carries accolade points, so the control
-    // for them is disabled rather than left live and inert.
-    var noHardware = view.getAttribute('data-scope') === 'regular';
-    inputs.hardware.disabled = noHardware;
-    inputs.hardware.closest('label').classList.toggle('off', noHardware);
 
     var teamBody = view.querySelector('tbody.at-teams');
     var teamTable = teamBody.closest('table');
     var teamRows = Array.prototype.slice.call(teamBody.getElementsByTagName('tr'));
     var byOwner = {};
     teamRows.forEach(function (tr) {
-      tr._r = ratingOf(tr, w);
+      tr._r = ratingOf(tr);
       tr._y = num(tr, 'data-year');
       var cell = tr.querySelector('.at-rating');
       if (cell) cell.textContent = tr._r.toFixed(1);
@@ -1848,7 +1766,7 @@ ALL_TIME_JS = """
     var liveBody = view.querySelector('tbody.at-current');
     if (liveBody) {
       Array.prototype.slice.call(liveBody.getElementsByTagName('tr')).forEach(function (tr) {
-        tr._r = ratingOf(tr, w);
+        tr._r = ratingOf(tr);
       });
     }
     if (charting()) drawChart(view, teamRows);
@@ -1901,40 +1819,6 @@ ALL_TIME_JS = """
     // follow it -- otherwise they stay parked on the chart that just got hidden.
     showView();
   });
-  // A preset writes the three sliders and then behaves exactly like having dragged
-  // them, so there is one path to a rating rather than two.
-  function choosePreset(radio) {
-    var spec = radio.getAttribute('data-weights');
-    if (spec) {
-      var parts = spec.split(',');
-      KEYS.forEach(function (k, i) { inputs[k].value = parts[i]; });
-    }
-    custom.hidden = !!spec;
-    if (presetName) {
-      presetName.textContent = radio.parentNode.querySelector('b').textContent;
-    }
-    update();
-  }
-
-  presets.addEventListener('change', function (e) {
-    var radio = e.target.closest('input[name="at-preset"]');
-    if (radio) choosePreset(radio);
-  });
-
-  // Dragging a weight is by definition a custom weighting, so the radio follows
-  // the slider rather than the two disagreeing about what is selected.
-  KEYS.forEach(function (k) {
-    inputs[k].addEventListener('input', function () {
-      var custom_radio = presets.querySelector('input[value="custom"]');
-      if (custom_radio && !custom_radio.checked) {
-        custom_radio.checked = true;
-        custom.hidden = false;
-        if (presetName) presetName.textContent = 'Custom';
-      }
-      update();
-    });
-  });
-  inputs.hardware.addEventListener('input', update);
   if (find) find.addEventListener('input', update);
 
   function charting() {
@@ -1994,12 +1878,6 @@ ALL_TIME_JS = """
   describe(xsel);
   describe(ysel);
 
-  var reset = document.getElementById('at-reset');
-  if (reset) reset.addEventListener('click', function () {
-    Object.keys(inputs).forEach(function (k) { inputs[k].value = defaults[k]; });
-    var first = presets.querySelector('input[name="at-preset"]');
-    if (first) { first.checked = true; choosePreset(first); } else { update(); }
-  });
   update();
 })();
 """
@@ -2168,7 +2046,13 @@ AT_METRICS = [
         "PPG measured against the league&rsquo;s average PPG that year",
     ),
     ("ppg", "PPG", "Points per game"),
-    ("rating", "Rating", "The three above, blended by the weights you set"),
+    (
+        "rating",
+        "Rating",
+        "All-Play {}%, Record {}% and Scoring {}%, plus points for what the season won".format(
+            *(round(all_time.WEIGHTS[k] * 100) for k in ("strength", "record", "scoring"))
+        ),
+    ),
 ]
 # Chart axes offer the same metrics; the order puts the two rates first because
 # they are the pair the chart is normally read with.
@@ -2285,45 +2169,13 @@ SCOPE_LABEL = {
 
 
 def _all_time_controls():
-    """Named presets, folded away, with the raw sliders behind a Custom option.
+    """The thin row of table controls: filter, Table/Chart, this-season overlay.
 
-    Four drags to answer "who was best on merit" was the wrong shape for the
-    question: almost nobody wants an arbitrary blend, they want one of a handful of
-    readings. So the presets do the work and the sliders stay for the rest.
-
-    Built on `<details>` rather than a scripted panel, so it collapses with no
-    JavaScript at all and is keyboard- and screen-reader-navigable for free.
-
-    The weights are **normalised by their sum**, so only their ratio matters --
-    which is why a preset can be written 70/10/20 without totalling 100.
-    Accolades scale separately because they are not a rate: they are added after
-    the blend, so a multiplier is the honest control rather than a fourth share.
+    No weighting controls. Four presets, three weight sliders and an accolade
+    multiplier made a ranking read as negotiable, which is the opposite of what a
+    ranking is for; the one weighting is `all_time.WEIGHTS`, stated in the legend.
     """
-    presets = "".join(
-        f'<label class="preset"><input type="radio" name="at-preset"'
-        f' value="{key}" data-weights="{",".join(str(w[n]) for n in ("strength", "record", "scoring"))}"'
-        f'{" checked" if key == all_time.DEFAULT_PRESET else ""}>'
-        f"<b>{esc(label)}</b>"
-        f'<span class="hint" tabindex="0" aria-label="{esc(blurb)}">?'
-        f'<span class="hintbox">{w["strength"]} / {w["record"]} / {w["scoring"]}'
-        f" &mdash; {esc(blurb)}</span></span>"
-        "</label>"
-        for key, label, w, blurb in all_time.PRESETS
-    )
-    sliders = "".join(
-        f'<label>{AT_LABEL[name]}'
-        f'<input type="range" id="at-w-{name}" min="0" max="100" step="5"'
-        f' value="{round(all_time.WEIGHTS[name] * 100)}">'
-        f'<span class="dim" id="at-w-{name}-val"></span></label>'
-        for name in ("strength", "record", "scoring")
-    )
-    default_label = next(
-        label for key, label, _, _ in all_time.PRESETS if key == all_time.DEFAULT_PRESET
-    )
     return (
-        # One thin row of table controls: the filter on the left, the weights as a
-        # quiet link on the right. The panel opens as a popover anchored to that
-        # link, so reaching for it never pushes the table down the page.
         '<div class="at-tools">'
         '<input type="search" id="at-find"'
         ' placeholder="Filter by year, team, manager or accolade">'
@@ -2331,28 +2183,11 @@ def _all_time_controls():
         '<span class="seg" id="at-view-seg">'
         '<button data-view="table" class="on">Table</button>'
         '<button data-view="chart">Chart</button></span>'
-        # Tucked in beside the weights: an in-progress season is not rankable, but
-        # there is no harm in seeing where it currently sits on a scatter.
+        # An in-progress season is not rankable, but there is no harm in seeing
+        # where it currently sits on a scatter.
         '<label class="at-live" id="at-live-wrap">'
         '<input type="checkbox" id="at-live"> this season</label>'
-        '<details class="weights" id="at-weights">'
-        f'<summary>Weights: <span id="at-preset-name">{esc(default_label)}</span>'
-        "</summary>"
-        '<div class="wbody">'
-        f'<div class="presets" id="at-presets">{presets}'
-        '<label class="preset"><input type="radio" name="at-preset" value="custom">'
-        '<b>Custom</b><span class="hint" tabindex="0"'
-        ' aria-label="Set the three weights yourself">?'
-        '<span class="hintbox">Set the three weights yourself</span>'
-        "</span></label></div>"
-        '<div class="controls" id="at-custom" hidden>'
-        f"{sliders}</div>"
-        '<div class="controls">'
-        '<label>Accolades<input type="range" id="at-w-hardware" min="0" max="200"'
-        ' step="10" value="100">'
-        '<span class="dim" id="at-w-hardware-val"></span></label>'
-        '<button type="button" id="at-reset">Reset</button>'
-        "</div></div></details></div>"
+        "</div>"
         # The pickers start here, parked and hidden, and are moved onto the axes of
         # whichever scope's chart is showing (see placePickers). There is one pair
         # rather than one per scope so the two views cannot disagree about which
@@ -2453,7 +2288,9 @@ def render_all_time(history):
         # came for; read behind, they are there for the one column that puzzled
         # them.
         + _all_time_legend()
-        + f"<script>{ALL_TIME_JS}</script>"
+        # The one weighting, injected so the script and the server-rendered
+        # ratings cannot disagree about it.
+        + f"<script>var AT_WEIGHTS={json.dumps(all_time.WEIGHTS)};{ALL_TIME_JS}</script>"
     )
 
 
