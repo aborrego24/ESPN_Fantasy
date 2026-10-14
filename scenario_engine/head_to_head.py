@@ -31,10 +31,6 @@ import league_stats
 # something a win-loss record does not: whether the close ones went your way.
 CLOSE_GAME = 10.0
 
-# Before a head-to-head record is worth calling anyone's nemesis. Two meetings
-# can only ever read 2-0, 1-1 or 0-2, none of which is evidence of anything.
-MIN_MEETINGS = 3
-
 REGULAR = "regular"
 PLAYOFFS = "playoffs"
 BOTH = "both"
@@ -443,5 +439,4 @@ def web_payload(history):
         "scopes": list(SCOPES),
         "default_scope": DEFAULT_SCOPE,
         "close_game": CLOSE_GAME,
-        "min_meetings": MIN_MEETINGS,
     }
