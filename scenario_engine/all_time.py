@@ -485,7 +485,7 @@ def career_keys(row):
     return row["managers"] or [f"__team__{row['name']}"]
 
 
-def owner_rows(rows):
+def owner_rows(rows, also=None):
     """One row per manager, best career rating first.
 
     Averaged rather than summed: a manager who played five seasons should not
@@ -498,6 +498,15 @@ def owner_rows(rows):
     cannot outrank five good ones. The rank follows that padded average rather
     than the plain one: a ranking that disagreed with the number printed beside
     it would be worse than either rule on its own.
+
+    `also` is {key: name} for managers who must appear even with no season in
+    this scope -- in the playoff scope, everyone who has never qualified.
+    Leaving them out answers "who has a playoff career" when the question being
+    asked is "how does everyone compare", and it hides exactly the fact that
+    they have never been. They carry **nulls, not zeroes**: a 0.0 rating would
+    rank them as the worst career rather than as no career, and the padding
+    above would hand them three league-average seasons they never played. They
+    sort last, after everyone with a career to rank.
     """
     groups = {}
     for row in rows:
@@ -541,7 +550,38 @@ def owner_rows(rows):
             }
         )
 
-    owners.sort(key=lambda o: (-o["avg_rating"], -o["titles"], o["owner"]))
+    for key, name in sorted((also or {}).items()):
+        if key in groups:
+            continue
+        owners.append(
+            {
+                "owner_id": key,
+                "owner": name,
+                "seasons": 0,
+                "avg_rating": None,
+                "best_rating": None,
+                "best_year": None,
+                "best_team": None,
+                "titles": 0,
+                "berths": 0,
+                "wins": 0,
+                "losses": 0,
+                "ties": 0,
+                "avg_strength": None,
+                "years": [],
+            }
+        )
+
+    # None last: a manager with no season in this scope is not the worst career
+    # in it, so they go below the ranking rather than at the bottom of it.
+    owners.sort(
+        key=lambda o: (
+            o["avg_rating"] is None,
+            -(o["avg_rating"] or 0.0),
+            -o["titles"],
+            o["owner"],
+        )
+    )
     for place, owner in enumerate(owners, 1):
         owner["rank"] = place
     return owners
@@ -576,6 +616,14 @@ def web_payload(history):
     weighting presets.
     """
     in_progress = [s for s in (history.get("seasons") or []) if not s.get("complete")]
+    # Everyone with a completed season at all. Every team plays a regular season,
+    # so that scope is the full roster; the playoff scope is the only one that is
+    # ever a subset of it, and it is the one that must not silently drop anyone.
+    everyone = {
+        key: (row["name"] if key.startswith("__team__") else key)
+        for row in team_rows(history, "regular")
+        for key in career_keys(row)
+    }
     scopes = {}
     for scope in SCOPES:
         teams = team_rows(history, scope)
@@ -589,7 +637,11 @@ def web_payload(history):
         ]
         for row in teams + current:
             row["career_keys"] = career_keys(row)
-        scopes[scope] = {"teams": teams, "current": current, "owners": owner_rows(teams)}
+        scopes[scope] = {
+            "teams": teams,
+            "current": current,
+            "owners": owner_rows(teams, also=everyone),
+        }
     return {
         "facts": summarise(history, team_rows(history)),
         "scopes": scopes,

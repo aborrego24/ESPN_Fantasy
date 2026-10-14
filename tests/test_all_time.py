@@ -728,3 +728,57 @@ def test_the_legend_and_the_table_agree_about_which_badges_exist():
             for label in row["accolades"]:
                 key = "1 playoff win" if "playoff win" in label else label
                 assert key in allowed, (scope, label)
+
+
+# --- managers with no season in a scope --------------------------------------
+# The playoff scope is the only one that is ever a subset of the league: a team
+# that never qualified has no playoff season. Leaving those managers out of the
+# careers table answers "who has a playoff career" when the question on screen
+# is "how does everyone compare", and hides the very fact that they have never
+# been.
+
+def _career_row(name, owner, year, rating):
+    return {
+        "name": name, "managers": [owner], "year": year, "rating": rating,
+        "final_standing": 0, "accolades": [], "wins": 1, "losses": 1, "ties": 0,
+        "strength": 0.5,
+    }
+
+
+def test_a_manager_with_no_season_in_scope_still_gets_a_row():
+    rows = [_career_row("A", "Ann", 2025, 80.0)]
+    owners = all_time.owner_rows(rows, also={"Ann": "Ann", "Bo": "Bo"})
+
+    assert [o["owner"] for o in owners] == ["Ann", "Bo"]
+    bo = owners[1]
+    assert bo["seasons"] == 0
+    assert bo["years"] == []
+
+
+def test_that_row_carries_nulls_rather_than_zeroes():
+    """A 0.0 rating would rank them as the worst career instead of as no career,
+    and the short-career padding would hand them league-average seasons they
+    never played."""
+    owners = all_time.owner_rows([_career_row("A", "Ann", 2025, 80.0)], also={"Bo": "Bo"})
+    bo = next(o for o in owners if o["owner"] == "Bo")
+
+    assert bo["avg_rating"] is None
+    assert bo["avg_strength"] is None
+    assert bo["best_year"] is None
+    assert bo["best_rating"] is None
+
+
+def test_those_rows_sort_below_every_real_career():
+    """Even below a bad one: having never qualified is not a worse playoff
+    career than a poor playoff career, it is no playoff career."""
+    rows = [_career_row("A", "Ann", 2025, 5.0), _career_row("B", "Cy", 2025, 90.0)]
+    owners = all_time.owner_rows(rows, also={"Ann": "Ann", "Bo": "Bo", "Cy": "Cy"})
+
+    assert [o["owner"] for o in owners] == ["Cy", "Ann", "Bo"]
+    assert [o["rank"] for o in owners] == [1, 2, 3]
+
+
+def test_a_manager_already_in_scope_is_not_duplicated():
+    owners = all_time.owner_rows([_career_row("A", "Ann", 2025, 80.0)], also={"Ann": "Ann"})
+    assert [o["owner"] for o in owners] == ["Ann"]
+    assert owners[0]["seasons"] == 1

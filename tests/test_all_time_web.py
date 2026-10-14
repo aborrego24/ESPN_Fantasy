@@ -40,3 +40,26 @@ def test_web_payload_matches_the_engine_rows_and_is_json():
     assert {p["key"] for p in out["presets"]} >= {out["default_preset"]}
     assert out["facts"]["excluded"] == [2026]
     assert out["accolade_points"]["Champion"] == all_time.CHAMPION
+
+
+def test_the_playoff_scope_keeps_everyone_who_never_qualified():
+    """Every scope's careers table lists the whole league. Only the playoff
+    scope is ever a subset, and dropping a manager there would hide exactly the
+    fact that they have never been."""
+    history = {"league_id": 1, "skipped": [], "seasons": [
+        _season(2025, True, [_team("A", "Ann"), _team("B", "Bo")]),
+    ]}
+    # Only Ann qualified.
+    teams = history["seasons"][0]["teams"]
+    teams[0].update(made_playoffs=True, playoff_games=1, playoff_points_for=120.0)
+    history["seasons"][0]["playoff_spots"] = 1
+    history["seasons"][0]["playoff_weeks"] = [
+        {"name": "A", "weeks": [{"week": 3, "points": 120.0, "opponent": None}]},
+    ]
+    out = json.loads(json.dumps(all_time.web_payload(history)))
+
+    for scope in all_time.SCOPES:
+        assert [o["owner"] for o in out["scopes"][scope]["owners"]] == ["Ann", "Bo"], scope
+    bo = out["scopes"]["playoffs"]["owners"][1]
+    assert bo["seasons"] == 0
+    assert bo["avg_rating"] is None
