@@ -568,4 +568,10 @@ def web_payload(history):
             for key, label, weights, blurb in PRESETS
         ],
         "default_preset": DEFAULT_PRESET,
+        # What each accolade is worth, so a renderer can score an in-progress
+        # season's clinched accolades the same way `hardware` scores a finished one.
+        "accolade_points": {
+            "Champion": CHAMPION, "#1 overall seed": TOP_SEED, "Division winner": DIVISION_WINNER,
+            "Playoffs": PLAYOFF_BERTH, "playoff win": PLAYOFF_WIN,
+        },
     }

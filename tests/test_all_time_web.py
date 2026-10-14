@@ -39,3 +39,4 @@ def test_web_payload_matches_the_engine_rows_and_is_json():
     assert all(r["career_keys"] for r in both["teams"])
     assert {p["key"] for p in out["presets"]} >= {out["default_preset"]}
     assert out["facts"]["excluded"] == [2026]
+    assert out["accolade_points"]["Champion"] == all_time.CHAMPION
