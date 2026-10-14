@@ -14,6 +14,24 @@ def load_league_data(file_path):
         return json.load(file)
 
 
+# One person, two ESPN names. A manager who renames their ESPN account becomes a
+# second manager everywhere identity is read from: two half-careers in All-Time,
+# both ratings wrong. It cannot be detected from what ESPN gives us -- the SWID is
+# not stable per person either (see owner_names), so neither field can arbitrate --
+# so the few real cases are simply listed. alias (lower case) -> the name to keep.
+#
+# Not scoped by league: the map is tiny and a clash would need two leagues to
+# share a spelling. Add a league key here if that ever happens.
+MANAGER_ALIASES = {
+    "cam t": "Tagavi",
+}
+
+
+def canonical_manager(name):
+    """The one name a manager is known by, collapsing a renamed ESPN account."""
+    return MANAGER_ALIASES.get(name.strip().lower(), name)
+
+
 def owner_names(team):
     """Every manager's display name for this team, in ESPN's own order.
 
@@ -30,14 +48,20 @@ def owner_names(team):
       {F7CFB7CB-...} through 2023 and {75F49BF8-...} afterwards, so the SWID is
       not a durable key either -- he came out as two separate managers.
 
-    The display name is therefore the identity. A nameless owner is dropped rather
-    than kept as an empty string, which would group every such team together.
+    The display name is therefore the identity, put through MANAGER_ALIASES so a
+    rename does not read as a new person. A nameless owner is dropped rather than
+    kept as an empty string, which would group every such team together.
     """
     names = []
     for owner in getattr(team, "owners", None) or []:
         name = f"{owner.get('firstName', '')} {owner.get('lastName', '')}".strip()
         if name:
-            names.append(name)
+            name = canonical_manager(name)
+            # Both spellings on one team (a transition season, or ESPN listing the
+            # account twice) is still one manager -- keeping both would count the
+            # season towards their career twice.
+            if name not in names:
+                names.append(name)
     return names
 
 
@@ -60,7 +84,7 @@ def primary_managers(league, names):
             if owner.get("id") == raw.get(team.team_id):
                 name = f"{owner.get('firstName', '')} {owner.get('lastName', '')}".strip()
                 if name:
-                    primary[names[team.team_id]] = name
+                    primary[names[team.team_id]] = canonical_manager(name)
     return primary
 
 

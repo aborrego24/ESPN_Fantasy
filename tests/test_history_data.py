@@ -13,6 +13,7 @@ there, and a test should fail if those are trusted instead of recomputed.
 import pytest
 
 import history_data
+import league_data
 
 
 class FakeSettings:
@@ -203,6 +204,32 @@ def test_every_manager_of_a_team_is_recorded():
 
     orphan = FakeTeam("Abandoned", [100.0], owners=[])
     assert history_data.owner_names(orphan) == []
+
+
+def test_a_renamed_manager_keeps_one_identity(monkeypatch):
+    """Renaming an ESPN account otherwise makes a second manager: two half
+    careers in All-Time, both ratings wrong. Neither ESPN field can arbitrate
+    (the SWID is not stable per person either), so the cases are listed."""
+    monkeypatch.setitem(league_data.MANAGER_ALIASES, "old name", "New Name")
+    team = FakeTeam("T", [100.0], owners=[{"id": "swid-1", "firstName": "Old", "lastName": "Name"}])
+
+    assert history_data.owner_names(team) == ["New Name"]
+
+
+def test_both_spellings_on_one_team_are_still_one_manager(monkeypatch):
+    """A transition season (or ESPN listing the account twice) would otherwise
+    count that season towards the same career twice."""
+    monkeypatch.setitem(league_data.MANAGER_ALIASES, "old name", "New Name")
+    team = FakeTeam(
+        "T",
+        [100.0],
+        owners=[
+            {"id": "swid-1", "firstName": "Old", "lastName": "Name"},
+            {"id": "swid-2", "firstName": "New", "lastName": "Name"},
+        ],
+    )
+
+    assert history_data.owner_names(team) == ["New Name"]
 
 
 def test_a_nameless_owner_is_dropped_rather_than_keyed_as_blank():
