@@ -119,17 +119,21 @@ DEFAULT_PRESET = "balanced"
 # games are excluded upstream in `history_data.postseason`, including the ones
 # played between two teams that both qualified -- see the Klorgon case there.
 #
-# Sizing: the title is worth roughly a seventh of a season's rating (raised from
-# 10 to 15 -- at 10 a title read as too small a bump). Deliberately not more,
-# because a championship is mostly luck here -- measured over those
-# eight seasons the top seed won it twice, the average champion was the third
-# seed, and two champions were the 7th and 10th best teams of their season by
-# regular-season rating. The trophy is worth honouring; it is not evidence.
-CHAMPION = 15.0
+# Sizing: the title is worth a quarter of a season's rating, and a playoff win
+# two points. Raised from 10 then 15 after reading a five-season league where the
+# champion kept landing mid-table: a title that cannot lift a season into the top
+# ten of its own league is not being honoured at all. At 25 every champion of
+# that league ranks top nine of sixty, while the best non-champion season still
+# outranks the two weakest titles -- which is the balance wanted, because a
+# championship here is substantially luck: over eight measured seasons the top
+# seed won it twice, the average champion was the third seed, and two champions
+# were the 7th and 10th best teams of their season by regular-season rating. The
+# trophy is worth honouring; it is not evidence.
+CHAMPION = 25.0
 TOP_SEED = 3.0
 DIVISION_WINNER = 2.0
 PLAYOFF_BERTH = 1.5
-PLAYOFF_WIN = 1.0
+PLAYOFF_WIN = 2.0
 
 # The accolades won over the fourteen weeks rather than in the bracket. These are
 # the only ones a regular-season view may show: qualifying, a division and the top
