@@ -220,7 +220,17 @@ def strength_table(weekly_scores, remaining_matchups=None, blend=0.5):
                 ],
                 "sos": index(name),
                 "actual_win_pct": actual,
+                # An average team's expected win percentage against this team's schedule, over
+                # the games played and over the ones still to come. High is an easy slate. This
+                # is the measure of a schedule the report draws: it reads each opponent's actual
+                # score in the week they were played (so catching a good team on a bad week
+                # counts as the easy game it was) against the whole league's distribution, which
+                # an average of opponents' points cannot do. SOR is this minus the real record,
+                # so the two are on one footing.
                 "benchmark_win_pct": expected,
+                "remaining_benchmark_win_pct": _remaining_benchmark(
+                    upcoming.get(name, []), points, reference
+                ),
                 "sor": None if expected is None else actual - expected,
             }
         )
@@ -272,6 +282,51 @@ def preseason_strength(projected_ppg, matchups):
 def _benchmark_scores(points):
     """The pool of weekly scores standing in for an average team: the league's."""
     return [s for scores in points.values() for s in scores if _played(s)]
+
+
+def _beat_chance(scores, reference):
+    """The chance a draw from `reference` beats a draw from `scores`, counting a tie as half.
+
+    The forward-looking twin of `_benchmark_win_pct`. That one can use the opponent's *actual*
+    score in the week you played them; a game not yet played has no score, so the opponent is
+    represented by every score they have put up so far.
+
+    The point is that the answer is a win probability on the same scale as the played half, not
+    that it prices volatility: being a mean of per-score chances makes it linear in them, so an
+    opponent with a symmetric spread can read the same as a steady one wherever the league's own
+    distribution is flat between them (see the test that pins this).
+
+    No self-exclusion is needed (unlike the record component): what enters here is the
+    opponent's own scores, never a result, so your own scoring cannot feed back into your own
+    strength of schedule.
+    """
+    played = [s for s in scores if _played(s)]
+    if not played or not reference:
+        return None
+    per_score = []
+    for score in played:
+        wins = sum(1 for s in reference if s > score)
+        ties = sum(1 for s in reference if s == score)
+        per_score.append((wins + 0.5 * ties) / len(reference))
+    return sum(per_score) / len(per_score)
+
+
+def _remaining_benchmark(upcoming, points, reference):
+    """An average team's expected win percentage over the games still to be played.
+
+    The same scale and the same meaning as `_benchmark_win_pct`, so the two halves of a
+    schedule can be read against each other: high is an easy slate either way. Opponents are
+    counted with multiplicity -- playing someone twice makes them twice as much of the
+    schedule. None when there is nothing left to play, which is not the same as an easy run-in
+    and must not be reported as one.
+    """
+    chances = [
+        chance
+        for opponent in upcoming
+        if opponent in points
+        and (chance := _beat_chance(points[opponent], reference)) is not None
+    ]
+    return _mean(chances)
 
 
 def _benchmark_win_pct(games_list, reference):
