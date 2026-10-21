@@ -255,6 +255,87 @@ def test_no_remaining_matchups_leaves_the_forward_half_empty():
         assert row["opp_ppg"] == pytest.approx(row["sos_played"])
 
 
+# --- the forward benchmark: an average team's win% over the games still to come ---
+
+
+def test_remaining_benchmark_is_an_average_team_s_win_pct_over_the_run_in():
+    """The forward twin of benchmark_win_pct, on the same scale: high is an easy slate.
+
+    One week played, one to come. Weak plays Strong next, Mid plays Other. The league's pool of
+    scores is {150, 100, 90, 80}, so against Strong's only score (150) an average team wins none
+    of four and ties the one 150 in the pool -- Strong's own -- for 0.5/4 = 0.125. Against
+    Other's 80 it beats three and ties one: 3.5/4 = 0.875.
+    """
+    scores = {"Strong": [150.0], "Mid": [100.0], "Weak": [90.0], "Other": [80.0]}
+    schedule = [[("Strong", "Other"), ("Weak", "Mid")]]
+    remaining = [[{"team1": "Weak", "team2": "Strong"}, {"team1": "Mid", "team2": "Other"}]]
+
+    rows = strength.strength_table(build(scores, schedule), remaining_matchups=remaining)
+
+    assert row_of(rows, "Weak")["remaining_benchmark_win_pct"] == pytest.approx(0.125)
+    assert row_of(rows, "Mid")["remaining_benchmark_win_pct"] == pytest.approx(0.875)
+
+
+def test_the_forward_benchmark_is_a_mean_of_per_score_chances():
+    """Known limitation, pinned so nobody claims more for it than it does.
+
+    The measure averages the chance an average team beats each score the opponent has posted.
+    That makes it linear in those chances, so an opponent with a *symmetric* spread around a
+    mean can read exactly the same as a steady one -- here Swingy's 150/50 and Steady's 100/100
+    both come out 0.5, because the league's pool is flat between them. It separates them only
+    where the league's score distribution curves. The win is that it is a win probability on the
+    same scale as the played half, not that it prices volatility.
+    """
+    scores = {"Steady": [100.0, 100.0], "Swingy": [150.0, 50.0],
+              "A": [100.0, 100.0], "B": [100.0, 100.0]}
+    schedule = [[("Steady", "Swingy"), ("A", "B")], [("Steady", "Swingy"), ("A", "B")]]
+    remaining = [[{"team1": "A", "team2": "Steady"}, {"team1": "B", "team2": "Swingy"}]]
+
+    rows = strength.strength_table(build(scores, schedule), remaining_matchups=remaining)
+
+    assert row_of(rows, "A")["remaining_benchmark_win_pct"] == pytest.approx(0.5)
+    assert row_of(rows, "B")["remaining_benchmark_win_pct"] == pytest.approx(0.5)
+
+
+def test_an_opponent_played_twice_counts_twice_in_the_forward_benchmark():
+    scores = {"Strong": [150.0], "Weak": [90.0], "Mid": [100.0], "Other": [80.0]}
+    schedule = [[("Strong", "Weak"), ("Mid", "Other")]]
+    once = [[{"team1": "Weak", "team2": "Strong"}, {"team1": "Mid", "team2": "Other"}]]
+    twice = once + [[{"team1": "Weak", "team2": "Strong"}, {"team1": "Mid", "team2": "Other"}]]
+    thrice = twice + [[{"team1": "Weak", "team2": "Other"}, {"team1": "Mid", "team2": "Strong"}]]
+
+    hard_twice = row_of(
+        strength.strength_table(build(scores, schedule), remaining_matchups=twice), "Weak"
+    )["remaining_benchmark_win_pct"]
+    mixed = row_of(
+        strength.strength_table(build(scores, schedule), remaining_matchups=thrice), "Weak"
+    )["remaining_benchmark_win_pct"]
+
+    # Twice against Strong and nobody else: the hardest run-in on offer. Adding an easy game
+    # against Other must raise the average team's chances.
+    assert hard_twice == pytest.approx(0.125)
+    assert mixed == pytest.approx((0.125 + 0.125 + 0.875) / 3)
+
+
+def test_nothing_left_to_play_is_not_an_easy_run_in():
+    """None, not 1.0: a finished schedule has no difficulty, and reporting the easiest possible
+    one would rank a team that is done as the luckiest."""
+    rows = strength.strength_table(build())
+
+    for row in rows:
+        assert row["remaining_benchmark_win_pct"] is None
+
+
+def test_an_upcoming_opponent_with_no_scores_yet_is_skipped_not_counted():
+    scores = {"A": [100.0], "B": [90.0]}
+    schedule = [[("A", "B")]]
+    # Ghost has never scored, so it cannot be measured; A's other game can.
+    remaining = [[{"team1": "A", "team2": "Ghost"}]]
+
+    rows = strength.strength_table(build(scores, schedule), remaining_matchups=remaining)
+    assert row_of(rows, "A")["remaining_benchmark_win_pct"] is None
+
+
 # --- preseason (projection-based) SOS -----------------------------------------
 
 
