@@ -477,3 +477,145 @@ def test_one_division_means_nobody_won_a_division():
     assert payload["division_names"] == {}
     assert not any(t["division_winner"] for t in payload["teams"])
     assert all(t["division"] == "" for t in payload["teams"])
+
+
+# --- long playoff rounds -----------------------------------------------------
+# A league whose bracket rounds run two NFL weeks each. ESPN reports one
+# `totalPoints` for the whole round, so without the split a 2024 round came back
+# at 298.5 against regular-season weeks topping out at 180.
+
+
+class FakeRequest:
+    """`espn_request`, answering one `mMatchup` fetch. `fail` raises instead."""
+
+    def __init__(self, schedule, fail=False):
+        self.schedule = schedule
+        self.fail = fail
+        self.calls = 0
+
+    def league_get(self, params=None, headers=None):
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError("ESPN said no")
+        return {"schedule": self.schedule}
+
+
+def long_round_league(schedule_rows, periods=None, fail=False):
+    """Two qualifiers, one bracket round at matchup period 3 covering weeks 3-4."""
+    a = FakeTeam("Alpha", [120.0, 110.0, 300.0], 1, 1)
+    b = FakeTeam("Bravo", [100.0, 105.0, 250.0], 2, 2)
+    schedule = {1: [(a, b)], 2: [(a, b)]}
+    league = FakeLeague([a, b], 2, 2024, 2, schedule)
+    for home, away in [(a, b)]:
+        home.schedule.append(away)
+        away.schedule.append(home)
+    league.settings.matchup_periods = periods if periods is not None else {
+        "1": [1], "2": [2], "3": [3, 4],
+    }
+    league.espn_request = FakeRequest(schedule_rows, fail=fail)
+    return league, a, b
+
+
+def _round_row(a_id, b_id, a_weeks, b_weeks, period=3):
+    return {
+        "matchupPeriodId": period,
+        "home": {"teamId": a_id, "pointsByScoringPeriod": a_weeks},
+        "away": {"teamId": b_id, "pointsByScoringPeriod": b_weeks},
+    }
+
+
+def test_long_rounds_names_only_the_rounds_worth_splitting():
+    league, _, _ = long_round_league([])
+    assert history_data.long_rounds(league) == {3: [3, 4]}
+
+
+def test_a_league_of_one_week_rounds_has_none_and_is_never_fetched():
+    league, _, _ = long_round_league([], periods={"1": [1], "2": [2], "3": [3]})
+    assert history_data.long_rounds(league) == {}
+    assert history_data.period_points(league, {}) == {}
+    assert league.espn_request.calls == 0
+
+
+def test_a_long_round_is_split_into_its_real_weeks():
+    league, a, b = long_round_league([])
+    league.espn_request.schedule = [
+        _round_row(a.team_id, b.team_id, {"3": 160.0, "4": 140.0}, {"3": 120.0, "4": 130.0}),
+    ]
+    rows = history_data.postseason(league, league_data.unique_names(league), 2,
+                                   {a.team_id, b.team_id})
+    weeks = {row["name"]: row["weeks"] for row in rows}
+    # The round keeps the total, because that is the contest that was won.
+    assert weeks["Alpha"][0]["week"] == 3
+    assert weeks["Alpha"][0]["points"] == 300.0
+    # And carries the two afternoons it was made of.
+    assert weeks["Alpha"][0]["parts"] == [{"week": 3, "points": 160.0},
+                                          {"week": 4, "points": 140.0}]
+    assert weeks["Bravo"][0]["parts"] == [{"week": 3, "points": 120.0},
+                                          {"week": 4, "points": 130.0}]
+
+
+def test_parts_that_do_not_add_up_to_the_round_are_refused():
+    """A split read wrongly is worse than an honest aggregate, so the sum is checked.
+
+    **Both sides, together.** Only Alpha's parts disagree here, and an earlier
+    version checked each team against its own total -- so Bravo kept a split
+    Alpha did not, and `top_weeks` would have ranked one of them by the afternoon
+    and the other by the round.
+    """
+    league, a, b = long_round_league([])
+    league.espn_request.schedule = [
+        _round_row(a.team_id, b.team_id, {"3": 160.0, "4": 99.0}, {"3": 120.0, "4": 130.0}),
+    ]
+    rows = history_data.postseason(league, league_data.unique_names(league), 2,
+                                   {a.team_id, b.team_id})
+    assert all("parts" not in w for row in rows for w in row["weeks"])
+
+
+def test_one_side_alone_is_not_a_split():
+    # The two are compared week by week downstream, so half a split is no split.
+    league, a, b = long_round_league([])
+    league.espn_request.schedule = [
+        {"matchupPeriodId": 3,
+         "home": {"teamId": a.team_id, "pointsByScoringPeriod": {"3": 160.0, "4": 140.0}},
+         "away": {"teamId": b.team_id}},
+    ]
+    rows = history_data.postseason(league, league_data.unique_names(league), 2,
+                                   {a.team_id, b.team_id})
+    assert all("parts" not in w for row in rows for w in row["weeks"])
+
+
+@pytest.mark.parametrize("schedule_rows, fail", [
+    ([], True),                                                    # the request itself fails
+    ([{"matchupPeriodId": 3, "home": {"teamId": 1,
+       "pointsByScoringPeriod": "nonsense"}}], False),             # not a mapping
+    ([{"matchupPeriodId": 3, "home": {"teamId": 1,
+       "pointsByScoringPeriod": {"3": "lots"}}}], False),          # not numbers
+    ([{"matchupPeriodId": 99, "home": {"teamId": 1,
+       "pointsByScoringPeriod": {"3": 10.0}}}], False),            # a round nobody asked about
+])
+def test_a_disappointing_fetch_leaves_the_aggregate_alone(schedule_rows, fail):
+    league, a, b = long_round_league(schedule_rows, fail=fail)
+    rows = history_data.postseason(league, league_data.unique_names(league), 2,
+                                   {a.team_id, b.team_id})
+    assert all("parts" not in w for row in rows for w in row["weeks"])
+    assert [w["points"] for w in rows[0]["weeks"]] == [300.0]
+
+
+def test_a_blanked_round_keeps_no_split():
+    # Alpha loses the round, so its later weeks are blanked; a blanked row means
+    # "no data for this week" and must not carry real afternoons.
+    league, a, b = long_round_league([])
+    a.scores = [120.0, 110.0, 250.0, 200.0]
+    b.scores = [100.0, 105.0, 300.0, 100.0]
+    for team in (a, b):
+        team.schedule.append(b if team is a else a)
+    league.settings.matchup_periods = {"1": [1], "2": [2], "3": [3, 4], "4": [5, 6]}
+    league.espn_request.schedule = [
+        _round_row(a.team_id, b.team_id, {"3": 130.0, "4": 120.0}, {"3": 150.0, "4": 150.0}),
+        _round_row(a.team_id, b.team_id, {"5": 100.0, "6": 100.0}, {"5": 50.0, "6": 50.0}, period=4),
+    ]
+    rows = history_data.postseason(league, league_data.unique_names(league), 2,
+                                   {a.team_id, b.team_id})
+    alpha = {row["name"]: row["weeks"] for row in rows}["Alpha"]
+    assert alpha[0]["parts"] == [{"week": 3, "points": 130.0}, {"week": 4, "points": 120.0}]
+    assert alpha[1]["points"] == 0.0 and "parts" not in alpha[1]
