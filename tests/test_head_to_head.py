@@ -305,3 +305,80 @@ def test_the_scopes_are_the_all_time_ones_and_both_is_the_sum():
         assert s["both"]["record"][part] == s["regular"]["record"][part] + s["playoffs"]["record"][part]
     assert s["both"]["record"]["points_for"] == round(
         s["regular"]["record"]["points_for"] + s["playoffs"]["record"]["points_for"], 2)
+
+
+# --- long playoff rounds -----------------------------------------------------
+
+
+def _long_round_history():
+    """2025, one bracket round at matchup period 3 covering weeks 3 and 4.
+
+      A 130 + 170 = 300    C 125 + 125 = 250
+
+    A won the round, so the tally is 1-0 over one game; the two afternoons are
+    listed separately for the leaderboards.
+    """
+    return {
+        "league_id": 1, "skipped": [],
+        "seasons": [{
+            "year": 2025, "complete": True, "num_teams": 2, "weeks_in_season": 2,
+            "playoff_spots": 2, "division_names": {},
+            "teams": [
+                _team("A", ["Ann"], wins=1, points_for=100.0, final_standing=1, seed=1,
+                      made_playoffs=True, playoff_wins=1, playoff_games=1),
+                _team("C", ["Cy"], losses=1, points_for=90.0, final_standing=2, seed=2,
+                      made_playoffs=True, playoff_losses=1, playoff_games=1),
+            ],
+            "weekly_scores": [
+                {"name": "A", "weeks": _weeks((1, 100.0, "C"), (2, 110.0, "C"))},
+                {"name": "C", "weeks": _weeks((1, 90.0, "A"), (2, 95.0, "A"))},
+            ],
+            "playoff_weeks": [
+                {"name": "A", "weeks": [{"week": 3, "points": 300.0, "opponent": "C",
+                                         "parts": [{"week": 3, "points": 130.0},
+                                                   {"week": 4, "points": 170.0}]}]},
+                {"name": "C", "weeks": [{"week": 3, "points": 250.0, "opponent": "A",
+                                         "parts": [{"week": 3, "points": 125.0},
+                                                   {"week": 4, "points": 125.0}]}]},
+            ],
+        }],
+    }
+
+
+def test_a_long_round_is_listed_by_the_week_but_tallied_once():
+    out = json.loads(json.dumps(head_to_head.web_payload(_long_round_history())))
+    pair = out["pairings"][0]
+
+    # One contest, decided on the aggregate: counting it twice would invent a
+    # result, since C won week 4 outright but lost the round.
+    assert pair["playoffs"]["wins"] + pair["playoffs"]["losses"] == 1
+    assert pair["playoffs"]["points_for"] == 300.0
+    assert pair["playoffs"]["points_against"] == 250.0
+
+    rounds = [m for m in pair["meetings"] if m["kind"] == "playoffs"]
+    assert [(m["week"], m["points"], m["opponent_points"]) for m in rounds] == [
+        (3, 130.0, 125.0), (4, 170.0, 125.0),
+    ]
+    # And no row carries the doubled total any more.
+    assert 300.0 not in [m["points"] for m in pair["meetings"]]
+
+
+def test_the_weeks_high_score_is_per_afternoon_not_per_round():
+    out = json.loads(json.dumps(head_to_head.web_payload(_long_round_history())))
+    led = {m["manager"]: m["scopes"]["playoffs"]["top_scorer_weeks"] for m in out["managers"]}
+    # A outscored C in both weeks of the round, so two weeks led -- not one for a
+    # round, and not a week credited to C for having the larger of nothing.
+    assert led == {"Ann": 2, "Cy": 0}
+
+
+def test_an_unsplit_round_still_reads_as_one_week():
+    # No `parts` is the ordinary case and the fallback when ESPN cannot be split.
+    history = _long_round_history()
+    for entry in history["seasons"][0]["playoff_weeks"]:
+        for week in entry["weeks"]:
+            week.pop("parts")
+    out = json.loads(json.dumps(head_to_head.web_payload(history)))
+    pair = out["pairings"][0]
+    rounds = [m for m in pair["meetings"] if m["kind"] == "playoffs"]
+    assert [(m["week"], m["points"]) for m in rounds] == [(3, 300.0)]
+    assert pair["playoffs"]["wins"] + pair["playoffs"]["losses"] == 1

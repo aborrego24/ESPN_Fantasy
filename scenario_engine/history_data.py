@@ -69,6 +69,95 @@ def weeks_with_play(league, limit):
     return last
 
 
+def long_rounds(league):
+    """Which scoring periods each playoff round covered, for rounds longer than
+    one week: `{matchup period: [scoring period, ...]}`, empty for most leagues.
+
+    **A matchup period is not a week.** `team.scores` carries one entry per
+    matchup period and `totalPoints` for that whole period, so where a league
+    plays a two-week bracket round the engine reads one score of two weeks added
+    together and labels it with the first week's number. Measured on a real
+    league: a 2024 round came back at 298.5 against regular-season weeks topping
+    out at 180, and the reader has no way to tell it is two afternoons.
+
+    `scheduleSettings.matchupPeriods` is the mapping, and it is already fetched
+    with the league, so knowing *which* rounds are long costs nothing. Splitting
+    their points is what needs another request -- see `period_points`.
+    """
+    periods = getattr(league.settings, "matchup_periods", None) or {}
+    out = {}
+    for period, weeks in periods.items():
+        ids = sorted(int(w) for w in weeks or [])
+        if len(ids) > 1:
+            out[int(period)] = ids
+    return out
+
+
+def period_points(league, rounds):
+    """Each team's points week by week inside a long round.
+
+    `{(matchup period, team id): {scoring period: points}}`, and **`{}` on any
+    disappointment** -- the field missing, the request failing, the shape being
+    something else. A caller that gets nothing back keeps the aggregate it
+    already had, which is today's behaviour: one row per round, labelled with the
+    round's number. That is the wrong *label*, where a half-applied split would
+    be the wrong *points*.
+
+    `pointsByScoringPeriod` rides along on the `mMatchup` view that
+    `get_league()` already asks for, but espn_api keeps only `totalPoints` from
+    each schedule entry and drops the rest, so it has to be asked for again.
+    One request per season, and only for a league that has a long round at all.
+    """
+    if not rounds:
+        return {}
+    try:
+        data = league.espn_request.league_get(params={"view": "mMatchup"})
+        schedule = data.get("schedule") or []
+    except Exception:  # noqa: BLE001 - any failure means "no split available"
+        return {}
+    out = {}
+    for game in schedule:
+        period = game.get("matchupPeriodId")
+        if period not in rounds:
+            continue
+        for side in ("home", "away"):
+            entry = game.get(side) or {}
+            team_id = entry.get("teamId")
+            weekly = entry.get("pointsByScoringPeriod")
+            if team_id is None or not isinstance(weekly, dict):
+                continue
+            try:
+                out[(period, team_id)] = {int(w): float(p) for w, p in weekly.items()}
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
+def _round_parts(week, points, against, rounds, splits, team_id, opponent_id):
+    """One round's real weeks, or None to leave it as the single row it is.
+
+    Both sides are required, and **both are checked together**: the two are
+    compared week by week downstream, so a split that holds for one team and not
+    the other is worse than no split -- it would rank one of them by the
+    afternoon and the other by the round. Each side's parts must also add up to
+    the total ESPN reported for it; a sum that disagrees means the split is being
+    read wrong, and wrong points are worse than an honestly-labelled aggregate.
+    """
+    weeks = rounds.get(week)
+    if not weeks:
+        return None
+    mine = splits.get((week, team_id))
+    theirs = splits.get((week, opponent_id))
+    if not mine or not theirs:
+        return None
+    if any(w not in mine or w not in theirs for w in weeks):
+        return None
+    for side, total in ((mine, points), (theirs, against)):
+        if round(sum(side[w] for w in weeks), 2) != round(total, 2):
+            return None
+    return [{"week": w, "points": round(mine[w], 2)} for w in weeks]
+
+
 def postseason(league, names, weeks_in_season, playoff_ids):
     """Each playoff team's bracket games, in the `weekly_scores` shape.
 
@@ -103,6 +192,8 @@ def postseason(league, names, weeks_in_season, playoff_ids):
     """
     # Pass one: every contested game, before knowing who survived it. A result
     # needs both sides' scores, so elimination cannot be decided in the same sweep.
+    rounds = long_rounds(league)
+    splits = period_points(league, rounds)
     raw = {}
     for team in league.teams:
         if team.team_id not in playoff_ids:
@@ -111,13 +202,24 @@ def postseason(league, names, weeks_in_season, playoff_ids):
         for index in range(weeks_in_season, len(team.scores)):
             opponent = league_data.opponent_in_week(team, index)
             played = opponent is not None and opponent.team_id in playoff_ids
-            weeks.append(
-                {
-                    "week": index + 1,
-                    "points": team.scores[index] if played else 0.0,
-                    "opponent": names[opponent.team_id] if played else None,
-                }
-            )
+            points = team.scores[index] if played else 0.0
+            entry = {
+                "week": index + 1,
+                "points": points,
+                "opponent": names[opponent.team_id] if played else None,
+            }
+            # The round stays one row here, because that is the contest: a long
+            # round is won on the two weeks added up, and elimination, the
+            # bracket record and every head-to-head tally read this number.
+            # `parts` carries the real weeks alongside, for the tables that rank
+            # one afternoon against another.
+            parts = _round_parts(
+                entry["week"], points, opponent.scores[index], rounds, splits,
+                team.team_id, opponent.team_id,
+            ) if played else None
+            if parts:
+                entry["parts"] = parts
+            weeks.append(entry)
         raw[names[team.team_id]] = weeks
 
     scored = {
@@ -136,7 +238,12 @@ def postseason(league, names, weeks_in_season, playoff_ids):
         for week in weeks:
             opponent = week["opponent"]
             if not alive or opponent is None or not week["points"]:
-                kept.append({**week, "points": 0.0, "opponent": None})
+                # `parts` goes with the points: a blanked row is "no data for
+                # this week", and leaving the split on it would put the real
+                # afternoons back into a round nobody contested.
+                blank = {**week, "points": 0.0, "opponent": None}
+                blank.pop("parts", None)
+                kept.append(blank)
                 continue
             kept.append(week)
             if week["points"] < scored[opponent][week["week"]]:

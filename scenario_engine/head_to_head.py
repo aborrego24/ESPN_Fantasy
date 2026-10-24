@@ -74,14 +74,24 @@ def _expected_wins(tally, games):
 def _season_games(season, kind):
     """Every contested game in one season, once each.
 
-    Yields (week, home, away, home_points, away_points) where "home" and "away"
-    are only an order, not a venue. Each game is reached from both teams'
-    schedules, so it is emitted the first time and skipped the second.
+    Yields (week, home, away, home_points, away_points, weeks) where "home" and
+    "away" are only an order, not a venue, and `weeks` is the round's real
+    scoring periods as `[(week, home_points, away_points), ...]` -- one entry for
+    an ordinary week, two or more for a long playoff round (see
+    `history_data.long_rounds`). The totals stay the round's, because the round
+    is the game that was won; `weeks` is for ranking one afternoon at a time.
+
+    Each game is reached from both teams' schedules, so it is emitted the first
+    time and skipped the second.
     """
     key = "playoff_weeks" if kind == PLAYOFFS else "weekly_scores"
     entries = season.get(key) or []
     points = {
         entry["name"]: {week["week"]: week["points"] for week in entry["weeks"]}
+        for entry in entries
+    }
+    parts = {
+        entry["name"]: {week["week"]: week.get("parts") for week in entry["weeks"]}
         for entry in entries
     }
     seen = set()
@@ -100,7 +110,23 @@ def _season_games(season, kind):
             if not _played(week["points"]) or not _played(opponent_points):
                 continue
             seen.add(pair)
-            yield week["week"], name, opponent, week["points"], opponent_points
+            yield (week["week"], name, opponent, week["points"], opponent_points,
+                   _weeks_of(week["week"], week["points"], opponent_points,
+                             week.get("parts"), parts[opponent].get(week["week"])))
+
+
+def _weeks_of(week, points, opponent_points, mine, theirs):
+    """A round's scoring periods, as `[(week, points, opponent_points), ...]`.
+
+    The round itself when it was one week, or when only one side could be split
+    -- the two are compared week by week, so half a split is no split.
+    `history_data` already refuses a split whose parts do not sum to the total,
+    so these line up by the time they get here.
+    """
+    if not mine or not theirs or len(mine) != len(theirs):
+        return [(week, points, opponent_points)]
+    return [(a["week"], a["points"], b["points"])
+            for a, b in zip(mine, theirs, strict=True)]
 
 
 def manager_games(history):
@@ -122,10 +148,10 @@ def manager_games(history):
         teams = {team["name"]: team for team in season["teams"]}
         managers = {name: all_time.career_keys(team) for name, team in teams.items()}
         for kind in (REGULAR, PLAYOFFS):
-            for week, home, away, home_points, away_points in _season_games(season, kind):
-                for own_name, own_points, foe_name, foe_points in (
-                    (home, home_points, away, away_points),
-                    (away, away_points, home, home_points),
+            for week, home, away, home_points, away_points, weeks in _season_games(season, kind):
+                for own_name, own_points, foe_name, foe_points, flip in (
+                    (home, home_points, away, away_points, False),
+                    (away, away_points, home, home_points, True),
                 ):
                     foe = teams.get(foe_name, {})
                     game = {
@@ -136,6 +162,9 @@ def manager_games(history):
                         "points": own_points,
                         "opponent_team": foe_name,
                         "opponent_points": foe_points,
+                        # The round's real weeks, from this side. One entry
+                        # unless a long playoff round was split.
+                        "weeks": [(w, b, a) if flip else (w, a, b) for w, a, b in weeks],
                         # Every manager on the other side, so one game can count
                         # against each of a co-managed pair.
                         "opponents": managers.get(foe_name, []),
@@ -206,8 +235,13 @@ def _expected_and_ranks(seasons):
             scores = {}
             for entry in entries:
                 for week in entry["weeks"]:
-                    if _played(week["points"]) and week["opponent"]:
-                        scores.setdefault(week["week"], []).append((week["points"], entry["name"]))
+                    if not _played(week["points"]) or not week["opponent"]:
+                        continue
+                    # Per real week, not per round: over a two-week round the
+                    # league's best round total is not whose afternoon was best,
+                    # and it would crown one team for two weeks at once.
+                    for part in week.get("parts") or [week]:
+                        scores.setdefault(part["week"], []).append((part["points"], entry["name"]))
             for pairs in scores.values():
                 best = max(points for points, _ in pairs)
                 for points, name in pairs:
@@ -391,14 +425,21 @@ def pairings(by_manager):
                 if manager != key[0]:
                     continue
                 side = entry[game["kind"]]
+                # Tallied once, on the round: a two-week playoff round was one
+                # contest, decided on the aggregate, and counting it twice would
+                # invent a result -- a team that lost the first week and won the
+                # round would read 1-1 instead of 1-0.
                 _add(side, game["points"], game["opponent_points"])
                 side["points_for"] += game["points"]
                 side["points_against"] += game["opponent_points"]
-                entry["meetings"].append({
-                    "year": game["year"], "week": game["week"], "kind": game["kind"],
-                    "points": game["points"], "opponent_points": game["opponent_points"],
-                    "team": game["team"], "opponent_team": game["opponent_team"],
-                })
+                # Listed once per real week, so a leaderboard of afternoons
+                # compares like with like.
+                for week, points, against in game["weeks"]:
+                    entry["meetings"].append({
+                        "year": game["year"], "week": week, "kind": game["kind"],
+                        "points": points, "opponent_points": against,
+                        "team": game["team"], "opponent_team": game["opponent_team"],
+                    })
     for entry in pairs.values():
         for kind in (REGULAR, PLAYOFFS):
             entry[kind]["points_for"] = round(entry[kind]["points_for"], 2)
