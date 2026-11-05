@@ -153,6 +153,8 @@ if __name__ == "__main__":
         "logos": league_data.get("logos", {}),
         # {name: primary owner}, to order a co-managed team's names; optional.
         "primary_managers": league_data.get("primary_managers", {}),
+        # {name: ESPN team id}, so a reader can follow a team across a rename; optional.
+        "team_ids": league_data.get("team_ids", {}),
         # Raw logo URLs for a browser to load; optional for older payloads.
         "logo_urls": league_data.get("logo_urls", {}),
         # Name-keyed, so it stays correct however the standings get re-sorted

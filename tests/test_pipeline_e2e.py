@@ -42,6 +42,7 @@ def test_stage2_emits_the_documented_wire_format(stage1_json, run_stages, name):
         "projected_ppg",
         "managers",
         "primary_managers",
+        "team_ids",
     }
     assert set(payload["league_data"]) == {
         "playoff_spots",
