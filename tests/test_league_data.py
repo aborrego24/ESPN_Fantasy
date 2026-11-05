@@ -119,6 +119,13 @@ def four_team_league(weeks=4, playoff_spots=2, current_week_override=None):
     )
 
 
+def test_payload_carries_each_teams_espn_id_by_name():
+    league = four_team_league()
+    payload = league_data.build_payload(league, current_week=2)
+    assert sorted(payload["team_ids"].values()) == sorted(t.team_id for t in league.teams)
+    assert set(payload["team_ids"]) == {t["name"] for t in payload["teams"]}
+
+
 def test_payload_has_the_shape_stage_two_expects():
     payload = league_data.build_payload(four_team_league(), current_week=2)
 
@@ -136,6 +143,7 @@ def test_payload_has_the_shape_stage_two_expects():
         "projected_ppg",
         "managers",
         "primary_managers",
+        "team_ids",
     }
     assert payload["league_settings"] == {
         "num_teams": 4,

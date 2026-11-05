@@ -451,6 +451,10 @@ def build_payload(league, current_week, inline_logos=False, espn_s2=None, swid=N
         # {name: primary owner's name}, so a co-managed row can lead with whoever
         # ESPN itself lists first. Empty when the raw response is unavailable.
         "primary_managers": primary_managers(league, names),
+        # {name: ESPN team id}. The id is the one identity that survives a rename,
+        # so a reader comparing two snapshots can tell a renamed team from a new one.
+        # Name-keyed like the maps around it.
+        "team_ids": {names[team.team_id]: team.team_id for team in league.teams},
         # ESPN's own short code per team, for the report to label a row with.
         # Keyed by the unique name because that is what the later stages carry;
         # only teams that actually have one appear.
