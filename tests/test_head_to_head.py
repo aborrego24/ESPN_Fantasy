@@ -382,3 +382,24 @@ def test_an_unsplit_round_still_reads_as_one_week():
     rounds = [m for m in pair["meetings"] if m["kind"] == "playoffs"]
     assert [(m["week"], m["points"]) for m in rounds] == [(3, 300.0)]
     assert pair["playoffs"]["wins"] + pair["playoffs"]["losses"] == 1
+
+
+def test_all_play_weeks_score_each_week_as_one_game_against_its_field():
+    weeks = payload()["all_play_weeks"]
+    # 2025 week 1: A's 100 beat B's 90, lost to C's 110 and D's 105.
+    assert weeks["Ann"][:2] == [[2024, 0, 1, 1.0], [2025, 0, 1, round(-1 / 3, 4)]]
+    # The bracket week's field is the two teams with a game: B and D, out of it, are not rivals.
+    assert weeks["Ann"][-1] == [2025, 1, 3, 1.0]
+    assert weeks["Cy"] == weeks["Dee"] and weeks["Cy"][-1] == [2025, 1, 3, -1.0]
+    # An unplayed week is no week at all.
+    assert [w for w in weeks["Bo"] if w[0] == 2025] == [[2025, 0, 1, -1.0], [2025, 0, 2, round(1 / 3, 4)]]
+
+
+def test_a_team_with_no_manager_is_still_a_rival():
+    hist = history()
+    for team in hist["seasons"][0]["teams"]:
+        if team["name"] == "D":
+            team["managers"] = []
+    weeks = head_to_head.all_play_weeks(hist)
+    assert "Ed" not in weeks
+    assert weeks["Ann"][1] == [2025, 0, 1, round(-1 / 3, 4)]
