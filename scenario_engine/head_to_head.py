@@ -179,6 +179,43 @@ def manager_games(history):
     return by_manager
 
 
+def all_play_weeks(history):
+    """Each manager's all-play result for every week they played, as
+    `[year, playoffs, week, value]` with `playoffs` 1 for a bracket week and
+    `value` from -1 (outscored by every other team with a game that week) to +1
+    (outscored them all) -- the week as one game, decided by the share of the
+    league it beat, so a running total sits on the same scale as a record.
+
+    The field is every team **with a game** that week, from the full weekly
+    scores (a team nobody's career is keyed to still counts as a rival): a team
+    on a playoff bye has a score, but nobody set a lineup for it, so it neither
+    earns nor gives up all-play. A long playoff round counts per real week.
+    """
+    out = {}
+    for season in history.get("seasons") or []:
+        year = season["year"]
+        managers = {team["name"]: all_time.career_keys(team) for team in season["teams"]}
+        for kind in (REGULAR, PLAYOFFS):
+            field = {}
+            for _, home, away, _, _, weeks in _season_games(season, kind):
+                for week, home_points, away_points in weeks:
+                    field.setdefault(week, {})[home] = home_points
+                    field.setdefault(week, {})[away] = away_points
+            for week, scores in sorted(field.items()):
+                rivals = len(scores) - 1
+                if rivals < 1:
+                    continue
+                for team, mine in scores.items():
+                    net = sum((mine > theirs) - (mine < theirs)
+                              for other, theirs in scores.items() if other != team)
+                    for manager in managers.get(team, []):
+                        out.setdefault(manager, []).append(
+                            [year, int(kind == PLAYOFFS), week, round(net / rivals, 4)])
+    for rows in out.values():
+        rows.sort()
+    return out
+
+
 def _streak(games, won):
     """The longest run of wins (or of losses) across a whole career, and when.
 
@@ -477,6 +514,7 @@ def web_payload(history):
     return {
         "managers": managers,
         "pairings": pairings(by_manager),
+        "all_play_weeks": all_play_weeks(history),
         "scopes": list(SCOPES),
         "default_scope": DEFAULT_SCOPE,
         "close_game": CLOSE_GAME,
