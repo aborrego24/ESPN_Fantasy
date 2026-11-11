@@ -180,11 +180,10 @@ def manager_games(history):
 
 
 def all_play_weeks(history):
-    """Each manager's all-play result for every week they played, as
-    `[year, playoffs, week, value]` with `playoffs` 1 for a bracket week and
-    `value` from -1 (outscored by every other team with a game that week) to +1
-    (outscored them all) -- the week as one game, decided by the share of the
-    league it beat, so a running total sits on the same scale as a record.
+    """Each manager's all-play record for every week they played, as
+    `[year, playoffs, week, wins, losses, ties]` with `playoffs` 1 for a bracket
+    week: how many of that week's other teams they outscored, lost to and tied.
+    A running total of wins minus losses is the all-play record against .500.
 
     The field is every team **with a game** that week, from the full weekly
     scores (a team nobody's career is keyed to still counts as a rival): a team
@@ -202,15 +201,14 @@ def all_play_weeks(history):
                     field.setdefault(week, {})[home] = home_points
                     field.setdefault(week, {})[away] = away_points
             for week, scores in sorted(field.items()):
-                rivals = len(scores) - 1
-                if rivals < 1:
+                if len(scores) < 2:
                     continue
                 for team, mine in scores.items():
-                    net = sum((mine > theirs) - (mine < theirs)
-                              for other, theirs in scores.items() if other != team)
+                    rivals = [theirs for other, theirs in scores.items() if other != team]
+                    row = [year, int(kind == PLAYOFFS), week, sum(mine > t for t in rivals),
+                           sum(mine < t for t in rivals), sum(mine == t for t in rivals)]
                     for manager in managers.get(team, []):
-                        out.setdefault(manager, []).append(
-                            [year, int(kind == PLAYOFFS), week, round(net / rivals, 4)])
+                        out.setdefault(manager, []).append(row)
     for rows in out.values():
         rows.sort()
     return out
